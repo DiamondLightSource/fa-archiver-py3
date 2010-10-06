@@ -48,8 +48,8 @@ static bool daemon_mode = false;
 static char *argv0;
 /* Name of FA sniffer device. */
 static const char *fa_sniffer_device = "/dev/fa_sniffer0";
-/* Name of archive store. */
-static char *output_filename = NULL;
+/* Name of archive store, must be specified. */
+static char *output_filename;
 /* If set, the PID is written to this file, and the archiver can then be
  * interrupted with the command
  *      kill $(cat $pid_filename)   */
@@ -58,18 +58,14 @@ static char *pid_filename = NULL;
 static unsigned int buffer_blocks = BUFFER_BLOCKS;
 /* Socket used for serving remote connections. */
 static int server_socket = 8888;
-/* True if archiving to disk, false if only serving live subscription data. */
-static bool archiving = false;
 
 
 
 static void usage(void)
 {
     printf(
-"Usage: %s [options] [<archive-file>]\n"
-"Captures continuous FA streaming data to disk.  If <archive-file> is not\n"
-"specified the continuous streaming service will be provided but no archive\n"
-"will be written.\n"
+"Usage: %s [options] <archive-file>\n"
+"Captures continuous FA streaming data to the specified <archive-file>.\n"
 "\n"
 "Options:\n"
 "    -d:  Specify device to use for FA sniffer (default /dev/fa_sniffer0)\n"
@@ -121,18 +117,10 @@ static bool process_options(int *argc, char ***argv)
 
 static bool process_args(int argc, char **argv)
 {
-    bool ok = process_options(&argc, &argv);
-    if (ok)
-    {
-        archiving = argc > 0;
-        if (archiving)
-        {
-            output_filename = argv[0];
-            argc --;
-        }
-    }
-    return ok  &&
-        TEST_OK_(argc == 0, "Try `%s -h` for usage", argv0);
+    return
+        process_options(&argc, &argv)  &&
+        TEST_OK_(argc == 1, "Try `%s -h` for usage", argv0)  &&
+        DO_(output_filename = argv[0]);
 }
 
 
@@ -211,8 +199,7 @@ static void run_archiver(void)
     log_message("Shutting down");
     terminate_server();
     terminate_sniffer();
-    if (archiving)
-        terminate_disk_writer();
+    terminate_disk_writer();
     if (pid_filename)
         TEST_IO(unlink(pid_filename));
     log_message("Shut Down");
@@ -226,15 +213,13 @@ int main(int argc, char **argv)
         process_args(argc, argv)  &&
         initialise_signals()  &&
         TEST_IO(feenableexcept(FE_DIVBYZERO | FE_INVALID | FE_OVERFLOW))  &&
-        IF_(archiving,
-            initialise_disk_writer(output_filename, &input_block_size))  &&
+        initialise_disk_writer(output_filename, &input_block_size)  &&
         maybe_daemonise()  &&
         /* All the thread initialisation must be done after daemonising, as of
          * course threads don't survive across the daemon() call!  Alas, this
          * means that many startup errors go into syslog rather than stderr. */
         initialise_buffer(input_block_size, buffer_blocks)  &&
-        IF_(archiving,
-            start_disk_writer())  &&
+        start_disk_writer()  &&
         initialise_sniffer(fa_sniffer_device)  &&
         initialise_server(server_socket)  &&
         initialise_reader(output_filename)  &&

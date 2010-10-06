@@ -1,0 +1,6 @@
+#!/bin/sh
+
+ARCHIVE_ARGS='-v /dev/sdb'
+
+cd "$(dirname "$0")"
+build/fa-archiver $ARCHIVE_ARGS
