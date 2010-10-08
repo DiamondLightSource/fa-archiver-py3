@@ -34,9 +34,6 @@
  * little delicate... */
 #define BUFFER_BLOCKS   64
 
-/* Default IO block size, only used if running without archiver. */
-#define DEFAULT_BLOCK_SIZE  (512 * K)
-
 
 /*****************************************************************************/
 /*                               Option Parsing                              */
@@ -208,7 +205,7 @@ static void run_archiver(void)
 
 int main(int argc, char **argv)
 {
-    uint32_t input_block_size = DEFAULT_BLOCK_SIZE;
+    uint32_t input_block_size;
     bool ok =
         process_args(argc, argv)  &&
         initialise_signals()  &&

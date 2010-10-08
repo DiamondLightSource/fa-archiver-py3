@@ -567,10 +567,13 @@ static bool write_header(unsigned int frames_written, uint64_t timestamp)
     place_matlab_vector(&h, "ids", miUINT8, mask_ids, mask_length);
 
     /* Write out the gap list data. */
-    place_matlab_vector(&h, "gapix", miINT32, data_index, gap_count + 1);
-    place_matlab_vector(&h, "id0",   miINT32, id_zero, gap_count + 1);
-    place_matlab_vector(&h, "gaptimes",
-        miDOUBLE, gap_timestamps, gap_count + 1);
+    if (!continuous_capture)
+    {
+        place_matlab_vector(&h, "gapix", miINT32, data_index, gap_count + 1);
+        place_matlab_vector(&h, "id0",   miINT32, id_zero, gap_count + 1);
+        place_matlab_vector(&h, "gaptimes",
+            miDOUBLE, gap_timestamps, gap_count + 1);
+    }
 
     /* Finally write out the matrix mat_header for the fa data. */
     int field_count = count_data_bits(data_mask);
@@ -592,7 +595,8 @@ static bool capture_and_save(int sock)
         uint64_t timestamp;
         return
             TEST_read(sock, &timestamp, sizeof(uint64_t))  &&
-            read_gap_list(sock)  &&
+            IF_(!continuous_capture,
+                read_gap_list(sock))  &&
             write_header(sample_count, timestamp)  &&
             DO_(frames_written = capture_data(sock))  &&
             IF_(frames_written != sample_count,
