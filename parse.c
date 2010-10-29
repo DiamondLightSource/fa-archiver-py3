@@ -41,10 +41,10 @@ static bool check_number(const char *start, const char *end)
         return check_number(start, *string); \
     }
 
-DEFINE_PARSE_NUM(parse_int,    int,          strtol, 0)
-DEFINE_PARSE_NUM(parse_uint,   unsigned int, strtoul, 0)
-DEFINE_PARSE_NUM(parse_uint32, uint32_t,     strtoul, 0)
-DEFINE_PARSE_NUM(parse_uint64, uint64_t,     strtoull, 0)
+DEFINE_PARSE_NUM(parse_int,    int,          strtol,   10)
+DEFINE_PARSE_NUM(parse_uint,   unsigned int, strtoul,  10)
+DEFINE_PARSE_NUM(parse_uint32, uint32_t,     strtoul,  10)
+DEFINE_PARSE_NUM(parse_uint64, uint64_t,     strtoull, 10)
 DEFINE_PARSE_NUM(parse_double, double,       strtod)
 
 
