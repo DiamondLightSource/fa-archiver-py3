@@ -48,6 +48,7 @@ static unsigned int data_mask = 1;
 static bool show_progress = true;
 static bool request_contiguous = false;
 static const char *data_name = "data";
+static bool all_data = false;
 
 /* Archiver parameters read from archiver during initialisation. */
 static double sample_frequency;
@@ -168,8 +169,8 @@ static void usage(char *argv0)
 "\n"
 "Either a start time or continuous capture must be specified, and so\n"
 "precisely one of the following must be given:\n"
-"   -s:  Specify start, as a date and time in ISO 8601 format (with\n"
-"        fractional seconds allowed), interpreted as a time in UTC.\n"
+"   -s:  Specify start, as a date and time in ISO 8601 date time format (with\n"
+"        fractional seconds allowed).  Use a trailing Z for UTC time.\n"
 "   -t:  Specify start as a time of day today, or yesterday if Y added to\n"
 "        the end, in format hh:mm:ss[Y], interpreted as a local time.\n"
 "   -b:  Specify start as a time in the past as hh:mm:ss\n"
@@ -184,6 +185,8 @@ static void usage(char *argv0)
 "        Decimated data is only available for archived data.\n"
 "           The bits in the data mask correspond to decimated fields:\n"
 "            1 => mean, 2 => min, 4 => max\n"
+"   -a   Capture all available data even if too much requested.  Otherwise\n"
+"        capture fails if more data requested than present in archive.\n"
 "   -R   Save in raw format, otherwise the data is saved in matlab format\n"
 "   -c   Forbid any gaps in the captured sequence, contiguous data only\n"
 "   -k   Keep extra dimensions in matlab values\n"
@@ -201,7 +204,7 @@ static void usage(char *argv0)
 
 
 /* Returns seconds at midnight this morning for time of day relative timestamp
- * specification.  This uses the current timezone.  Horrible code. */
+ * specification.  This uses the current timezone. */
 static time_t midnight_today(void)
 {
     time_t now;
@@ -287,12 +290,13 @@ static bool parse_opts(int *argc, char ***argv)
     bool ok = true;
     while (ok)
     {
-        switch (getopt(*argc, *argv, "+hRCo:S:qckn:s:t:b:p:f:"))
+        switch (getopt(*argc, *argv, "+hRCo:aS:qckn:s:t:b:p:f:"))
         {
             case 'h':   usage(argv0);                               exit(0);
             case 'R':   matlab_format = false;                      break;
             case 'C':   continuous_capture = true;                  break;
             case 'o':   output_filename = optarg;                   break;
+            case 'a':   all_data = true;                            break;
             case 'S':   server_name = optarg;                       break;
             case 'q':   show_progress = false;                      break;
             case 'c':   request_contiguous = true;                  break;
@@ -338,7 +342,7 @@ static bool parse_args(int argc, char **argv)
         TEST_OK_(argc == 1  ||  argc == 2,
             "Wrong number of arguments.  Try `capture -h` for help.")  &&
         DO_PARSE("capture mask", parse_mask, argv[0], capture_mask)  &&
-        read_archive_parameters()  &&
+        read_archive_parameters()  &&           // Needed for parse_samples
         IF_(argc == 2,
             DO_PARSE("sample count", parse_samples, argv[1], &sample_count));
 }
@@ -399,8 +403,9 @@ static bool request_data(int sock)
             case DATA_D:    sprintf(format, "DF%u",  data_mask);    break;
             case DATA_DD:   sprintf(format, "DDF%u", data_mask);    break;
         }
-        sprintf(request, "R%sMR%sS%ld.%09ldN%u%s%s\n",
+        sprintf(request, "R%sMR%sS%ld.%09ldN%u%s%s%s\n",
             format, raw_mask, start.tv_sec, start.tv_nsec, sample_count,
+            all_data ? "A" : "",
             matlab_format ? "TG" : "", request_contiguous ? "C" : "");
     }
     return TEST_write(sock, request, strlen(request));
@@ -610,7 +615,7 @@ static bool capture_and_save(int sock)
     else
     {
         unsigned int frames_written = capture_data(sock);
-        return TEST_OK_(frames_written == sample_count,
+        return TEST_OK_(all_data  ||  frames_written == sample_count,
             "Only captured %u of %u frames", frames_written, sample_count);
     }
 }

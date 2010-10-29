@@ -20,10 +20,10 @@ bool parse_size64(const char **string, uint64_t *result);
 
 /* Parses date and time in ISO format with an optional trailing nanoseconds
  * part, ie:
- *      yyyy-mm-ddThh:mm:ss[.nnnnnnnnnn] . */
+ *      yyyy-mm-ddThh:mm:ss[.nnnnnnnnnn][Z] . */
 struct timespec;
 bool parse_datetime(const char **string, struct timespec *ts);
-/* Parses time of day in ISO 8601 format optional nanoseconds:
+/* Parses time of day in ISO 8601 format with optional nanoseconds:
  *      hh:mm:ss[.nnnnnnnnnn] . */
 bool parse_time(const char **string, struct timespec *ts);
 /* Parses timestamp in format: secs[.nnn] */

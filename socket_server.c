@@ -116,14 +116,21 @@ static bool process_command(int scon, const char *buf)
 }
 
 
-/* A subscribe request is either S<mask> or SR<raw-mask>. */
+/* A subscribe request is a filter mask followed by options:
+ *
+ *  subscription = "S" filter-mask options
+ *  options = [ "T" ] [ "Z" ]
+ */
 static bool parse_subscription(
-    const char **string, filter_mask_t mask, bool *want_timestamp)
+    const char **string, filter_mask_t mask,
+    bool *want_timestamp, bool *want_t0)
 {
     return
         parse_char(string, 'S')  &&
         parse_mask(string, mask)  &&
-        DO_(*want_timestamp = read_char(string, 'T'));
+        DO_(
+            *want_timestamp = read_char(string, 'T');
+            *want_t0 = read_char(string, 'Z'));
 }
 
 
@@ -156,23 +163,32 @@ static bool process_subscribe(int scon, const char *buf)
 {
     filter_mask_t mask;
     push_error_handling();
-    bool want_timestamp = false;
-    bool parse_ok = DO_PARSE(
-        "subscription", parse_subscription, buf, mask, &want_timestamp);
-    bool ok = report_socket_error(scon, parse_ok);
+    bool want_timestamp = false, want_t0 = false;
+    struct reader_state *reader = NULL;
+    struct timespec ts;
+    const void *block = NULL;
 
-    if (parse_ok  &&  ok)
+    bool start_ok =
+        DO_PARSE(
+            "subscription", parse_subscription, buf, mask,
+            &want_timestamp, &want_t0)  &&
+        DO_(reader = open_reader(false))  &&
+        TEST_NULL_(
+            block = get_read_block(reader, NULL, &ts),
+            "No data currently available");
+    bool ok = report_socket_error(scon, start_ok);
+
+    if (start_ok  &&  ok)
     {
-        struct reader_state *reader = open_reader(false);
-        struct timespec ts;
-        const void *block = get_read_block(reader, NULL, &ts);
-        ok = TEST_NULL_(block, "No data currently available");
-        if (ok  &&  want_timestamp)
+        if (want_timestamp)
         {
             uint64_t timestamp =
                 (uint64_t) ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
             ok = TEST_write(scon, &timestamp, sizeof(uint64_t));
         }
+        if (ok  &&  want_t0)
+            /* The first word in the block is the T0 timestamp. */
+            ok = TEST_write(scon, block, sizeof(uint32_t));
 
         while (ok)
         {
@@ -188,11 +204,13 @@ static bool process_subscribe(int scon, const char *buf)
             else
                 block = NULL;
         }
-        if (block != NULL)
-            release_read_block(reader);
-
-        close_reader(reader);
     }
+
+    if (block != NULL)
+        release_read_block(reader);
+    if (reader != NULL)
+        close_reader(reader);
+
     return ok;
 }
 
@@ -214,6 +232,33 @@ struct command_table {
 };
 
 
+/* Converts connected socket to a printable identification string. */
+static void get_client_name(int scon, char *client_name)
+{
+    struct sockaddr_in name;
+    socklen_t namelen = sizeof(name);
+    if (TEST_IO(getpeername(scon, (struct sockaddr *) &name, &namelen)))
+    {
+        uint8_t * ip = (uint8_t *) &name.sin_addr.s_addr;
+        sprintf(client_name, "%u.%u.%u.%u:%u",
+            ip[0], ip[1], ip[2], ip[3], ntohs(name.sin_port));
+    }
+    else
+        sprintf(client_name, "unknown");
+}
+
+
+/* Sets socket receive timeout.  Used so we don't have threads hanging waiting
+ * for users to complete sending their commands.  (Also so I can remember how to
+ * do this!) */
+static bool set_socket_timeout(int sock, int secs, int usecs)
+{
+    struct timeval timeout = { .tv_sec = secs, .tv_usec = usecs };
+    return TEST_IO(setsockopt(
+        sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)));
+}
+
+
 /* Reads from the given socket until one of the following is encountered: a
  * newline (the preferred case), end of input, end of buffer or an error.  The
  * newline and anything following is discarded. */
@@ -222,7 +267,7 @@ static bool read_line(int sock, char *buf, size_t buflen)
     ssize_t rx;
     while (
         TEST_OK_(buflen > 0, "Read buffer exhausted")  &&
-        TEST_IO(rx = read(sock, buf, buflen))  &&
+        TEST_IO_(rx = read(sock, buf, buflen), "Socket read failed")  &&
         TEST_OK_(rx > 0, "End of file on input"))
     {
         char *newline = memchr(buf, '\n', rx);
@@ -239,41 +284,39 @@ static bool read_line(int sock, char *buf, size_t buflen)
 }
 
 
+/* Command successfully read, dispatch it to the appropriate handler. */
+static bool dispatch_command(
+    int scon, const char *client_name, const char *buf)
+{
+    log_message("Client %s: \"%s\"", client_name, buf);
+    struct command_table *command = command_table;
+    while (command->id  &&  command->id != buf[0])
+        command += 1;
+    return command->process(scon, buf);
+}
+
+
 static void * process_connection(void *context)
 {
     int scon = (intptr_t) context;
 
     /* Retrieve client address so we can log all messages associated with this
      * client with the appropriate address. */
-    struct sockaddr_in name;
-    socklen_t namelen = sizeof(name);
     char client_name[64];
-    if (TEST_IO(getpeername(scon, (struct sockaddr *) &name, &namelen)))
-    {
-        uint8_t * ip = (uint8_t *) &name.sin_addr.s_addr;
-        sprintf(client_name, "%u.%u.%u.%u:%u",
-            ip[0], ip[1], ip[2], ip[3], ntohs(name.sin_port));
-    }
-    else
-        sprintf(client_name, "unknown");
+    get_client_name(scon, client_name);
 
     /* Read the command, required to be one line terminated by \n, and dispatch
      * to the appropriate handler.  Any errors are handled locally and are
      * reported below. */
     char buf[4096];
     push_error_handling();
-    bool ok = read_line(scon, buf, sizeof(buf));
-    if (ok)
-    {
-        log_message("Client %s: \"%s\"", client_name, buf);
-        /* Command successfully read, dispatch it to the appropriate handler. */
-        struct command_table * command = command_table;
-        while (command->id  &&  command->id != buf[0])
-            command += 1;
+    bool ok = FINALLY(
+        set_socket_timeout(scon, 0, 100000)  &&      // 100ms rx timeout
+        read_line(scon, buf, sizeof(buf))  &&
+        dispatch_command(scon, client_name, buf),
 
-        ok = command->process(scon, buf);
-    }
-    ok = TEST_IO(close(scon))  &&  ok;
+        // Always close the socket when done
+        TEST_IO(close(scon)));
 
     /* Report any errors. */
     char *error_message;

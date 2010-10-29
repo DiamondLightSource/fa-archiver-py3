@@ -146,10 +146,11 @@ bool parse_datetime(const char **string, struct timespec *ts)
             "%Y-%m-%dT%H:%M:%S",
             "Incomplete date time, should be yyyy-mm-ddThh:mm:ss",
             string, &tm, &ts->tv_nsec)  &&
-        /* Convert tm value into seconds for return.  Note that the more
-         * standard function to use here is mktime(), but that depends on the
-         * value of the TZ environment variable. */
-        TEST_IO_(ts->tv_sec = timegm(&tm), "Invalid date");
+        TEST_IO_(
+            /* Convert tm into seconds, using the appropriate conversion
+             * function depending on whether UTC has been requested. */
+            ts->tv_sec = (read_char(string, 'Z') ? timegm : mktime)(&tm),
+            "Unable to convert date");
 }
 
 

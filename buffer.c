@@ -149,7 +149,7 @@ const void * get_read_block(
     else
     {
         /* If we're on the tail of the writer then we have to wait for a new
-         * entry in the buffer. */
+         * entry in the buffer, unless writing is currently halted. */
         while (reader->running  &&  reader->index_out == buffer_index_in)
             pwait(&lock);
         if (!reader->running)
@@ -204,7 +204,6 @@ bool release_read_block(struct reader_state *reader)
 /* Writer routines.                                                          */
 
 static bool write_blocked = false;  // Used to halt writes for debugging
-static bool in_gap = true;          // Used to coalesce repeated gaps
 
 /* Checks for the presence of a blocking reserved reader. */
 static bool blocking_readers(void)
@@ -220,8 +219,6 @@ void * get_write_block(void)
 {
     void *buffer;
     LOCK(lock);
-    while (write_blocked)
-        pwait(&lock);
     if (blocking_readers())
         /* There's a reserved reader not finished with the next block yet.
          * Bail and try again later. */
@@ -236,10 +233,7 @@ void * get_write_block(void)
 
 void release_write_block(bool gap)
 {
-    if (gap  &&  in_gap)
-        /* Ignore repeated reports of the same gap. */
-        return;
-    in_gap = gap;
+    gap = gap || write_blocked;
 
     /* Get the time this block was written.  This is close enough to the
      * completion of the FA sniffer read to be a good timestamp for the last
@@ -269,10 +263,7 @@ void release_write_block(bool gap)
 
 void enable_buffer_write(bool enabled)
 {
-    LOCK(lock);
     write_blocked = !enabled;
-    psignal(&lock);
-    UNLOCK(lock);
 }
 
 

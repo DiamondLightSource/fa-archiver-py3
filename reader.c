@@ -210,7 +210,8 @@ static bool check_run(
 
 static bool compute_start(
     const struct reader *reader,
-    uint64_t start, unsigned int samples, bool only_contiguous,
+    uint64_t start, unsigned int *samples,
+    bool all_data, bool only_contiguous,
     unsigned int *block, unsigned int *offset)
 {
     uint64_t available;
@@ -223,11 +224,15 @@ static bool compute_start(
          * appropriate for our current data type. */
         DO_(fixup_offset(reader, ix_block, block, offset, &available))  &&
         /* Check the requested data set is valid and available. */
-        TEST_OK_(samples <= available,
-            "Only %"PRIu64" samples of %u requested available",
-            available, samples)  &&
+        IF_ELSE(all_data,
+            // Truncate to available data if necessary
+            IF_(*samples > available, DO_(*samples = available)),
+            // Otherwise ensure all requested data available
+            TEST_OK_(*samples <= available,
+                "Only %"PRIu64" samples of %u requested available",
+                available, *samples))  &&
         IF_(only_contiguous,
-            check_run(reader, ix_block, *offset, samples));
+            check_run(reader, ix_block, *offset, *samples));
 }
 
 
@@ -359,7 +364,7 @@ static bool read_data(
     const struct reader *reader, int scon,
     unsigned int data_mask, filter_mask_t read_mask,
     uint64_t start, unsigned int samples,
-    bool only_contiguous, bool want_timestamp, bool gaplist)
+    bool all_data, bool only_contiguous, bool want_timestamp, bool gaplist)
 {
     unsigned int block, offset;
     struct iter_mask iter = { 0 };
@@ -367,7 +372,8 @@ static bool read_data(
     int archive = -1;
     bool ok =
         compute_start(
-            reader, start, samples, only_contiguous, &block, &offset)  &&
+            reader, start, &samples, all_data,
+            only_contiguous, &block, &offset)  &&
         mask_to_archive(read_mask, &iter)  &&
         lock_buffers(&read_buffers, iter.count)  &&
         TEST_IO(archive = open(archive_filename, O_RDONLY));
@@ -556,11 +562,12 @@ static struct reader dd_reader = {
  *  source = "F" | "D" ["D"] ["F" data-mask]
  *  samples = integer
  *  data-mask = integer
- *  options = [ "T" ] [ "G" ] [ "C" ]
+ *  options = [ "A" ] [ "T" ] [ "G" ] [ "C" ]
  *
  * The options can only appear in the order given and have the following
  * meanings:
  *
+ *  A   Send all data there is, even if samples is too large
  *  T   Send timestamp at head of dataset
  *  G   Send gap list at end of data capture
  *  C   Ensure no gaps in selected dataset, fail if any
@@ -573,6 +580,7 @@ struct read_parse {
     uint64_t start;                 // Data start (in microseconds into epoch)
     const struct reader *reader;    // Interpretation of data source
     unsigned int data_mask;         // Data mask for D and DD data
+    bool send_all_data;             // Don't bail out if insufficient data
     bool only_contiguous;           // Only contiguous data acceptable
     bool timestamp;                 // Send timestamp at start of data
     bool gaplist;                   // Send gaplist after data
@@ -624,9 +632,10 @@ static bool parse_start(const char **string, uint64_t *start)
 }
 
 
-/* options = [ "T" ] [ "G" ] [ "C" ] . */
+/* options = [ "A" ] [ "T" ] [ "G" ] [ "C" ] . */
 static bool parse_options(const char **string, struct read_parse *parse)
 {
+    parse->send_all_data = read_char(string, 'A');
     parse->timestamp = read_char(string, 'T');
     parse->gaplist = read_char(string, 'G');
     parse->only_contiguous = read_char(string, 'C');
@@ -663,7 +672,8 @@ bool process_read(int scon, const char *buf)
         return read_data(
             parse.reader, scon, parse.data_mask,
             parse.read_mask, parse.start, parse.samples,
-            parse.only_contiguous, parse.timestamp, parse.gaplist);
+            parse.send_all_data, parse.only_contiguous,
+            parse.timestamp, parse.gaplist);
     else
         return report_socket_error(scon, false);
 }
