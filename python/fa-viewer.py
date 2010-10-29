@@ -4,12 +4,11 @@ from pkg_resources import require
 require('cothread')
 
 import os, sys
-
-import cothread
-
+import optparse
 import numpy
 from PyQt4 import Qwt5, QtGui, QtCore, uic
 
+import cothread
 import falib
 
 
@@ -51,8 +50,9 @@ class buffer:
 
 class monitor:
     def __init__(self,
-            server, on_event, on_connect, on_eof, buffer_size, read_size):
+            server, port, on_event, on_connect, on_eof, buffer_size, read_size):
         self.server = server
+        self.port = port
         self.on_event = on_event
         self.on_connect = on_connect
         self.on_eof = on_eof
@@ -66,7 +66,8 @@ class monitor:
     def start(self):
         assert not self.running, 'Strange: we are already running'
         try:
-            self.subscription = falib.subscription([self.id], server=server)
+            self.subscription = falib.subscription(
+                [self.id], server=self.server, port=self.port)
         except Exception, message:
             self.on_eof('Unable to connect to server: %s' % message)
         else:
@@ -557,15 +558,28 @@ INITIAL_MODE = 0
 # This is the implementation of the viewer as a Qt display application.
 
 
-BPM_list = [('Other', [])] + [
-    ('Cell %d' % (c+1),
-     [('SR%02dC-DI-EBPM-%02d' % (c+1, n+1), 7*c+n+1) for n in range(7)])
-    for c in range(24)]
-BPM_list[21][1].append(('SR21C-DI-EBPM-08', 169))
-BPM_list[13][1].extend(
-    [('SR13S-DI-EBPM-%02d' % (n+1), 174+n) for n in range(2)])
+# The format of BPM_list is (Haskell type syntax):
+#   [(group_name, [(bpm_name, bpm_id)])]
+# Ie, a list of group names, and for each group a list of bpm name and id pairs.
+
+def storage_bpms():
+    cells = [('Other', [])] + [
+        ('Cell %d' % (c+1),
+         [('SR%02dC-DI-EBPM-%02d' % (c+1, n+1), 7*c+n+1) for n in range(7)])
+        for c in range(24)]
+    cells[21][1].append(('SR21C-DI-EBPM-08', 169))
+    cells[13][1].extend(
+        [('SR13S-DI-EBPM-%02d' % (n+1), 174+n) for n in range(2)])
+    return cells
+
+def booster_bpms():
+    # Complete black magic computation of booster bpm cells!
+    return [('Other', [])] + [('Booster',
+        [('BR%02dC-DI-EBPM-%02d' % (((2*n + 6) // 11) % 4 + 1, n + 1), n + 1)
+            for n in range(22)])]
 
 
+BPM_list = storage_bpms()
 # Start on BPM #1 -- as sensible a default as any
 INITIAL_BPM = 0
 
@@ -598,13 +612,13 @@ class Viewer:
         'middle click to zoom out, right click and drag to pan.'
 
     '''application class'''
-    def __init__(self, ui, server):
+    def __init__(self, ui, server, port):
         self.ui = ui
 
         self.makeplot()
 
         self.monitor = monitor(
-            server, self.on_data_update, self.on_connect, self.on_eof,
+            server, port, self.on_data_update, self.on_connect, self.on_eof,
             500000, 1000)
 
         # Prepare the selections in the controls
@@ -840,19 +854,35 @@ class Viewer:
         self.on_data_update(self.monitor.read())
 
 
+# Argument parsing
+parser = optparse.OptionParser(usage = '''\
+Usage: fa-viewer [options]
+
+Display live Fast Acquisition data from EBPM data stream''')
+parser.add_option(
+    '-S', dest = 'server', default = falib.DEFAULT_SERVER,
+    help = 'FA archive server used to provide data feed')
+parser.add_option(
+    '-p', dest = 'port', default = falib.DEFAULT_PORT, type = 'int',
+    help = 'Port number on server')
+parser.add_option(
+    '-B', dest = 'booster', default = False, action = 'store_true',
+    help = 'Configure BPM list for booster')
+options, arglist = parser.parse_args()
+if arglist:
+    parser.error('Unexpected arguments')
+
+if options.booster:
+    BPM_list = booster_bpms()
+
+F_S = falib.get_sample_frequency(server=options.server, port=options.port)
+
 cothread.iqt()
-
-server = falib.DEFAULT_SERVER
-if len(sys.argv) > 1:
-    server = sys.argv[1]
-
-F_S = falib.get_sample_frequency(server=server)
-
 
 # create and show form
 ui_viewer = uic.loadUi(os.path.join(os.path.dirname(__file__), 'viewer.ui'))
 ui_viewer.show()
 # Bind code to form
-s = Viewer(ui_viewer, server)
+s = Viewer(ui_viewer, options.server, options.port)
 
 cothread.WaitForQuit()
