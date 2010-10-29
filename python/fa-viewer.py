@@ -133,9 +133,9 @@ char_times  = u'\u00D7'             # Multiplication sign
 char_mu     = u'\u03BC'             # Greek mu
 char_sqrt   = u'\u221A'             # Square root sign
 char_cdot   = u'\u22C5'             # Centre dot
+squared     = u'\u00B2'             # Superscript 2
 
 micrometre  = char_mu + 'm'
-squared     = u'\u00B2'              # Superscript 2
 
 
 class mode_common:
@@ -143,7 +143,8 @@ class mode_common:
         self.parent = parent
 
     def show_xy(self, show_x, show_y):
-        pass
+        self.show_x = show_x
+        self.show_y = show_y
 
     def plot(self, value):
         v = self.compute(value)
@@ -153,9 +154,14 @@ class mode_common:
     def set_enable(self, enabled):
         pass
 
+    def compute(self, value):
+        return value
+
     def get_minmax(self, value):
         value = self.compute(value)
-        return numpy.nanmin(value), numpy.nanmax(value)
+        ix = (self.show_x, self.show_y)
+        ix = numpy.nonzero(ix)[0]           # Ugly numpy clever indexing failure
+        return numpy.nanmin(value[:, ix]), numpy.nanmax(value[:, ix])
 
     def linear_rescale(self, value):
         min, max = self.get_minmax(value)
@@ -288,12 +294,8 @@ class mode_raw(mode_common):
         self.parent.cx.setData(self.xaxis, mean[:, 0])
         self.parent.cy.setData(self.xaxis, mean[:, 1])
 
-    def get_minmax(self, value):
-        return numpy.nanmin(value), numpy.nanmax(value)
-
     def show_xy(self, show_x, show_y):
-        self.show_x = show_x
-        self.show_y = show_y
+        mode_common.show_xy(self, show_x, show_y)
         self.set_visible()
 
 
@@ -538,8 +540,7 @@ class mode_integrated(mode_common):
         self.parent.reset_mode()
 
     def show_xy(self, show_x, show_y):
-        self.show_x = show_x
-        self.show_y = show_y
+        mode_common.show_xy(self, show_x, show_y)
         self.cxb.setVisible(show_x)
         self.cyb.setVisible(show_y)
 
@@ -741,9 +742,11 @@ class Viewer:
         self.monitor.set_id(self.channel)
 
     def set_channel_id(self):
-        self.channel = int(self.ui.channel_id.text())
-        self.bpm_name = 'BPM id %d' % self.channel
-        self.monitor.set_id(self.channel)
+        channel = int(self.ui.channel_id.text())
+        if channel != self.channel:
+            self.channel = channel
+            self.bpm_name = 'BPM id %d' % channel
+            self.monitor.set_id(channel)
 
     def rescale_graph(self):
         self.mode.rescale(self.monitor.read())
