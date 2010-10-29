@@ -43,8 +43,8 @@ class connection:
     def close(self):
         self.sock.close()
 
-    def recv(self, block_size=65536):
-        cothread.select([self.sock.fileno()], [], [])
+    def recv(self, block_size=65536, timeout=0.2):
+        cothread.select([self.sock.fileno()], [], [], timeout)
         chunk = self.sock.recv(block_size)
         if not chunk:
             raise self.EOF('Connection closed by server')
