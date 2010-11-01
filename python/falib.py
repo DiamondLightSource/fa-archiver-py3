@@ -4,6 +4,7 @@ DEFAULT_SERVER = 'fa-archiver.cs.diamond.ac.uk'
 DEFAULT_PORT = 8888
 
 import socket
+import struct
 import numpy
 import cothread
 
@@ -27,6 +28,14 @@ def count_mask(mask):
         if mask[i // 8] & (1 << (i % 8)):
             n += 1
     return n
+
+def subscription_flags(timestamp = False, t0 = False):
+    flags = ''
+    if timestamp:
+        flags = 'T'
+    if t0:
+        flags = flags + 'Z'
+    return flags
 
 
 class connection:
@@ -72,20 +81,31 @@ class connection:
 
 
 class subscription(connection):
-    def __init__(self, mask, **kargs):
+    def __init__(self, mask, t0 = False, **kargs):
         connection.__init__(self, **kargs)
         self.mask = normalise_mask(mask)
         self.count = count_mask(self.mask)
 
-        self.sock.send('SR%s\n' % format_mask(self.mask))
+        self.sock.send('SR%s%s\n' % (
+            format_mask(self.mask), subscription_flags(t0 = t0)))
         c = self.recv(1)
         if c != chr(0):
-            raise self.Error(c + self.recv())
+            raise self.Error((c + self.recv())[:-1])    # Discard trailing \n
+        if t0:
+            self.t0 = struct.unpack('<I', self.recv(4))[0]
+        else:
+            self.t0 = 0
 
     def read(self, samples):
+        self.t0 = (self.t0 + samples) & 0xffffffff
         raw = self.read_block(8 * samples * self.count)
         array = numpy.frombuffer(raw, dtype = numpy.int32)
         return array.reshape((samples, self.count, 2))
+
+    def read_t0(self, samples):
+        t0 = self.t0
+        data = self.read(samples)
+        return data, t0
 
 
 class sample_frequency(connection):
