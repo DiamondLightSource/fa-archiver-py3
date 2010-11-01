@@ -146,8 +146,8 @@ static char * add_strerror(char *message, int last_errno)
          * maybe use for the message. */
         char StrError[64];
         char *result;
-        asprintf(&result, "%s: (%d) %s", message, last_errno,
-            strerror_r(last_errno, StrError, sizeof(StrError)));
+        IGNORE(asprintf(&result, "%s: (%d) %s", message, last_errno,
+            strerror_r(last_errno, StrError, sizeof(StrError))));
         free(message);
         return result;
     }
@@ -160,7 +160,7 @@ void print_error(const char * format, ...)
     va_list args;
     va_start(args, format);
     char *message;
-    vasprintf(&message, format, args);
+    IGNORE(vasprintf(&message, format, args));
     message = add_strerror(message, last_errno);
     if (!save_message(message))
     {
@@ -174,7 +174,7 @@ void panic_error(const char * filename, int line)
 {
     int last_errno = errno;
     char *message;
-    asprintf(&message, "panic at %s, line %d", filename, line);
+    IGNORE(asprintf(&message, "panic at %s, line %d", filename, line));
     message = add_strerror(message, last_errno);
     log_error("%s", message);
     free(message);

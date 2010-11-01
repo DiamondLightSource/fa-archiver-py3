@@ -138,5 +138,9 @@ void panic_error(const char * filename, int line)
 #define ARRAY_SIZE(a)   (sizeof(a)/sizeof((a)[0]))
 
 
+/* For ignoring return values even when warn_unused_result is in force. */
+#define IGNORE(e)       do if(e) {;} while (0)
+
+
 /* Debug utility for dumping binary data in ASCII format. */
 void dump_binary(FILE *out, const void *buffer, size_t length);
