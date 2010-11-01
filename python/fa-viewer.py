@@ -204,8 +204,7 @@ class decimation:
         # To get the initial size right, start by adding all items
         self.selector.addItems(['%d:1' % n for n in item_list])
         self.selector.setSizeAdjustPolicy(QtGui.QComboBox.AdjustToContents)
-        parent.connect(self.selector,
-            'currentIndexChanged(int)', self.set_decimation)
+        self.selector.currentIndexChanged.connect(self.set_decimation)
         mode.addWidget(self.selector)
         self.decimation = self.item_list[0]
 
@@ -354,7 +353,7 @@ class mode_fft(mode_common):
 
         squared = QtGui.QCheckBox(
             '%s%s/Hz' % (micrometre, char_squared), parent.ui)
-        parent.connect(squared, 'stateChanged(int)', self.set_squared)
+        squared.stateChanged.connect(self.set_squared)
         self.addWidget(squared)
 
         self.selector = decimation(
@@ -468,14 +467,14 @@ class mode_fft_logf(mode_common):
 
         check_scalef = QtGui.QCheckBox('scale by f', parent.ui)
         self.addWidget(check_scalef)
-        parent.connect(check_scalef, 'stateChanged(int)', self.set_scalef_state)
+        check_scalef.stateChanged.connect(self.set_scalef_state)
 
         self.addWidget(QtGui.QLabel('Filter', parent.ui))
 
         selector = QtGui.QComboBox(parent.ui)
         selector.addItems(['%ds' % f for f in self.Filters])
         self.addWidget(selector)
-        parent.connect(selector, 'currentIndexChanged(int)', self.set_filter)
+        selector.currentIndexChanged.connect(self.set_filter)
 
         self.filter = 1
         self.reset = True
@@ -534,11 +533,11 @@ class mode_integrated(mode_common):
 
         yselect = QtGui.QCheckBox('Linear', parent.ui)
         self.addWidget(yselect)
-        parent.connect(yselect, 'stateChanged(int)', self.set_yscale)
+        yselect.stateChanged.connect(self.set_yscale)
 
         button = QtGui.QPushButton('Background', parent.ui)
         self.addWidget(button)
-        parent.connect(button, 'clicked()', self.set_background)
+        button.clicked.connect(self.set_background)
 
         self.cxb = parent.makecurve(X_colour, True)
         self.cyb = parent.makecurve(Y_colour,  True)
@@ -618,6 +617,8 @@ INITIAL_TIMEBASE = 3
 SCROLL_THRESHOLD = 10000
 
 class SpyMouse(QtCore.QObject):
+    MouseMove = QtCore.pyqtSignal(QtCore.QPoint)
+
     def __init__(self, parent):
         QtCore.QObject.__init__(self, parent)
         parent.setMouseTracking(True)
@@ -625,7 +626,7 @@ class SpyMouse(QtCore.QObject):
 
     def eventFilter(self, object, event):
         if event.type() == QtCore.QEvent.MouseMove:
-            self.emit(QtCore.SIGNAL('MouseMove'), event.pos())
+            self.MouseMove.emit(event.pos())
         return QtCore.QObject.eventFilter(self, object, event)
 
 
@@ -669,18 +670,14 @@ class Viewer:
         self.mode.show_xy(True, True)
 
         # Make the initial GUI connections
-        self.connect(ui.channel_group,
-            'currentIndexChanged(int)', self.set_group)
-        self.connect(ui.channel,
-            'currentIndexChanged(int)', self.set_channel)
-        self.connect(ui.channel_id, 'editingFinished()', self.set_channel_id)
-        self.connect(ui.timebase,
-            'currentIndexChanged(int)', self.set_timebase)
-        self.connect(ui.rescale, 'clicked()', self.rescale_graph)
-        self.connect(ui.mode, 'currentIndexChanged(int)', self.set_mode)
-        self.connect(ui.run, 'clicked(bool)', self.toggle_running)
-        self.connect(ui.show_curves,
-            'currentIndexChanged(int)', self.show_curves)
+        ui.channel_group.currentIndexChanged.connect(self.set_group)
+        ui.channel.currentIndexChanged.connect(self.set_channel)
+        ui.channel_id.editingFinished.connect(self.set_channel_id)
+        ui.timebase.currentIndexChanged.connect(self.set_timebase)
+        ui.rescale.clicked.connect(self.rescale_graph)
+        ui.mode.currentIndexChanged.connect(self.set_mode)
+        ui.run.clicked.connect(self.toggle_running)
+        ui.show_curves.currentIndexChanged.connect(self.show_curves)
 
         # Initial control settings: these all trigger GUI related actions.
         self.channel_ix = 0
@@ -690,10 +687,6 @@ class Viewer:
         # Go!
         self.monitor.start()
         self.ui.show()
-
-    def connect(self, control, signal, action):
-        '''Connects a Qt signal from a control to the selected action.'''
-        self.ui.connect(control, QtCore.SIGNAL(signal), action)
 
     def makecurve(self, colour, dotted=False):
         c = Qwt5.QwtPlotCurve()
@@ -748,8 +741,7 @@ class Viewer:
 
         # Monitor mouse movements over the plot area so we can show the position
         # in coordinates.
-        self.connect(SpyMouse(plot.canvas()), 'MouseMove', self.mouse_move)
-
+        SpyMouse(plot.canvas()).MouseMove.connect(self.mouse_move)
 
 
     # --------------------------------------------------------------------------
