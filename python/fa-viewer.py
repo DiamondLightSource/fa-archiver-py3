@@ -134,14 +134,29 @@ char_times  = u'\u00D7'             # Multiplication sign
 char_mu     = u'\u03BC'             # Greek mu
 char_sqrt   = u'\u221A'             # Square root sign
 char_cdot   = u'\u22C5'             # Centre dot
-squared     = u'\u00B2'             # Superscript 2
+char_squared = u'\u00B2'            # Superscript 2
 
 micrometre  = char_mu + 'm'
 
 
 class mode_common:
+    yshortname = 'Y'
+
     def __init__(self, parent):
         self.parent = parent
+        self.__tray = QtGui.QWidget(parent.ui)
+        self.__tray_layout = QtGui.QHBoxLayout()
+        self.__tray.setLayout(self.__tray_layout)
+        parent.ui.bottom_row.addWidget(self.__tray)
+        self.__tray_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.__tray.setVisible(False)
+
+    def set_enable(self, enabled):
+        self.__tray.setVisible(enabled)
+
+    def addWidget(self, widget):
+        self.__tray_layout.addWidget(widget)
 
     def show_xy(self, show_x, show_y):
         self.show_x = show_x
@@ -151,9 +166,6 @@ class mode_common:
         v = self.compute(value)
         self.parent.cx.setData(self.xaxis, v[:, 0])
         self.parent.cy.setData(self.xaxis, v[:, 1])
-
-    def set_enable(self, enabled):
-        pass
 
     def compute(self, value):
         return value
@@ -180,24 +192,22 @@ class decimation:
     '''Common code for decimation selection.'''
 
     # Note that this code assumes that filter selectes a prefix of item_list
-    def __init__(self, parent, item_list, filter, on_update):
+    def __init__(self, mode, parent, item_list, filter, on_update):
         self.parent = parent
         self.item_list = item_list
         self.filter = filter
         self.on_update = on_update
 
-        self.label = QtGui.QLabel('Decimation', parent.ui)
+        mode.addWidget(QtGui.QLabel('Decimation', parent.ui))
+
         self.selector = QtGui.QComboBox(parent.ui)
+        # To get the initial size right, start by adding all items
+        self.selector.addItems(['%d:1' % n for n in item_list])
         self.selector.setSizeAdjustPolicy(QtGui.QComboBox.AdjustToContents)
-        parent.ui.bottom_row.addWidget(self.label)
-        parent.ui.bottom_row.addWidget(self.selector)
         parent.connect(self.selector,
             'currentIndexChanged(int)', self.set_decimation)
+        mode.addWidget(self.selector)
         self.decimation = self.item_list[0]
-
-    def set_enable(self, enabled):
-        self.label.setVisible(enabled)
-        self.selector.setVisible(enabled)
 
     def set_decimation(self, ix):
         self.decimation = self.item_list[ix]
@@ -238,8 +248,8 @@ class mode_raw(mode_common):
     def __init__(self, parent):
         mode_common.__init__(self, parent)
         self.selector = decimation(
-            parent, self.Decimations, lambda d: 50*d < self.timebase,
-            self.set_decimation)
+            self, parent, self.Decimations,
+            lambda d: 50*d < self.timebase, self.set_decimation)
         self.decimation = self.selector.decimation
         self.maxx = parent.makecurve(X_colour, True)
         self.maxy = parent.makecurve(Y_colour, True)
@@ -247,7 +257,7 @@ class mode_raw(mode_common):
         self.miny = parent.makecurve(Y_colour, True)
         self.show_x = True
         self.show_y = True
-        self.set_enable(False)
+        self.set_visible(False)
 
     def set_visible(self, enabled=True):
         self.maxx.setVisible(enabled and self.decimation > 1 and self.show_x)
@@ -256,7 +266,7 @@ class mode_raw(mode_common):
         self.miny.setVisible(enabled and self.decimation > 1 and self.show_y)
 
     def set_enable(self, enabled):
-        self.selector.set_enable(enabled)
+        mode_common.set_enable(self, enabled)
         self.set_visible(enabled)
 
     def set_timebase(self, timebase):
@@ -329,8 +339,6 @@ class mode_fft(mode_common):
     yname = 'Amplitude'
     xshortname = 'f'
     xunits = 'kHz'
-    yunits_normal = '%s/%sHz' % (micrometre, char_sqrt)
-    yunits_squared = '%s%s/Hz' % (micrometre, squared)
     xscale = Qwt5.QwtLinearScaleEngine
     yscale = Qwt5.QwtLog10ScaleEngine
     xticks = 5
@@ -343,24 +351,22 @@ class mode_fft(mode_common):
 
     def __init__(self, parent):
         mode_common.__init__(self, parent)
+
+        squared = QtGui.QCheckBox(
+            '%s%s/Hz' % (micrometre, char_squared), parent.ui)
+        parent.connect(squared, 'stateChanged(int)', self.set_squared)
+        self.addWidget(squared)
+
         self.selector = decimation(
-            parent, self.Decimations, lambda d: 1000 * d <= self.timebase,
-            self.set_decimation)
-        self.squared = QtGui.QCheckBox(
-            '%s%s/Hz' % (micrometre, squared), parent.ui)
-        parent.ui.bottom_row.insertWidget(0, self.squared)
-        parent.connect(self.squared, 'stateChanged(int)', self.set_squared)
+            self, parent, self.Decimations,
+            lambda d: 1000 * d <= self.timebase, self.set_decimation)
+
         self.set_squared_state(False)
-        self.set_enable(False)
         self.decimation = self.selector.decimation
 
     def set_timebase(self, timebase):
         self.timebase = timebase
         self.selector.update()
-
-    def set_enable(self, enabled):
-        self.selector.set_enable(enabled)
-        self.squared.setVisible(enabled)
 
     def set_decimation(self, decimation):
         self.decimation = decimation
@@ -369,10 +375,10 @@ class mode_fft(mode_common):
     def set_squared_state(self, show_squared):
         self.show_squared = show_squared
         if show_squared:
-            self.yunits = self.yunits_squared
+            self.yunits = '%s%s/Hz' % (micrometre, char_squared)
             self.ymin = self.ymin_normal ** 2
         else:
-            self.yunits = self.yunits_normal
+            self.yunits = '%s/%sHz' % (micrometre, char_sqrt)
             self.ymin = self.ymin_normal
 
     def set_squared(self, squared):
@@ -424,16 +430,12 @@ def condense(value, counts):
 class mode_fft_logf(mode_common):
     mode_name = 'FFT (log f)'
     xname = 'Frequency'
-    yname = 'Amplitude %s freq' % char_times
     xshortname = 'f'
     xunits = 'Hz'
-    yunits = '%s%s%sHz' % (micrometre, char_cdot, char_sqrt)
     xscale = Qwt5.QwtLog10ScaleEngine
     yscale = Qwt5.QwtLog10ScaleEngine
     xticks = 10
     xmax = F_S / 2
-    ymin = 1e-3
-    ymax = 100
 
     Filters = [1, 10, 100]
 
@@ -445,8 +447,10 @@ class mode_fft_logf(mode_common):
 
     def compute(self, value):
         fft = scaled_abs_fft(value)[1:]
-        fft_logf = self.xaxis[:, None] * numpy.sqrt(
+        fft_logf = numpy.sqrt(
             condense(fft**2, self.counts) / self.counts[:,None])
+        if self.scalef:
+            fft_logf *= self.xaxis[:, None]
 
         if self.filter == 1:
             return fft_logf
@@ -461,24 +465,44 @@ class mode_fft_logf(mode_common):
 
     def __init__(self, parent):
         mode_common.__init__(self, parent)
-        self.label = QtGui.QLabel('Filter', parent.ui)
-        self.selector = QtGui.QComboBox(parent.ui)
-        self.selector.addItems(['%ds' % f for f in self.Filters])
-        parent.ui.bottom_row.addWidget(self.label)
-        parent.ui.bottom_row.addWidget(self.selector)
-        parent.connect(self.selector,
-            'currentIndexChanged(int)', self.set_filter)
-        self.set_enable(False)
+
+        check_scalef = QtGui.QCheckBox('scale by f', parent.ui)
+        self.addWidget(check_scalef)
+        parent.connect(check_scalef, 'stateChanged(int)', self.set_scalef_state)
+
+        self.addWidget(QtGui.QLabel('Filter', parent.ui))
+
+        selector = QtGui.QComboBox(parent.ui)
+        selector.addItems(['%ds' % f for f in self.Filters])
+        self.addWidget(selector)
+        parent.connect(selector, 'currentIndexChanged(int)', self.set_filter)
+
         self.filter = 1
         self.reset = True
-
-    def set_enable(self, enabled):
-        self.label.setVisible(enabled)
-        self.selector.setVisible(enabled)
+        self.set_scalef(False)
 
     def set_filter(self, ix):
         self.filter = 1.0 / self.Filters[ix]
         self.reset = True
+
+    def set_scalef(self, scalef):
+        self.scalef = scalef
+        if self.scalef:
+            self.yname = 'Amplitude %s freq' % char_times
+            self.yunits = '%s%s%sHz' % (micrometre, char_cdot, char_sqrt)
+            self.yshortname = 'f%sY' % char_cdot
+            self.ymin = 1e-3
+            self.ymax = 100
+        else:
+            self.yname = 'Amplitude'
+            self.yunits = '%s/%sHz' % (micrometre, char_sqrt)
+            self.yshortname = 'Y'
+            self.ymin = 1e-4
+            self.ymax = 1
+
+    def set_scalef_state(self, scalef):
+        self.set_scalef(scalef != 0)
+        self.parent.reset_mode()
 
 
 class mode_integrated(mode_common):
@@ -507,23 +531,22 @@ class mode_integrated(mode_common):
 
     def __init__(self, parent):
         mode_common.__init__(self, parent)
-        self.button = QtGui.QPushButton('Background', parent.ui)
-        parent.ui.bottom_row.addWidget(self.button)
-        parent.connect(self.button, 'clicked()', self.set_background)
+
+        yselect = QtGui.QCheckBox('Linear', parent.ui)
+        self.addWidget(yselect)
+        parent.connect(yselect, 'stateChanged(int)', self.set_yscale)
+
+        button = QtGui.QPushButton('Background', parent.ui)
+        self.addWidget(button)
+        parent.connect(button, 'clicked()', self.set_background)
+
         self.cxb = parent.makecurve(X_colour, True)
         self.cyb = parent.makecurve(Y_colour,  True)
         self.show_x = True
         self.show_y = True
 
-        self.yselect = QtGui.QCheckBox('Linear', parent.ui)
-        parent.ui.bottom_row.insertWidget(0, self.yselect)
-        parent.connect(self.yselect, 'stateChanged(int)', self.set_yscale)
-
-        self.set_enable(False)
-
     def set_enable(self, enabled):
-        self.button.setVisible(enabled)
-        self.yselect.setVisible(enabled)
+        mode_common.set_enable(self, enabled)
         self.cxb.setVisible(enabled and self.show_x)
         self.cyb.setVisible(enabled and self.show_y)
 
@@ -802,9 +825,9 @@ class Viewer:
         x = self.plot.invTransform(Qwt5.QwtPlot.xBottom, pos.x())
         y = self.plot.invTransform(Qwt5.QwtPlot.yLeft, pos.y())
         self.ui.position_xy.setText(
-            '%s: %.4g %s, Y: %.4g %s' % (
+            '%s: %.4g %s, %s: %.4g %s' % (
                 self.mode.xshortname, x, self.mode.xunits,
-                y, self.mode.yunits))
+                self.mode.yshortname, y, self.mode.yunits))
 
 
     # --------------------------------------------------------------------------
