@@ -3,6 +3,10 @@
 DEFAULT_SERVER = 'fa-archiver.cs.diamond.ac.uk'
 DEFAULT_PORT = 8888
 
+if __name__ == '__main__':
+    from pkg_resources import require
+    require('cothread')
+
 import socket
 import struct
 import numpy
@@ -53,7 +57,8 @@ class connection:
         self.sock.close()
 
     def recv(self, block_size=65536, timeout=0.2):
-        cothread.select([self.sock.fileno()], [], [], timeout)
+        if not cothread.select([self.sock.fileno()], [], [], timeout)[0]:
+            raise socket.timeout
         chunk = self.sock.recv(block_size)
         if not chunk:
             raise self.EOF('Connection closed by server')
@@ -124,10 +129,6 @@ def get_sample_frequency(**kargs):
 
 
 if __name__ == '__main__':
-    from pkg_resources import require
-    require('cothread')
-    import cothread
-    select.select = cothread.select
     f = sample_frequency()
     import sys
     s = subscription(map(int, sys.argv[1:]))
