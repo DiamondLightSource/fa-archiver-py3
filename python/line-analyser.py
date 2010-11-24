@@ -5,6 +5,8 @@ from pkg_resources import require
 require('cothread==1.17')
 require('iocbuilder==3.3')
 
+import sys
+
 import builder
 import numpy
 import cothread
@@ -12,11 +14,28 @@ from cothread import catools
 
 import falib
 
+if len(sys.argv) > 1:
+    if sys.argv[1] == 'BR':
+        BOOSTER = True
+        SERVER = '172.23.234.70'
+    elif sys.argv[1] == 'SR':
+        BOOSTER = False
+        SERVER = 'fa-archiver.cs.diamond.ac.uk'
+    else:
+        print 'Unrecognised ring specification'
+        sys.exit(1)
+else:
+    print 'Specify BR or SR'
+    sys.exit(1)
+
 
 SAMPLE_SIZE = 10000
-F_S = 10072.4
+F_S = 10072
 
-builder.SetDeviceName('CS-DI-FAAN-01')
+if BOOSTER:
+    builder.SetDeviceName('BR-DI-FAAN-01')
+else:
+    builder.SetDeviceName('SR-DI-FAAN-01')
 
 
 # ------------------------------------------------------------------------------
@@ -35,17 +54,21 @@ def make_bpms(straight, cell):
         [cell(c+1, n+1) for n in range(7)]
         for c in range(24)])
 
-BPM_ids = make_bpms(
-    lambda c, n: c - 0.2 + 0.1*n,
-    lambda c, n: c + 0.1*n)
+if BOOSTER:
+    BPM_ids = range(1, 23)
+    FA_IDS = BPM_ids
+else:
+    BPM_ids = make_bpms(
+        lambda c, n: c - 0.2 + 0.1*n,
+        lambda c, n: c + 0.1*n)
+    # List of BPM FA ids to be monitored: 168 arc BPMs plus the straights
+    FA_IDS = make_bpms(
+        lambda c, n: STRAIGHT_ID[STRAIGHTS.index(c)] + n - 1,
+        lambda c, n: 7 * (c - 1) + n)
 
 builder.Waveform('BPMID', BPM_ids)
 
 
-# List of BPM FA ids to be monitored: 168 arc BPMs plus the straights
-FA_IDS = make_bpms(
-    lambda c, n: STRAIGHT_ID[STRAIGHTS.index(c)] + n - 1,
-    lambda c, n: 7 * (c - 1) + n)
 # Compute the reverse permutation array to translate the monitored FA ids, which
 # are returned in ascending numerical order, back into BPM index position.
 PERMUTE = numpy.empty(len(FA_IDS), dtype = int)
@@ -56,17 +79,31 @@ PERMUTE[numpy.argsort(FA_IDS)] = numpy.arange(len(FA_IDS))
 
 class cis:
     def __init__(self):
-        self.set_freq(100.0)
-        self.pv = builder.aOut('FREQ', 0, 1000,
-            VAL = self.freq,
+        self.f_s = 10072.4
+        self.freq = 100.0
+        self.reset()
+
+        builder.aOut('FREQ', 0, 1000,
+            VAL  = self.freq,   PREC = 4,
             on_update = self.set_freq)
+        builder.aOut('F_S',
+            VAL  = self.f_s,    PREC = 1,
+            on_update = self.set_f_s)
+
+    def reset(self):
+        # To be called when frequency has changed
+        self.cis = self.phase(numpy.arange(SAMPLE_SIZE))
+        self.cis *= 1e-3 / SAMPLE_SIZE      # Take mean and convert to microns
+        mean.reset()
 
     def set_freq(self, freq):
         print 'set_freq', freq
         self.freq = freq
-        self.cis = self.phase(numpy.arange(SAMPLE_SIZE))
-        self.cis *= 1e-3 / SAMPLE_SIZE      # Take mean and convert to microns
-        mean.reset()
+        self.reset()
+
+    def set_f_s(self, f_s):
+        self.f_s = f_s
+        self.reset()
 
     def phase(self, n):
         '''Returns exp(2 pi n f / f_s), in other words, the phase advance at the
@@ -76,20 +113,25 @@ class cis:
 
 
 class waveform:
-    def __waveform(self, axis, name):
-        return builder.Waveform(axis + name, length = 168, datatype = float)
+    def __waveform(self, axis, name, multiplier=1):
+        return builder.Waveform(
+            axis + name, length = multiplier * len(BPM_ids), datatype = float)
 
     def __init__(self, axis):
         self.wfi = self.__waveform(axis, 'I')
         self.wfq = self.__waveform(axis, 'Q')
         self.wfa = self.__waveform(axis, 'A')
+        self.wfiq = self.__waveform(axis, 'IQ')
 
     def update(self, value):
+        I = numpy.real(value)
+        Q = numpy.imag(value)
         # Note: need to copy the real and imag parts as numpy otherwise just
         # recycles the the underlying data which is too transient here.
-        self.wfi.set(+numpy.real(value))
-        self.wfq.set(+numpy.imag(value))
+        self.wfi.set(+I)
+        self.wfq.set(+Q)
         self.wfa.set(numpy.abs(value))
+        self.wfiq.set(numpy.concatenate((I, Q)))
 
 
 class enabled:
@@ -146,12 +188,13 @@ class updater:
         cothread.Spawn(self.run)
 
     def subscription(self):
-        sub = falib.subscription(FA_IDS, t0 = True)
+        sub = falib.subscription(FA_IDS, t0 = True, server=SERVER)
         mean.reset()
         while True:
             r, t0 = sub.read_t0(SAMPLE_SIZE)
             # Remove mean before mixing to avoid avoid numerical problems
-            r -= numpy.mean(r, axis=0)
+            if cis.freq > 10:
+                r -= numpy.mean(r, axis=0)
             # Mix with the selected frequency and adjust for the phase advance
             # of the FA stream.  If this is an FA excitation this will keep us
             # in phase.  Finish by permuting result from archive order into BPM
@@ -172,11 +215,16 @@ class updater:
 
 
     def run(self):
+        import socket
         while True:
             try:
                 self.subscription()
             except falib.connection.EOF, eof:
                 print eof
+            except falib.connection.Error, error:
+                print error
+            except socket.timeout:
+                print 'Server timed out'
             except:
                 print 'Unexpected failure'
                 import traceback
@@ -186,7 +234,7 @@ class updater:
 
 
 hide_disabled = builder.boolOut('HIDEDIS',
-    'Show Disabled', 'Hide Disabled', RVAL = 1, PINI = 'YES')
+    'Show Disabled', 'Hide Disabled', RVAL = 0, PINI = 'YES')
 
 # Monitors ENABLED waveform
 enabled = enabled()

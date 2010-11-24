@@ -61,14 +61,14 @@ y2Max 1
 # Trace Properties
 numTraces 3
 xPv {
-  0 "CS-DI-FAAN-01:BPMID"
-  1 "CS-DI-FAAN-01:BPMID"
-  2 "CS-DI-FAAN-01:BPMID"
+  0 "$(device):BPMID"
+  1 "$(device):BPMID"
+  2 "$(device):BPMID"
 }
 yPv {
-  0 "CS-DI-FAAN-01:$(x)I"
-  1 "CS-DI-FAAN-01:$(x)Q"
-  2 "CS-DI-FAAN-01:$(x)A"
+  0 "$(device):$(x)I"
+  1 "$(device):$(x)Q"
+  2 "$(device):$(x)A"
 }
 plotUpdateMode {
   0 "y"
@@ -118,14 +118,14 @@ y2Max 1
 # Trace Properties
 numTraces 3
 xPv {
-  0 "CS-DI-FAAN-01:BPMID"
-  1 "CS-DI-FAAN-01:BPMID"
-  2 "CS-DI-FAAN-01:BPMID"
+  0 "$(device):BPMID"
+  1 "$(device):BPMID"
+  2 "$(device):BPMID"
 }
 yPv {
-  0 "CS-DI-FAAN-01:$(y)I"
-  1 "CS-DI-FAAN-01:$(y)Q"
-  2 "CS-DI-FAAN-01:$(y)A"
+  0 "$(device):$(y)I"
+  1 "$(device):$(y)Q"
+  2 "$(device):$(y)A"
 }
 plotUpdateMode {
   0 "y"
@@ -169,7 +169,7 @@ x 88
 y 696
 w 64
 h 24
-controlPv "CS-DI-FAAN-01:FREQ"
+controlPv "$(device):FREQ"
 font "helvetica-medium-r-14.0"
 fgColor index 14
 bgColor index 0
@@ -219,10 +219,10 @@ y2Max 1
 # Trace Properties
 numTraces 1
 xPv {
-  0 "CS-DI-FAAN-01:$(x)I"
+  0 "$(device):$(x)I"
 }
 yPv {
-  0 "CS-DI-FAAN-01:$(x)Q"
+  0 "$(device):$(x)Q"
 }
 plotStyle {
   0 "point"
@@ -270,10 +270,10 @@ y2Max 1
 # Trace Properties
 numTraces 1
 xPv {
-  0 "CS-DI-FAAN-01:$(y)I"
+  0 "$(device):$(y)I"
 }
 yPv {
-  0 "CS-DI-FAAN-01:$(y)Q"
+  0 "$(device):$(y)Q"
 }
 plotStyle {
   0 "point"
@@ -301,7 +301,7 @@ bgColor index 4
 inconsistentColor index 0
 topShadowColor index 1
 botShadowColor index 11
-controlPv "CS-DI-FAAN-01:HIDEDIS"
+controlPv "$(device):HIDEDIS"
 font "helvetica-medium-r-14.0"
 endObjectProperties
 
@@ -354,7 +354,7 @@ x 872
 y 696
 w 56
 h 24
-controlPv "CS-DI-FAAN-01:TARGET"
+controlPv "$(device):TARGET"
 font "helvetica-medium-r-14.0"
 fgColor index 14
 bgColor index 0
@@ -379,7 +379,7 @@ x 936
 y 696
 w 48
 h 16
-controlPv "CS-DI-FAAN-01:COUNT"
+controlPv "$(device):COUNT"
 font "helvetica-medium-r-14.0"
 fontAlign "right"
 fgColor index 14
