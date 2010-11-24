@@ -262,30 +262,40 @@ bool validate_header(struct disk_header *header, uint64_t file_size)
 void print_header(FILE *out, struct disk_header *header)
 {
     char mask_string[RAW_MASK_BYTES+1];
+    char format_string[256];
     format_raw_mask(header->archive_mask, mask_string);
+    if (!format_mask(
+            header->archive_mask, format_string, sizeof(format_string)))
+        sprintf(format_string, "...");
+    double sample_frequency =
+        header->major_sample_count * 1e6 / header->last_duration;
+    uint64_t total_sample_count =
+        (uint64_t) header->major_block_count * header->major_sample_count;
+    double seconds = total_sample_count / sample_frequency;
     fprintf(out,
         "FA sniffer archive: %.7s, v%d.\n"
-        "Archiving: %s\n"
+        "Archiving: %s\n    BPMS: %s\n"
         "Decimation %"PRIu32", %"PRIu32" => %"PRIu32", recording %u BPMs\n"
         "Input block size = %"PRIu32" bytes, %zu frames\n"
         "Major block size = %"PRIu32" bytes, %"PRIu32" samples\n"
-        "Total size = %"PRIu32" major blocks = %"PRIu32" samples"
+        "Total size = %"PRIu32" major blocks = %"PRIu64" samples"
             " = %"PRIu64" bytes\n"
+        "    Duration: %d hours, %d minutes, %.1f seconds (f_s = %.2f)\n"
         "Index data from %"PRIu64" for %"PRIu32" bytes\n"
         "DD data starts %"PRIu64" for %"PRIu32" bytes, %"PRIu32" samples,"
             " %"PRIu32" per block\n"
         "FA+D data from %"PRIu64", %"PRIu32" decimated samples per block\n"
         "Last duration: %"PRIu32" us, or %lg Hz.  Current index: %"PRIu32"\n",
         header->signature, header->version,
-        mask_string,
+        mask_string, format_string,
         header->first_decimation, header->second_decimation,
             header->first_decimation * header->second_decimation,
             header->archive_mask_count,
         header->input_block_size, header->input_block_size / FA_FRAME_SIZE,
         header->major_block_size, header->major_sample_count,
-        header->major_block_count,
-            header->major_block_count * header->major_sample_count,
-            header->total_data_size,
+        header->major_block_count, total_sample_count, header->total_data_size,
+        (int) seconds / 3600, ((int) seconds / 60) % 60, fmod(seconds, 60),
+            sample_frequency,
         header->index_data_start, header->index_data_size,
         header->dd_data_start, header->dd_data_size, header->dd_total_count,
             header->dd_sample_count,

@@ -105,6 +105,70 @@ bool parse_mask(const char **string, filter_mask_t mask)
 }
 
 
+/* Support functions for format_mask() to help safely write values into a
+ * string. */
+static bool write_string(char **string, size_t *length, const char *value)
+{
+    size_t value_len = strlen(value);
+    if (TEST_OK_(value_len < *length, "Mask too long to format"))
+    {
+        memcpy(*string, value, value_len + 1);
+        *string += value_len;
+        *length -= value_len;
+        return true;
+    }
+    else
+        return false;
+}
+
+static bool write_int(char **string, size_t *length, int value)
+{
+    char buffer[24];
+    sprintf(buffer, "%d", value);
+    return write_string(string, length, buffer);
+}
+
+static bool write_range(
+    char **string, size_t *length, int start, int end, bool first)
+{
+    return
+        IF_(!first, write_string(string, length, ","))  &&
+        write_int(string, length, start)  &&
+        IF_(end > start,
+            write_string(string, length, "-")  &&
+            write_int(string, length, end));
+}
+
+bool format_mask(filter_mask_t mask, char *string, size_t length)
+{
+    bool ok = true;
+    bool in_range = false;
+    bool first = true;
+    int range_start = 0;
+    for (int id = 0; ok  &&  id < FA_ENTRY_COUNT; id ++)
+    {
+        bool set = test_mask_bit(mask, id);
+        if (set  &&  !in_range)
+        {
+            /* Starting a new range of values.  Write the first number. */
+            in_range = true;
+            range_start = id;
+        }
+        else if (!set  &&  in_range)
+        {
+            /* End of range, now write it out. */
+            ok = write_range(&string, &length, range_start, id - 1, first);
+            in_range = false;
+            first = false;
+        }
+    }
+    if (ok  &&  in_range)
+        ok = write_range(
+            &string, &length, range_start, FA_ENTRY_COUNT - 1, first);
+    return ok;
+}
+
+
 int copy_frame(void *to, const void *from, const filter_mask_t mask)
 {
     const int32_t *from_p = from;

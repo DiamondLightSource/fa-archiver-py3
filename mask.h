@@ -38,6 +38,10 @@ int format_raw_mask(const filter_mask_t mask, char *buffer);
  * Prints error message and returns false if parsing fails. */
 bool parse_mask(const char **string, filter_mask_t mask);
 
+/* Formats mask in canonical form into the given string buffer.  If the buffer
+ * overflows an error is reported and false returned. */
+bool format_mask(filter_mask_t mask, char *string, size_t length);
+
 /* Copies a single FA frame taking the mask into account, returns the number
  * of bytes copied into the target buffer (will be 8*count_mask_bits(mask)).
  * 'from' should point to a completely populated frame, 'to' will contain X,Y
