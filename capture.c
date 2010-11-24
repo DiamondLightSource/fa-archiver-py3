@@ -393,7 +393,7 @@ static bool request_data(int sock)
     format_raw_mask(capture_mask, raw_mask);
     char request[1024];
     if (continuous_capture)
-        sprintf(request, "SR%s%s\n", raw_mask, matlab_format ? "T" : "");
+        sprintf(request, "SR%s%s\n", raw_mask, matlab_format ? "TZ" : "");
     else
     {
         char format[16];
@@ -519,6 +519,13 @@ static uint32_t data_index[MAX_GAP_COUNT];
 static uint32_t id_zero[MAX_GAP_COUNT];
 static double gap_timestamps[MAX_GAP_COUNT];
 
+static bool read_t0(int sock)
+{
+    gap_count = 0;
+    return TEST_read(sock, &id_zero, sizeof(uint32_t));
+}
+
+
 static bool read_gap_list(int sock)
 {
     bool ok =
@@ -565,6 +572,7 @@ static bool write_header(unsigned int frames_written, uint64_t timestamp)
     place_matlab_value(&h, "decimation", miINT32, &decimation);
     place_matlab_value(&h, "f_s",        miDOUBLE, &frequency);
     place_matlab_value(&h, "timestamp",  miDOUBLE, &m_timestamp);
+    place_matlab_vector(&h, "id0", miINT32, id_zero, gap_count + 1);
 
     /* Write out the index array tying data back to original BPM ids. */
     uint8_t mask_ids[FA_ENTRY_COUNT];
@@ -575,7 +583,6 @@ static bool write_header(unsigned int frames_written, uint64_t timestamp)
     if (!continuous_capture)
     {
         place_matlab_vector(&h, "gapix", miINT32, data_index, gap_count + 1);
-        place_matlab_vector(&h, "id0",   miINT32, id_zero, gap_count + 1);
         place_matlab_vector(&h, "gaptimes",
             miDOUBLE, gap_timestamps, gap_count + 1);
     }
@@ -600,7 +607,8 @@ static bool capture_and_save(int sock)
         uint64_t timestamp;
         return
             TEST_read(sock, &timestamp, sizeof(uint64_t))  &&
-            IF_(!continuous_capture,
+            IF_ELSE(continuous_capture,
+                read_t0(sock),
                 read_gap_list(sock))  &&
             write_header(sample_count, timestamp)  &&
             DO_(frames_written = capture_data(sock))  &&
