@@ -591,7 +591,7 @@ def storage_bpms():
         for c in range(24)]
     cells[21][1].append(('SR21C-DI-EBPM-08', 169))
     cells[13][1].extend(
-        [('SR13S-DI-EBPM-%02d' % (n+1), 174+n) for n in range(2)])
+        [('SR13S-DI-EBPM-%02d' % (n+1), 170+n) for n in range(2)])
     return cells
 
 def booster_bpms():
@@ -869,6 +869,18 @@ class Viewer:
         self.on_data_update(self.monitor.read())
 
 
+class KeyFilter(QtCore.QObject):
+    # Implements ctrl-Q or the standard binding for fast exit.
+    def eventFilter(self, watched, event):
+        if event.type() == QtCore.QEvent.KeyPress:
+            key = QtGui.QKeyEvent(event)
+            # \x11 is CTRL-Q; I can't find any other way to force a match.
+            if key.text() == '\x11' or key.matches(QtGui.QKeySequence.Quit):
+                cothread.Quit()
+                return True
+        return False
+
+
 # Argument parsing
 parser = optparse.OptionParser(usage = '''\
 Usage: fa-viewer [options]
@@ -892,7 +904,9 @@ if options.booster:
 
 F_S = falib.get_sample_frequency(server=options.server, port=options.port)
 
-cothread.iqt()
+qapp = cothread.iqt()
+key_filter = KeyFilter()
+qapp.installEventFilter(key_filter)
 
 # create and show form
 ui_viewer = uic.loadUi(os.path.join(os.path.dirname(__file__), 'viewer.ui'))
