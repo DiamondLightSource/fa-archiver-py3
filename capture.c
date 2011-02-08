@@ -42,6 +42,8 @@ static bool squeeze_matlab = true;
 static bool continuous_capture = false;
 static bool start_specified = false;
 static struct timespec start;
+static bool end_specified = false;
+static struct timespec end;
 static unsigned int sample_count = 0;
 static enum data_format data_format = DATA_FA;
 static unsigned int data_mask = 1;
@@ -135,7 +137,6 @@ static unsigned int get_decimation(void)
 {
     switch (data_format)
     {
-        /* Deliberate fall-through in all three cases. */
         case DATA_DD:   return first_decimation * second_decimation;
         case DATA_D:    return first_decimation;
         case DATA_FA:   return 1;
@@ -164,16 +165,20 @@ static void usage(char *argv0)
 "\n"
 "<samples> specifies how many samples will be captured or the sample time in\n"
 "seconds (if the number ends in s).  This must be specified when reading\n"
-"historical data (-b, -s or -t).  If <samples> is not specified continuous\n"
-"capture (-C) can be interrupted with ctrl-C.\n"
+"historical data (-b, -s or -t) unless a range of times has been specified\n"
+"with these options.  If <samples> is not specified with continuous capture\n"
+"(-C) capture must be interrupted with ctrl-C.\n"
 "\n"
-"Either a start time or continuous capture must be specified, and so\n"
-"precisely one of the following must be given:\n"
+"If historical data is wanted one of the following must be specified:\n"
 "   -s:  Specify start, as a date and time in ISO 8601 date time format (with\n"
 "        fractional seconds allowed).  Use a trailing Z for UTC time.\n"
 "   -t:  Specify start as a time of day today, or yesterday if Y added to\n"
 "        the end, in format hh:mm:ss[Y], interpreted as a local time.\n"
 "   -b:  Specify start as a time in the past as hh:mm:ss\n"
+"For each of these flags a range of times separated by ~ can be specified\n"
+"instead of giving a sample count.\n"
+"\n"
+"Alternatively, continuous capture of live data can be specified:\n"
 "   -C   Request continuous capture from live data stream\n"
 "\n"
 "The following options can be given:\n"
@@ -196,9 +201,10 @@ static void usage(char *argv0)
 "   -p:  Specify port to connect to on server (default is %d)\n"
 "   -q   Suppress display of progress of capture on stderr\n"
 "\n"
-"Note that if matlab format is specified and continuous capture is\n"
-"interrupted then output must be directed to a file, otherwise the capture\n"
-"count in the result will be invalid.\n"
+"Note that if matlab format is specified and no sample count is specified\n"
+"(interrupted continuous capture or range of times given) then output must be\n"
+"directed to a file, otherwise the capture count in the result will be\n"
+"invalid.\n"
     , argv0, data_name, server_name, port);
 }
 
@@ -224,9 +230,18 @@ static bool parse_today(const char **string, struct timespec *ts)
 {
     return
         parse_time(string, ts)  &&
-        DO_(start.tv_sec += midnight_today())  &&
+        DO_(ts->tv_sec += midnight_today())  &&
         IF_(read_char(string, 'Y'),
-            DO_(start.tv_sec -= 24 * 3600));
+            DO_(ts->tv_sec -= 24 * 3600));
+}
+
+
+static int compare_ts(struct timespec *ts1, struct timespec *ts2)
+{
+    if (ts1->tv_sec == ts2->tv_sec)
+        return ts1->tv_nsec - ts2->tv_nsec;
+    else
+        return ts1->tv_sec - ts2->tv_sec;
 }
 
 
@@ -268,14 +283,26 @@ static bool parse_before(const char **string, struct timespec *ts)
 }
 
 
+static bool parse_interval(
+    const char **string,
+    bool (*parser)(const char **string, struct timespec *ts))
+{
+    return
+        parser(string, &start)  &&
+        DO_(start_specified = true)  &&
+        IF_(read_char(string, '~'),
+            parser(string, &end)  &&
+            DO_(end_specified = true));
+}
+
+
 static bool parse_start(
     bool (*parser)(const char **string, struct timespec *ts),
     const char *string)
 {
     return
         TEST_OK_(!start_specified, "Start already specified")  &&
-        DO_PARSE("start time", parser, string, &start)  &&
-        DO_(start_specified = true);
+        DO_PARSE("start time", parse_interval, string, parser);
 }
 
 
@@ -355,8 +382,12 @@ static bool validate_args(void)
             "Must specify a start date or continuous capture")  &&
         TEST_OK_(!continuous_capture || !start_specified,
             "Cannot combine continuous and archive capture")  &&
-        TEST_OK_(continuous_capture  ||  sample_count > 0,
-            "Must specify sample count for historical data")  &&
+        TEST_OK_(continuous_capture  ||  end_specified  ||  sample_count > 0,
+            "Must specify sample count or end for historical data")  &&
+        TEST_OK_(sample_count == 0  ||  !end_specified,
+            "Cannot specify both sample count and data end point")  &&
+        TEST_OK_(!end_specified  ||  compare_ts(&start, &end) < 0,
+            "End time isn't after start")  &&
         TEST_OK_(start_specified  ||  data_format == DATA_FA,
             "Decimated data must be historical");
 }
@@ -403,8 +434,13 @@ static bool request_data(int sock)
             case DATA_D:    sprintf(format, "DF%u",  data_mask);    break;
             case DATA_DD:   sprintf(format, "DDF%u", data_mask);    break;
         }
-        sprintf(request, "R%sMR%sS%ld.%09ldN%u%s%s%s\n",
-            format, raw_mask, start.tv_sec, start.tv_nsec, sample_count,
+        char count[64];
+        if (end_specified)
+            sprintf(count, "ES%ld.%09ld", end.tv_sec, end.tv_nsec);
+        else
+            sprintf(count, "N%u", sample_count);
+        sprintf(request, "R%sMR%sS%ld.%09ld%s%s%s%s\n",
+            format, raw_mask, start.tv_sec, start.tv_nsec, count,
             all_data ? "A" : "",
             matlab_format ? "TG" : "", request_contiguous ? "C" : "");
     }
@@ -623,7 +659,8 @@ static bool capture_and_save(int sock)
     else
     {
         unsigned int frames_written = capture_data(sock);
-        return TEST_OK_(all_data  ||  frames_written == sample_count,
+        return TEST_OK_(
+            all_data  ||  frames_written == sample_count  ||  end_specified,
             "Only captured %u of %u frames", frames_written, sample_count);
     }
 }
