@@ -19,11 +19,11 @@ void process_block(const void *read_block, struct timespec *ts);
 /* Converts timestamp into corresponding index, or fails if timestamp is outside
  * the archive.  Returns number of available samples, the major block containing
  * the first data point, and the offset of the selected timestamp into that
- * block.  Also returns the true timestamp of the first sample, which may differ
- * from the requested timestamp. */
+ * block. */
 bool timestamp_to_index(
     uint64_t timestamp, uint64_t *samples_available,
-    unsigned int *major_block, unsigned int *offset);
+    unsigned int *major_block, unsigned int *offset,
+    uint64_t *start_timestamp, uint64_t *end_timestamp);
 
 /* Searches a range of index blocks for a gap in the timestamp, returning true
  * iff a gap is found.  *start is updated to the index of the block directly
@@ -35,6 +35,9 @@ const struct data_index * read_index(unsigned int ix);
  * constant header fields. */
 const struct disk_header *get_header(void);
 
+/* Converts time in seconds and nanoseconds (struct timespec) in the Unix epoch
+ * into the appropriate internal representation, in 64-bit microseconds. */
+uint64_t ts_to_microseconds(struct timespec *ts);
 
 bool initialise_transform(
     struct disk_header *header, struct data_index *data_index,

@@ -13,7 +13,7 @@
 
 
 /* Checks whether a string has been fully parsed. */
-bool parse_end(const char **string)
+bool parse_eos(const char **string)
 {
     return TEST_OK_(**string == '\0', "Unexpected character");
 }
@@ -118,10 +118,9 @@ static bool parse_date_or_time(
     const char *format, const char *error_message,
     const char **string, struct tm *tm, long *nsecs)
 {
-    char *end;  // Mustn't assign NULL to *string!
+    char *end = strptime(*string, format, tm);
     return
-        TEST_NULL_(
-            end = strptime(*string, format, tm), "%s", error_message)  &&
+        TEST_NULL_(end, "%s", error_message)  &&
         DO_(*string = end)  &&
         parse_nanoseconds(string, nsecs);
 }
@@ -167,7 +166,7 @@ bool parse_seconds(const char **string, struct timespec *ts)
 bool report_parse_error(
     const char *message, bool ok, const char *string, const char **end)
 {
-    if (ok  &&  parse_end(end))
+    if (ok  &&  parse_eos(end))
     {
         pop_error_handling(NULL);
         return true;

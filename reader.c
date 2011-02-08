@@ -208,21 +208,63 @@ static bool check_run(
 }
 
 
+/* Computes a requested number of samples from an end date. */
+static bool compute_end_samples(
+    const struct reader *reader,
+    uint64_t end, unsigned int start_block, unsigned int start_offset,
+    bool all_data, unsigned int *samples)
+{
+    const struct disk_header *header = get_header();
+    unsigned int end_block, end_offset;
+    uint64_t end_timestamp;
+
+    bool ok =
+        timestamp_to_index(
+            end, NULL, &end_block, &end_offset, NULL, &end_timestamp)  &&
+        IF_(!all_data,
+            TEST_OK_(end < end_timestamp, "End timestamp too late"));
+    if (ok)
+    {
+        /* Convert the two block and offset counts into a total FA count. */
+        if (end_block < start_block)
+            end_block += header->major_block_count;
+        int64_t fa_samples =
+            (int64_t) header->major_sample_count * (end_block - start_block) +
+            end_offset - start_offset;
+        /* Finally convert FA samples to requested samples, rounding up to avoid
+         * silly surprises. */
+        unsigned int decimation = reader->decimation;
+        *samples = (unsigned int) ((fa_samples + decimation - 1) / decimation);
+
+        ok =
+            TEST_OK(fa_samples > 0)  &&
+            TEST_OK_(*samples > 0, "No samples in selected range");
+    }
+    return ok;
+}
+
+
 static bool compute_start(
     const struct reader *reader,
-    uint64_t start, unsigned int *samples,
+    uint64_t start, uint64_t end, unsigned int *samples,
     bool all_data, bool only_contiguous,
     unsigned int *block, unsigned int *offset)
 {
     uint64_t available;
     unsigned int ix_block;
+    uint64_t start_timestamp;
     return
         /* Convert requested timestamp into a starting index block and FA offset
          * into that block. */
-        timestamp_to_index(start, &available, &ix_block, offset)  &&
+        timestamp_to_index(
+            start, &available, &ix_block, offset, &start_timestamp, NULL)  &&
         /* Check that the start date is actually available. */
-        TEST_OK_(all_data  ||  read_index(ix_block)->timestamp <= start,
+        TEST_OK_(all_data  ||  start_timestamp <= start,
             "Timestamp too early")  &&
+        IF_(end != 0,
+            TEST_OK_(end > start, "Time range runs backwards")  &&
+            compute_end_samples(
+                reader, end, ix_block, *offset, all_data, samples))  &&
         /* Convert FA block, offset and available counts into numbers
          * appropriate for our current data type. */
         DO_(fixup_offset(reader, ix_block, block, offset, &available))  &&
@@ -350,7 +392,8 @@ static bool transfer_data(
             reader->write_lines(
                 line_count, iter->count,
                 read_buffers, offset, data_mask, write_buffer);
-            ok = TEST_write(scon, write_buffer, line_count * line_size_out);
+            ok = TEST_write_(scon, write_buffer, line_count * line_size_out,
+                "Error writing to client");
 
             count -= line_count;
             offset += line_count;
@@ -363,34 +406,46 @@ static bool transfer_data(
 }
 
 
-static bool read_data(
-    const struct reader *reader, int scon,
-    unsigned int data_mask, filter_mask_t read_mask,
-    uint64_t start, unsigned int samples,
-    bool all_data, bool only_contiguous, bool want_timestamp, bool gaplist)
+/* Result of parsing a read command. */
+struct read_parse {
+    filter_mask_t read_mask;        // List of BPMs to be read
+    unsigned int samples;           // Requested number of samples
+    uint64_t start;                 // Data start (in microseconds into epoch)
+    uint64_t end;                   // Data end (alternative to count)
+    const struct reader *reader;    // Interpretation of data source
+    unsigned int data_mask;         // Data mask for D and DD data
+    bool send_all_data;             // Don't bail out if insufficient data
+    bool only_contiguous;           // Only contiguous data acceptable
+    bool timestamp;                 // Send timestamp at start of data
+    bool gaplist;                   // Send gaplist after data
+};
+
+
+static bool read_data(int scon, struct read_parse *parse)
 {
     unsigned int block, offset;
     struct iter_mask iter = { 0 };
     read_buffers_t read_buffers = NULL;
     int archive = -1;
+    unsigned int samples = parse->samples;
     bool ok =
         compute_start(
-            reader, start, &samples, all_data,
-            only_contiguous, &block, &offset)  &&
-        mask_to_archive(read_mask, &iter)  &&
+            parse->reader, parse->start, parse->end, &samples,
+            parse->send_all_data, parse->only_contiguous, &block, &offset)  &&
+        mask_to_archive(parse->read_mask, &iter)  &&
         lock_buffers(&read_buffers, iter.count)  &&
         TEST_IO(archive = open(archive_filename, O_RDONLY));
     bool write_ok = report_socket_error(scon, ok);
 
     if (ok  &&  write_ok)
         write_ok =
-            IF_(want_timestamp,
-                send_timestamp(reader, scon, block, offset))  &&
-            IF_(gaplist,
-                send_gaplist(reader, scon, block, offset, samples))  &&
+            IF_(parse->timestamp,
+                send_timestamp(parse->reader, scon, block, offset))  &&
+            IF_(parse->gaplist,
+                send_gaplist(parse->reader, scon, block, offset, samples))  &&
             transfer_data(
-                reader, read_buffers, archive, scon,
-                &iter, data_mask, block, offset, samples);
+                parse->reader, read_buffers, archive, scon,
+                &iter, parse->data_mask, block, offset, samples);
 
     if (read_buffers != NULL)
         unlock_buffers(read_buffers, iter.count);
@@ -560,11 +615,13 @@ static struct reader dd_reader = {
  *
  * The syntax is very simple (no spaces allowed):
  *
- *  read-request = "R" source "M" filter-mask start "N" samples options
- *  start = "T" date-time | "S" seconds [ "." nanoseconds ]
- *  source = "F" | "D" ["D"] ["F" data-mask]
- *  samples = integer
+ *  read-request = "R" source "M" filter-mask start end options
+ *  source = "F" | "D" [ "D" ] [ "F" data-mask ]
  *  data-mask = integer
+ *  start = time-or-seconds
+ *  end = "N" samples | "E" time-or-seconds
+ *  time-or-seconds = "T" date-time | "S" seconds [ "." nanoseconds ]
+ *  samples = integer
  *  options = [ "A" ] [ "T" ] [ "G" ] [ "C" ]
  *
  * The options can only appear in the order given and have the following
@@ -575,20 +632,6 @@ static struct reader dd_reader = {
  *  G   Send gap list at end of data capture
  *  C   Ensure no gaps in selected dataset, fail if any
  */
-
-/* Result of parsing a read command. */
-struct read_parse {
-    filter_mask_t read_mask;        // List of BPMs to be read
-    unsigned int samples;           // Requested number of samples
-    uint64_t start;                 // Data start (in microseconds into epoch)
-    const struct reader *reader;    // Interpretation of data source
-    unsigned int data_mask;         // Data mask for D and DD data
-    bool send_all_data;             // Don't bail out if insufficient data
-    bool only_contiguous;           // Only contiguous data acceptable
-    bool timestamp;                 // Send timestamp at start of data
-    bool gaplist;                   // Send gaplist after data
-};
-
 
 /* source = "F" | "D" [ "D" ] [ "F" data-mask ] . */
 static bool parse_source(const char **string, struct read_parse *parse)
@@ -618,8 +661,8 @@ static bool parse_source(const char **string, struct read_parse *parse)
 }
 
 
-/* start = "T" datetime | "S" seconds . */
-static bool parse_start(const char **string, uint64_t *start)
+/* time-or-seconds = "T" date-time | "S" seconds [ "." nanoseconds ] . */
+static bool parse_time_or_seconds(const char **string, uint64_t *microseconds)
 {
     struct timespec ts = { .tv_sec = 0, .tv_nsec = 0 };
     bool ok;
@@ -629,9 +672,24 @@ static bool parse_start(const char **string, uint64_t *start)
         ok = parse_seconds(string, &ts);
     else
         ok = FAIL_("Expected T or S for timestamp");
-    ok = ok  &&  TEST_OK_(ts.tv_sec > 0, "Timestamp ridiculously early");
-    *start = 1000000 * (uint64_t) ts.tv_sec + ts.tv_nsec / 1000;
-    return ok;
+    *microseconds = ts_to_microseconds(&ts);
+    return ok  &&  TEST_OK_(ts.tv_sec > 0, "Timestamp ridiculously early");
+}
+
+
+/* end = "N" samples | "E" time-or-seconds . */
+static bool parse_end(const char **string, uint64_t *end, unsigned int *samples)
+{
+    *end = 0;
+    *samples = 0;
+    if (read_char(string, 'N'))
+        return
+            parse_uint(string, samples)  &&
+            TEST_OK_(*samples > 0, "No samples requested\n");
+    else if (read_char(string, 'E'))
+        return parse_time_or_seconds(string, end);
+    else
+        return FAIL_("Expected count or end time");
 }
 
 
@@ -646,7 +704,7 @@ static bool parse_options(const char **string, struct read_parse *parse)
 }
 
 
-/* read-request = "R" source "M" mask start "N" samples options . */
+/* read-request = "R" source "M" filter-mask start end options . */
 static bool parse_read_request(const char **string, struct read_parse *parse)
 {
     return
@@ -654,9 +712,8 @@ static bool parse_read_request(const char **string, struct read_parse *parse)
         parse_source(string, parse)  &&
         parse_char(string, 'M')  &&
         parse_mask(string, parse->read_mask)  &&
-        parse_start(string, &parse->start)  &&
-        parse_char(string, 'N')  &&
-        parse_uint(string, &parse->samples)  &&
+        parse_time_or_seconds(string, &parse->start)  &&
+        parse_end(string, &parse->end, &parse->samples)  &&
         parse_options(string, parse);
 }
 
@@ -672,11 +729,7 @@ bool process_read(int scon, const char *buf)
     struct read_parse parse;
     push_error_handling();      // Popped by report_socket_error()
     if (DO_PARSE("read request", parse_read_request, buf, &parse))
-        return read_data(
-            parse.reader, scon, parse.data_mask,
-            parse.read_mask, parse.start, parse.samples,
-            parse.send_all_data, parse.only_contiguous,
-            parse.timestamp, parse.gaplist);
+        return read_data(scon, &parse);
     else
         return report_socket_error(scon, false);
 }

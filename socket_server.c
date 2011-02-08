@@ -68,6 +68,7 @@ static double get_mean_frame_rate(void)
  *  D   Returns second decimation
  *  T   Returns earliest available timestamp
  *  V   Returns protocol identification string
+ *  M   Returns configured capture mask
  */
 static bool process_command(int scon, const char *buf)
 {
@@ -105,6 +106,14 @@ static bool process_command(int scon, const char *buf)
                 break;
             case 'V':
                 ok = write_string(scon, PROTOCOL_VERSION "\n");
+                break;
+            case 'M':
+                {
+                    char string[RAW_MASK_BYTES+2];
+                    int n = format_raw_mask(get_header()->archive_mask, string);
+                    strcpy(string + n, "\n");
+                    ok = write_string(scon, string);
+                }
                 break;
 
             default:
@@ -182,8 +191,7 @@ static bool process_subscribe(int scon, const char *buf)
     {
         if (want_timestamp)
         {
-            uint64_t timestamp =
-                (uint64_t) ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
+            uint64_t timestamp = ts_to_microseconds(&ts);
             ok = TEST_write(scon, &timestamp, sizeof(uint64_t));
         }
         if (ok  &&  want_t0)

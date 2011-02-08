@@ -29,8 +29,8 @@ bool parse_time(const char **string, struct timespec *ts);
 /* Parses timestamp in format: secs[.nnn] */
 bool parse_seconds(const char **string, struct timespec *ts);
 
-/* Only succeeds if **string=='\0'. */
-bool parse_end(const char **string);
+/* Only succeeds if **string=='\0', ie end of string. */
+bool parse_eos(const char **string);
 
 /* Checks for presence of ch, consumes it if present.  No error is generated if
  * ch is not found, unlike the parse functions. */

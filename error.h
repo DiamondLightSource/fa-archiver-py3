@@ -1,5 +1,50 @@
 /* Helper macros and declarations to simplify error handling. */
 
+/* The following error handling macros are defined here:
+ *
+ *  TEST_OK     TEST_OK_    ASSERT_OK       Fail if expression is false
+ *  TEST_IO     TEST_IO_    ASSERT_IO       Fail if expression is -1
+ *  TEST_NULL   TEST_NULL_  ASSERT_NULL     Fail if expression equals NULL
+ *  TEST_0      TEST_0_     ASSERT_0        Fail if expression is not 0
+ *
+ * There are also macros for handling file I/O in a similar form (but with
+ * slightly different argument lists):
+ *
+ *  TEST_read   TEST_read_  ASSERT_read     Fail if read not of expected size
+ *  TEST_write  TEST_write_ ASSERT_write    Fail if write not of expected size
+ *
+ * The three patterns behave thus:
+ *
+ *  TEST_xx(expr)
+ *      If the test fails a canned error message (defined by the macro
+ *      ERROR_MESSAGE) is generated and the macro evaluates to False, otherwise
+ *      evaluates to True.
+ *
+ *  TEST_xx_(expr, message...)
+ *      If the test fails then the given error message (with sprintf formatting)
+ *      is generated and the macro evaluates to False, otherwise True.
+ *
+ *  ASSERT_xx(expr)
+ *      If the test fails then panic_error() is called and execution does not
+ *      continue from this point.
+ *
+ * Note that the _0 macros have the extra side effect of assigning any non-zero
+ * expression to errno: these are designed to be used with the pthread functions
+ * where this behaviour is appropriate.
+ *
+ * These macros are designed to be used as chained conjunctions of the form
+ *
+ *  TEST_xx(...)  &&  TEST_xx(...)  &&  ...
+ *
+ * To facilitate this three further macros are provided:
+ *
+ *  DO_(statements)             Performs statements and evaluates to True
+ *  IF_(test, iftrue)                   Only checks iftrue if test succeeds
+ *  IF_ELSE(test, iftrue, iffalse)      Alternative spelling of (?:)
+ */
+
+
+/* Hint to compiler that x is likely to be 0. */
 #define unlikely(x)   __builtin_expect((x), 0)
 
 /* Controls whether to emit log_message() output. */

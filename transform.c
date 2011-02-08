@@ -299,7 +299,7 @@ static void index_minor_block(const void *block, struct timespec *ts)
 {
     /* Convert timestamp to our working representation in microseconds in the
      * current epoch. */
-    uint64_t timestamp = 1000000 * (uint64_t) ts->tv_sec + ts->tv_nsec / 1000;
+    uint64_t timestamp = ts_to_microseconds(ts);
 
     if (timestamp_index == 0)
     {
@@ -379,7 +379,8 @@ static void initialise_index(void)
 
 bool timestamp_to_index(
     uint64_t timestamp, uint64_t *samples_available,
-    unsigned int *major_block, unsigned int *offset)
+    unsigned int *major_block, unsigned int *offset,
+    uint64_t *start_timestamp, uint64_t *end_timestamp)
 {
     bool ok;
     LOCK(transform_lock);
@@ -406,7 +407,6 @@ bool timestamp_to_index(
             low = mid;
     }
 
-
     /* Compute the offset of the selected timestamp into the current block and
      * compensate for any block that's too early. */
     unsigned int duration = data_index[low].duration;
@@ -425,8 +425,10 @@ bool timestamp_to_index(
         if (raw_offset >= block_size  &&  low != current)
         {
             /* If we fall off the end of the selected block (perhaps there's a
-             * capture gap) simply skip to the following block. */
-            low = high;
+             * capture gap) simply skip to the following block -- unless we're
+             * already on the last block. */
+            if (high != current)
+                low = high;
             *offset = 0;
         }
         else
@@ -434,14 +436,22 @@ bool timestamp_to_index(
     }
 
     *major_block = low;
-    unsigned int block_count =
-        current > low ? current - low : N - low + current;
-    *samples_available = (uint64_t) block_count * block_size - *offset;
+    if (samples_available != NULL)
+    {
+        unsigned int block_count =
+            current > low ? current - low : N - low + current;
+        *samples_available = (uint64_t) block_count * block_size - *offset;
+    }
+    /* If required return bounding timestamps. */
+    if (start_timestamp != NULL)
+        *start_timestamp = data_index[low].timestamp;
+    if (end_timestamp != NULL)
+        *end_timestamp = data_index[low].timestamp + data_index[low].duration;
 
+    /* Check that the identified block is in fact valid. */
     ok = TEST_OK_(low != current, "Timestamp too late");
     UNLOCK(transform_lock);
 
-    /* Check that the identified block is in fact valid. */
     return ok;
 }
 
@@ -489,6 +499,12 @@ const struct decimated_data * get_dd_area(void)
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /* Top level control. */
+
+
+uint64_t ts_to_microseconds(struct timespec *ts)
+{
+    return 1000000 * (uint64_t) ts->tv_sec + ts->tv_nsec / 1000;
+}
 
 
 /* Processes a single block of raw frames read from the internal circular
