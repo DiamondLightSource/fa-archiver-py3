@@ -44,7 +44,7 @@ static bool start_specified = false;
 static struct timespec start;
 static bool end_specified = false;
 static struct timespec end;
-static unsigned int sample_count = 0;
+static uint64_t sample_count = 0;
 static enum data_format data_format = DATA_FA;
 static unsigned int data_mask = 1;
 static bool show_progress = true;
@@ -352,11 +352,11 @@ static bool parse_opts(int *argc, char ***argv)
 }
 
 
-static bool parse_samples(const char **string, unsigned int *result)
+static bool parse_samples(const char **string, uint64_t *result)
 {
-    bool ok = parse_uint(string, result);
+    bool ok = parse_uint64(string, result);
     if (ok  &&  read_char(string, 's'))
-        *result = (unsigned int) round(
+        *result = (uint64_t) round(
             *result * sample_frequency / get_decimation());
     return ok  &&  TEST_OK_(*result > 0, "Zero sample count");
 }
@@ -438,8 +438,9 @@ static bool request_data(int sock)
         if (end_specified)
             sprintf(count, "ES%ld.%09ld", end.tv_sec, end.tv_nsec);
         else
-            sprintf(count, "N%u", sample_count);
-        sprintf(request, "R%sMR%sS%ld.%09ld%s%s%s%s\n",
+            sprintf(count, "N%"PRIu64, sample_count);
+        // Send R<source> M<mask> S<start> <end> <options>
+        sprintf(request, "R%sMR%sS%ld.%09ld%sN%s%s%s\n",
             format, raw_mask, start.tv_sec, start.tv_nsec, count,
             all_data ? "A" : "",
             matlab_format ? "TG" : "", request_contiguous ? "C" : "");
@@ -588,7 +589,7 @@ static bool read_gap_list(int sock)
 }
 
 
-static bool write_header(unsigned int frames_written, uint64_t timestamp)
+static bool write_header(uint64_t frames_written, uint64_t timestamp)
 {
     bool squeeze[4] = {
         false,                                      // X, Y
@@ -637,11 +638,15 @@ static bool write_header(unsigned int frames_written, uint64_t timestamp)
 
 static bool capture_and_save(int sock)
 {
+    bool ok = true;
+    if (!continuous_capture)
+        ok = TEST_read(sock, &sample_count, sizeof(uint64_t));
+
     if (matlab_format)
     {
         unsigned int frames_written;
         uint64_t timestamp;
-        return
+        ok = ok  &&
             TEST_read(sock, &timestamp, sizeof(uint64_t))  &&
             IF_ELSE(continuous_capture,
                 read_t0(sock),
@@ -659,10 +664,11 @@ static bool capture_and_save(int sock)
     else
     {
         unsigned int frames_written = capture_data(sock);
-        return TEST_OK_(
-            all_data  ||  frames_written == sample_count  ||  end_specified,
-            "Only captured %u of %u frames", frames_written, sample_count);
+        ok = ok  &&
+            TEST_OK_(continuous_capture || frames_written == sample_count,
+                "Only captured %u of %"PRIu64" frames", frames_written, sample_count);
     }
+    return ok;
 }
 
 

@@ -153,7 +153,7 @@ struct reader {
 
 
 /* Helper routine to calculate the ceiling of a/b. */
-static unsigned int round_up(unsigned int a, unsigned int b)
+static unsigned int round_up(uint64_t a, unsigned int b)
 {
     return (a + b - 1) / b;
 }
@@ -193,7 +193,7 @@ static void convert_data_to_index(
  * start is an index block, but the offset is an offset in data points. */
 static bool check_run(
     const struct reader *reader,
-    unsigned int ix_start, unsigned int offset, unsigned int samples)
+    unsigned int ix_start, unsigned int offset, uint64_t samples)
 {
     /* Convert offset into a data offset into the current index block and
      * compute the total number of index blocks that will need to be read. */
@@ -203,8 +203,9 @@ static bool check_run(
     unsigned int blocks_requested = blocks;
     /* Check whether they represent a contiguous data block. */
     return TEST_OK_(!find_gap(&ix_start, &blocks),
-        "Only %u contiguous samples available",
-        (blocks_requested - blocks) * reader->samples_per_fa_block - offset);
+        "Only %"PRIu64" contiguous samples available",
+        (uint64_t) (blocks_requested - blocks) *
+            reader->samples_per_fa_block - offset);
 }
 
 
@@ -212,7 +213,7 @@ static bool check_run(
 static bool compute_end_samples(
     const struct reader *reader,
     uint64_t end, unsigned int start_block, unsigned int start_offset,
-    bool all_data, unsigned int *samples)
+    bool all_data, uint64_t *samples)
 {
     const struct disk_header *header = get_header();
     unsigned int end_block, end_offset;
@@ -234,7 +235,7 @@ static bool compute_end_samples(
         /* Finally convert FA samples to requested samples, rounding up to avoid
          * silly surprises. */
         unsigned int decimation = reader->decimation;
-        *samples = (unsigned int) ((fa_samples + decimation - 1) / decimation);
+        *samples = (fa_samples + decimation - 1) / decimation;
 
         ok =
             TEST_OK(fa_samples > 0)  &&
@@ -246,7 +247,7 @@ static bool compute_end_samples(
 
 static bool compute_start(
     const struct reader *reader,
-    uint64_t start, uint64_t end, unsigned int *samples,
+    uint64_t start, uint64_t end, uint64_t *samples,
     bool all_data, bool only_contiguous,
     unsigned int *block, unsigned int *offset)
 {
@@ -274,7 +275,7 @@ static bool compute_start(
             IF_(*samples > available, DO_(*samples = available)),
             // Otherwise ensure all requested data available
             TEST_OK_(*samples <= available,
-                "Only %"PRIu64" samples of %u requested available",
+                "Only %"PRIu64" samples of %"PRIu64" requested available",
                 available, *samples))  &&
         IF_(only_contiguous,
             check_run(reader, ix_block, *offset, *samples));
@@ -299,7 +300,7 @@ static bool send_timestamp(
 
 static bool send_gaplist(
     const struct reader *reader, int scon,
-    unsigned int block, unsigned int offset, unsigned int samples)
+    unsigned int block, unsigned int offset, uint64_t samples)
 {
     /* First convert block, offset and samples into an index block count. */
     unsigned int samples_per_block = reader->samples_per_fa_block;
@@ -358,7 +359,7 @@ static bool send_gaplist(
 static bool transfer_data(
     const struct reader *reader, read_buffers_t read_buffers,
     int archive, int scon, struct iter_mask *iter, unsigned int data_mask,
-    unsigned int block, unsigned int offset, unsigned int count)
+    unsigned int block, unsigned int offset, uint64_t count)
 {
     size_t line_size_out = iter->count * reader->output_size(data_mask);
 
@@ -409,11 +410,12 @@ static bool transfer_data(
 /* Result of parsing a read command. */
 struct read_parse {
     filter_mask_t read_mask;        // List of BPMs to be read
-    unsigned int samples;           // Requested number of samples
+    uint64_t samples;               // Requested number of samples
     uint64_t start;                 // Data start (in microseconds into epoch)
     uint64_t end;                   // Data end (alternative to count)
     const struct reader *reader;    // Interpretation of data source
     unsigned int data_mask;         // Data mask for D and DD data
+    bool send_sample_count;         // Send sample count at start
     bool send_all_data;             // Don't bail out if insufficient data
     bool only_contiguous;           // Only contiguous data acceptable
     bool timestamp;                 // Send timestamp at start of data
@@ -427,7 +429,7 @@ static bool read_data(int scon, struct read_parse *parse)
     struct iter_mask iter = { 0 };
     read_buffers_t read_buffers = NULL;
     int archive = -1;
-    unsigned int samples = parse->samples;
+    uint64_t samples = parse->samples;
     bool ok =
         compute_start(
             parse->reader, parse->start, parse->end, &samples,
@@ -439,6 +441,8 @@ static bool read_data(int scon, struct read_parse *parse)
 
     if (ok  &&  write_ok)
         write_ok =
+            IF_(parse->send_sample_count,
+                TEST_write(scon, &samples, sizeof(samples)))  &&
             IF_(parse->timestamp,
                 send_timestamp(parse->reader, scon, block, offset))  &&
             IF_(parse->gaplist,
@@ -622,11 +626,12 @@ static struct reader dd_reader = {
  *  end = "N" samples | "E" time-or-seconds
  *  time-or-seconds = "T" date-time | "S" seconds [ "." nanoseconds ]
  *  samples = integer
- *  options = [ "A" ] [ "T" ] [ "G" ] [ "C" ]
+ *  options = [ "N" ] [ "A" ] [ "T" ] [ "G" ] [ "C" ]
  *
  * The options can only appear in the order given and have the following
  * meanings:
  *
+ *  N   Send sample count as part of data stream
  *  A   Send all data there is, even if samples is too large or starts too early
  *  T   Send timestamp at head of dataset
  *  G   Send gap list at end of data capture
@@ -678,13 +683,13 @@ static bool parse_time_or_seconds(const char **string, uint64_t *microseconds)
 
 
 /* end = "N" samples | "E" time-or-seconds . */
-static bool parse_end(const char **string, uint64_t *end, unsigned int *samples)
+static bool parse_end(const char **string, uint64_t *end, uint64_t *samples)
 {
     *end = 0;
     *samples = 0;
     if (read_char(string, 'N'))
         return
-            parse_uint(string, samples)  &&
+            parse_uint64(string, samples)  &&
             TEST_OK_(*samples > 0, "No samples requested\n");
     else if (read_char(string, 'E'))
         return parse_time_or_seconds(string, end);
@@ -693,9 +698,10 @@ static bool parse_end(const char **string, uint64_t *end, unsigned int *samples)
 }
 
 
-/* options = [ "A" ] [ "T" ] [ "G" ] [ "C" ] . */
+/* options = [ "N" ] [ "A" ] [ "T" ] [ "G" ] [ "C" ] . */
 static bool parse_options(const char **string, struct read_parse *parse)
 {
+    parse->send_sample_count = read_char(string, 'N');
     parse->send_all_data = read_char(string, 'A');
     parse->timestamp = read_char(string, 'T');
     parse->gaplist = read_char(string, 'G');
