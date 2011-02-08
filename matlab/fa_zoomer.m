@@ -28,7 +28,9 @@ uicontrol('String', 'Zoom',     'Position', [150 10 60 20], ...
 uicontrol('String', 'Spectrogram', 'Position', [220 10 100 20], ...
     'Callback', @spectrogram_callback);
 h.message = uicontrol('Position', [330 10 150 20], 'Style', 'text');
-h.ylim = uicontrol('Position', [490 10 80 20], 'Style', 'checkbox', ...
+h.maxpts = uicontrol('Position', [490 10 50 20], 'Style', 'edit', ...
+    'String', num2str(1e7));
+h.ylim = uicontrol('Position', [550 10 80 20], 'Style', 'checkbox', ...
     'String', 'Zoomed', 'Value', 1);
 
 % Hang onto the controls we need to reference later
@@ -53,7 +55,7 @@ function zoom_in_callback(fig, event)
 h = guidata(fig);
 global data;
 
-maxdata = 1e7;
+maxdata = str2num(get(h.maxpts, 'String'));
 points = diff(xlim) * 24 * 3600 * 10072 * length(data.ids);
 
 type = 'F';
