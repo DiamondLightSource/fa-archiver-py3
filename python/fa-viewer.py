@@ -906,6 +906,10 @@ class KeyFilter(QtCore.QObject):
 
 
 # Argument parsing
+def option_booster(option, opt, value, parser):
+    parser.values.booster = True
+    parser.values.server = '172.23.234.70'
+
 parser = optparse.OptionParser(usage = '''\
 Usage: fa-viewer [options]
 
@@ -917,8 +921,9 @@ parser.add_option(
     '-p', dest = 'port', default = falib.DEFAULT_PORT, type = 'int',
     help = 'Port number on server')
 parser.add_option(
-    '-B', dest = 'booster', default = False, action = 'store_true',
-    help = 'Configure BPM list for booster')
+    '-B', dest = 'booster', default = False, action = 'callback',
+    callback = option_booster,
+    help = 'Configure BPM list and server for booster')
 options, arglist = parser.parse_args()
 if arglist:
     parser.error('Unexpected arguments')
