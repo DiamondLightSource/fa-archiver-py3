@@ -386,6 +386,7 @@ bool timestamp_to_index(
 
     unsigned int N = header->major_block_count;
     unsigned int current = header->current_major_block;
+    unsigned int block_size = header->major_sample_count;
 
     /* Binary search to find major block corresponding to timestamp.  Note that
      * the high block is never inspected, which is just as well, as the current
@@ -405,36 +406,42 @@ bool timestamp_to_index(
             low = mid;
     }
 
-    uint64_t block_start = data_index[low].timestamp;
-    unsigned int duration = data_index[low].duration;
-    ok = TEST_OK_(duration > 0, "Timestamp not in index");
-    if (ok)
-    {
-        /* Compute the raw offset.  If we fall off the end of the selected block
-         * (perhaps there's a capture gap) simply skip to the following block.
-         * Note that this can push us to an invalid timestamp. */
-        uint64_t raw_offset =
-            (timestamp - block_start) * header->major_sample_count /
-            data_index[low].duration;
-        if (raw_offset >= header->major_sample_count)
-        {
-            low = (low + 1) % N;
-            raw_offset = 0;
-        }
 
-        /* Store the results and validate the timestamp and sample count. */
-        *major_block = low;
-        *offset = (unsigned int) raw_offset;
-        unsigned int block_count =
-            current > low ? current - low : N - low + current;
-        *samples_available =
-            (uint64_t) block_count * header->major_sample_count - raw_offset;
-        ok =
-            TEST_OK_(low != current, "Timestamp too late")  &&
-            TEST_OK_(timestamp >= block_start, "Timestamp too early");
+    /* Compute the offset of the selected timestamp into the current block and
+     * compensate for any block that's too early. */
+    unsigned int duration = data_index[low].duration;
+    if (duration == 0)
+    {
+        /* Fresh blocks that have never been overwritten have both duration and
+         * timestamp zero, so the next block along will be the right block. */
+        low = high;
+        *offset = 0;
+    }
+    else
+    {
+        /* Compute the offset of the timestamp into the selected block. */
+        uint64_t block_start = data_index[low].timestamp;
+        uint64_t raw_offset = (timestamp - block_start) * block_size / duration;
+        if (raw_offset >= block_size  &&  low != current)
+        {
+            /* If we fall off the end of the selected block (perhaps there's a
+             * capture gap) simply skip to the following block. */
+            low = high;
+            *offset = 0;
+        }
+        else
+            *offset = (unsigned int) raw_offset;
     }
 
+    *major_block = low;
+    unsigned int block_count =
+        current > low ? current - low : N - low + current;
+    *samples_available = (uint64_t) block_count * block_size - *offset;
+
+    ok = TEST_OK_(low != current, "Timestamp too late");
     UNLOCK(transform_lock);
+
+    /* Check that the identified block is in fact valid. */
     return ok;
 }
 

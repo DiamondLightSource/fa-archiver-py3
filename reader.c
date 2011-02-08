@@ -220,6 +220,9 @@ static bool compute_start(
         /* Convert requested timestamp into a starting index block and FA offset
          * into that block. */
         timestamp_to_index(start, &available, &ix_block, offset)  &&
+        /* Check that the start date is actually available. */
+        TEST_OK_(all_data  ||  read_index(ix_block)->timestamp <= start,
+            "Timestamp too early")  &&
         /* Convert FA block, offset and available counts into numbers
          * appropriate for our current data type. */
         DO_(fixup_offset(reader, ix_block, block, offset, &available))  &&
@@ -567,7 +570,7 @@ static struct reader dd_reader = {
  * The options can only appear in the order given and have the following
  * meanings:
  *
- *  A   Send all data there is, even if samples is too large
+ *  A   Send all data there is, even if samples is too large or starts too early
  *  T   Send timestamp at head of dataset
  *  G   Send gap list at end of data capture
  *  C   Ensure no gaps in selected dataset, fail if any
