@@ -85,10 +85,10 @@ class cis:
         self.reset()
 
         builder.aOut('FREQ', 0, 1000,
-            VAL  = self.freq,   PREC = 4,
+            VAL  = self.freq,   PREC = 2,
             on_update = self.set_freq)
         builder.aOut('F_S',
-            VAL  = self.f_s,    PREC = 1,
+            VAL  = self.f_s,    PREC = 2,
             on_update = self.set_f_s)
 
     def reset(self):
@@ -98,7 +98,6 @@ class cis:
         mean.reset()
 
     def set_freq(self, freq):
-        print 'set_freq', freq
         self.freq = freq
         self.reset()
 
@@ -119,19 +118,28 @@ class waveform:
             axis + name, length = scale * len(BPM_ids), datatype = float)
 
     def __init__(self, axis):
+        self.axis = axis
         self.wfi = self.__waveform(axis, 'I')
         self.wfq = self.__waveform(axis, 'Q')
         self.wfa = self.__waveform(axis, 'A')
         self.wfiq = self.__waveform(axis, 'IQ', 2)
 
     def update(self, value):
+        A = numpy.abs(value)
+
+        coh = numpy.sum(value * value) / numpy.sum(A * A)
+        phase = numpy.angle(coh) / 2
+        value *= numpy.exp(-1j * phase)
+
         I = numpy.real(value)
         Q = numpy.imag(value)
+        A = numpy.abs(value)
+
         # Note: need to copy the real and imag parts as numpy otherwise just
         # recycles the the underlying data which is too transient here.
         self.wfi.set(+I)
         self.wfq.set(+Q)
-        self.wfa.set(numpy.abs(value))
+        self.wfa.set(A)
         self.wfiq.set(numpy.concatenate((I, Q)))
 
 
@@ -157,6 +165,7 @@ class mean:
         builder.longOut('TARGET', 1, 600,
             VAL = self.target, on_update = self.set_target)
         self.count_pv = builder.longIn('COUNT', VAL = 0)
+        builder.Action('RESET', on_update = lambda _: self.reset())
 
     def reset(self):
         self.count = 0
