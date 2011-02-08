@@ -177,10 +177,10 @@ class mode_common:
         return numpy.nanmin(value[:, ix]), numpy.nanmax(value[:, ix])
 
     def linear_rescale(self, value):
-        min, max = self.get_minmax(value)
-        margin = 0.2 * (max - min)
-        self.ymin = min - margin
-        self.ymax = max + margin
+        low, high = self.get_minmax(value)
+        margin = max(1e-3, 0.2 * (high - low))
+        self.ymin = low - margin
+        self.ymax = high + margin
 
     def log_rescale(self, value):
         self.ymin, self.ymax = self.get_minmax(value)
@@ -227,6 +227,9 @@ class decimation:
 
         self.set_decimation(current_index)
 
+    def resetIndex(self):
+        self.selector.setCurrentIndex(0)
+
 
 class mode_raw(mode_common):
     mode_name = 'Raw Signal'
@@ -246,10 +249,17 @@ class mode_raw(mode_common):
 
     def __init__(self, parent):
         mode_common.__init__(self, parent)
+
+        self.qt_diff = QtGui.QCheckBox('Diff', parent.ui)
+        self.diff = False
+        self.qt_diff.stateChanged.connect(self.set_diff)
+        self.addWidget(self.qt_diff)
+
         self.selector = decimation(
             self, parent, self.Decimations,
             lambda d: 50*d < self.timebase, self.set_decimation)
         self.decimation = self.selector.decimation
+
         self.maxx = parent.makecurve(X_colour, True)
         self.maxy = parent.makecurve(Y_colour, True)
         self.minx = parent.makecurve(X_colour, True)
@@ -257,6 +267,11 @@ class mode_raw(mode_common):
         self.show_x = True
         self.show_y = True
         self.set_visible(False)
+
+    def set_diff(self, diff):
+        self.diff = diff != 0
+        if self.diff:
+            self.selector.resetIndex()
 
     def set_visible(self, enabled=True):
         self.maxx.setVisible(enabled and self.decimation > 1 and self.show_x)
@@ -285,8 +300,17 @@ class mode_raw(mode_common):
         self.xaxis = self.scale / F_S * \
             decimation * numpy.arange(self.timebase / decimation)
         self.set_visible()
+        if self.decimation != 1:
+            self.qt_diff.setChecked(False)
+
+    def compute(self, value):
+        if self.diff:
+            return numpy.diff(value, axis=0)
+        else:
+            return value
 
     def plot(self, value):
+        value = self.compute(value)
         if self.decimation == 1:
             mean = value
         else:
