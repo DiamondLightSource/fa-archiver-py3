@@ -30,6 +30,7 @@ else:
 
 
 SAMPLE_SIZE = 10000
+# Nominal sample frequency used to compute exitation waveform.
 F_S = 10072
 
 if BOOSTER:
@@ -79,7 +80,7 @@ PERMUTE[numpy.argsort(FA_IDS)] = numpy.arange(len(FA_IDS))
 
 class cis:
     def __init__(self):
-        self.f_s = 10072.4
+        self.f_s = F_S
         self.freq = 100.0
         self.reset()
 
@@ -108,20 +109,20 @@ class cis:
     def phase(self, n):
         '''Returns exp(2 pi n f / f_s), in other words, the phase advance at the
         selected frequency for sample n.'''
-        freq_n = 2 * numpy.pi * self.freq / F_S
+        freq_n = 2 * numpy.pi * self.freq / self.f_s
         return numpy.exp(1j * freq_n * n)
 
 
 class waveform:
-    def __waveform(self, axis, name, multiplier=1):
+    def __waveform(self, axis, name, scale=1):
         return builder.Waveform(
-            axis + name, length = multiplier * len(BPM_ids), datatype = float)
+            axis + name, length = scale * len(BPM_ids), datatype = float)
 
     def __init__(self, axis):
         self.wfi = self.__waveform(axis, 'I')
         self.wfq = self.__waveform(axis, 'Q')
         self.wfa = self.__waveform(axis, 'A')
-        self.wfiq = self.__waveform(axis, 'IQ')
+        self.wfiq = self.__waveform(axis, 'IQ', 2)
 
     def update(self, value):
         I = numpy.real(value)
