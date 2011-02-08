@@ -17,11 +17,13 @@
 % Output:
 %   d = object containing all of the data
 function d = loadfa(tse, mask, type, server)
-if nargin<3
+if nargin < 3
     type = 'F';
 end
 if nargin < 4
-    server = 'fa-archiver.cs.diamond.ac.uk';
+    server = '';
+else
+    server = [' -S' server];
 end
 
 switch type
@@ -32,15 +34,18 @@ switch type
     case 'D'
         rate = 10072/128^2;
 end
+
+% Create temporary file to capture into
 [r, famat] = system('mktemp');
 famat = famat(1:end-1);
 if r ~= 0; error('no mktmp?'); end
 start = tse(1);
 n = floor(diff(tse)*24*3600*rate);
 maskstr = sprintf('%d,', mask);
+
 [r, o] = system([ ...
-    'fa-capture -ka -s' datestr(start, 'yyyy-mm-ddTHH:MM:SS') ...
-    ' -o' famat ' -f' type ' -S' server ' ' maskstr(1:end-1) ' ' num2str(n)]);
+    'fa-capture -ka -s' format_time(start) ...
+    ' -o' famat ' -f' type server ' ' maskstr(1:end-1) ' ' num2str(n)]);
 if r ~= 0
     delete(famat);
     error(o)
@@ -53,3 +58,14 @@ end
 d.day = floor(d.t(1));
 d.t = d.t-d.day;
 delete(famat);
+
+
+function str = format_time(time)
+format = 'yyyy-mm-ddTHH:MM:SS';
+str = datestr(time, format);
+% Work out the remaining unformatted fraction of a second
+delta_s = 3600 * 24 * (time - datenum(str, format));
+if 0 < delta_s && delta_s < 0.9999
+    nano = sprintf('%.4f', delta_s);
+    str = [str nano(2:end)];
+end

@@ -9,7 +9,7 @@ h = {};
 
 if nargin == 0
     h.server = 'fa-archiver.cs.diamond.ac.uk';
-elseif server == 'booster'
+elseif strcmp(server, 'booster')
     h.server = '172.23.234.70';
 else
     h.server = server;
@@ -28,9 +28,13 @@ uicontrol('String', 'Zoom',     'Position', [150 10 60 20], ...
 uicontrol('String', 'Spectrogram', 'Position', [220 10 100 20], ...
     'Callback', @spectrogram_callback);
 h.message = uicontrol('Position', [330 10 150 20], 'Style', 'text');
+h.ylim = uicontrol('Position', [490 10 80 20], 'Style', 'checkbox', ...
+    'String', 'Zoomed', 'Value', 1);
 
 % Hang onto the controls we need to reference later
 guidata(fig, h);
+
+last_day_callback(fig, 0);
 
 
 function last_day_callback(fig, event)
@@ -40,7 +44,7 @@ global data;
 pvs = str2num(get(h.bpm_list, 'String'));
 
 busy;
-data = fa_load([now - 1.5 now], pvs, 'D', h.server);
+data = fa_load([now-1.5 now], pvs, 'D', h.server);
 plotfa(data);
 describe;
 
@@ -55,7 +59,7 @@ points = diff(xlim) * 24 * 3600 * 10072 * length(data.ids);
 type = 'F';
 if points > maxdata
     type = 'd';
-    points = points / 128;
+    points = points / 64;
     if points > maxdata
         type = 'D';
     end
@@ -71,39 +75,46 @@ function spectrogram_callback(fig, event)
 global data;
 len=1024;
 
-busy;
-for n = 1:2
+if length(size(data.data)) == 3
+    busy;
+    for n = 1:2
     subplot(2, 1, n)
-    if length(size(data.data))==3
         e = squeeze(data.data(n, 1, :));
         cols = floor(length(e)/len);
         sg = log10(abs(fft(reshape(e(1:(len*cols)), len, cols))));
         imagesc(data.t, [0 data.f_s/5], sg(1:(round(len/5)), :));
+
         set(gca, 'Ydir', 'normal');
         caxis([2 6])
+        label_axis(n)
     end
-    datetick('keeplimits')
-    title(datestr(data.day))
+    describe;
+else
+    message('Decimated data');
 end
-describe;
 
 
 function plotfa(d)
-axes = {'X'; 'Y'};
+h = guidata(gcf);
 for n = 1:2
     subplot(2, 1, n)
-    if length(size(d.data))==4
+    if length(size(d.data)) == 4
         plot(d.t, 1e-3 * squeeze(d.data(n, 2, :, :))); hold on
         plot(d.t, 1e-3 * squeeze(d.data(n, 3, :, :))); hold off
     else
         plot(d.t, 1e-3 * squeeze(d.data(n, :, :)))
     end
 
-    ylim([-100 100]);
-    datetick('keeplimits')
-    title([datestr(d.day) ' ' axes{n}])
+    if get(h.ylim, 'Value'); ylim([-100 100]); end
+    label_axis(n)
 end
 
+
+function label_axis(n)
+axes = {'X'; 'Y'};
+global data;
+datetick('keeplimits')
+title([datestr(data.day) ' ' axes{n}])
 
 function message(msg)
 h = guidata(gcf);
@@ -114,6 +125,7 @@ message('Busy');
 drawnow;
 
 function describe
+% Prints description of currently plotted data
 global data;
-message(sprintf('%d* %d/%d', ...
+message(sprintf('[%d] %d/%d', ...
     length(data.ids), length(data.data), data.decimation))
