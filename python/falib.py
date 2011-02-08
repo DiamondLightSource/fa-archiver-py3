@@ -58,7 +58,7 @@ class connection:
 
     def recv(self, block_size=65536, timeout=0.2):
         if not cothread.select([self.sock.fileno()], [], [], timeout)[0]:
-            raise socket.timeout
+            raise socket.timeout('Receive timeout')
         chunk = self.sock.recv(block_size)
         if not chunk:
             raise self.EOF('Connection closed by server')
