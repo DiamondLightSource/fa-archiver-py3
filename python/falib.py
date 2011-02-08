@@ -33,15 +33,6 @@ def count_mask(mask):
             n += 1
     return n
 
-def subscription_flags(timestamp = False, t0 = False):
-    flags = ''
-    if timestamp:
-        flags = 'T'
-    if t0:
-        flags = flags + 'Z'
-    return flags
-
-
 class connection:
     class EOF(Exception):
         pass
@@ -57,7 +48,8 @@ class connection:
         self.sock.close()
 
     def recv(self, block_size=65536, timeout=0.2):
-        if not cothread.select([self.sock.fileno()], [], [], timeout)[0]:
+        if not cothread.poll_list(
+                [(self.sock.fileno(), cothread.POLLIN)], timeout):
             raise socket.timeout('Receive timeout')
         chunk = self.sock.recv(block_size)
         if not chunk:
@@ -86,22 +78,31 @@ class connection:
 
 
 class subscription(connection):
-    def __init__(self, mask, t0 = False, **kargs):
+    '''s = subscription(bpm_list, server, port)
+
+    Creates a stream connection to the given FA archiver server (or the default
+    server if not specified) returning continuous data for the selected bpms.
+    The s.read() method must be called frequently enough to ensure that the
+    connection to the server doesn't overflow.
+    '''
+
+    def __init__(self, mask, **kargs):
         connection.__init__(self, **kargs)
         self.mask = normalise_mask(mask)
         self.count = count_mask(self.mask)
 
-        self.sock.send('SR%s%s\n' % (
-            format_mask(self.mask), subscription_flags(t0 = t0)))
+        self.sock.send('SR%sZ\n' % format_mask(self.mask))
         c = self.recv(1)
         if c != chr(0):
             raise self.Error((c + self.recv())[:-1])    # Discard trailing \n
-        if t0:
-            self.t0 = struct.unpack('<I', self.recv(4))[0]
-        else:
-            self.t0 = 0
+        self.t0 = struct.unpack('<I', self.recv(4))[0]
 
     def read(self, samples):
+        '''Returns a waveform of samples indexed by sample count, bpm count
+        (from the original subscription) and channel, thus:
+            wf = s.read(N)
+        wf[n, b, x] = sample n of BPM b on channel x, where x=0 for horizontal
+        position and x=1 for vertical position.'''
         self.t0 = (self.t0 + samples) & 0xffffffff
         raw = self.read_block(8 * samples * self.count)
         array = numpy.frombuffer(raw, dtype = numpy.int32)
