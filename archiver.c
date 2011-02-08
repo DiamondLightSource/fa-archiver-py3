@@ -174,7 +174,7 @@ static bool maybe_daemonise(void)
                 pid_filename, O_WRONLY | O_CREAT | O_EXCL, 0644),
                 "PID file already exists: is archiver already running?"))  &&
         IF_(daemon_mode,
-            /* Don't chdir to / so that we can rmdir(pid_filename) at end. */
+            /* Don't chdir to / so that we can unlink(pid_filename) at end. */
             TEST_IO(daemon(true, false))  &&
             DO_(start_logging("FA archiver")))  &&
         IF_(pid_filename,

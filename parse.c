@@ -168,13 +168,12 @@ bool report_parse_error(
 {
     if (ok  &&  parse_eos(end))
     {
-        pop_error_handling(NULL);
+        pop_error_handling(false);
         return true;
     }
     else
     {
-        char *error_message;
-        pop_error_handling(&error_message);
+        char *error_message = pop_error_handling(true);
         print_error(
             "Error parsing %s: %s at offset %zd in \"%s\"",
             message, error_message, *end - string, string);

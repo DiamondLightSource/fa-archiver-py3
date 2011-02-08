@@ -39,6 +39,7 @@ const struct disk_header *get_header(void);
  * into the appropriate internal representation, in 64-bit microseconds. */
 uint64_t ts_to_microseconds(struct timespec *ts);
 
+
 bool initialise_transform(
     struct disk_header *header, struct data_index *data_index,
     struct decimated_data *dd_area);

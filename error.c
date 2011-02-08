@@ -31,12 +31,13 @@ void push_error_handling(void)
     error_stack = new_entry;
 }
 
-void pop_error_handling(char **error_message)
+char * pop_error_handling(bool return_message)
 {
     struct error_stack *top = error_stack;
     error_stack = top->last;
-    if (error_message != NULL)
-        *error_message = top->message;
+    char * error_message = NULL;
+    if (return_message)
+        error_message = top->message;
     else if (top->message != NULL)
     {
         /* If the caller isn't claiming the error message this needs to be
@@ -45,6 +46,7 @@ void pop_error_handling(char **error_message)
         free(top->message);
     }
     free(top);
+    return error_message;
 }
 
 

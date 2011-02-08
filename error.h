@@ -65,10 +65,11 @@ void vlog_message(int priority, const char *format, va_list args);
  * below.  Once push_error_handling() has been called any subsequent calls to
  * print_error() in the same thread will cause the error message to be stashed.
  * Previous error handling is restored by calling pop_error_handling() which
- * returns the stored error message.  Error handlers can be nested like
- * exception handlers. */
+ * returns the stored error message if return_message is set (in which case the
+ * caller is responsible for freeing the error message).  Error handlers can be
+ * nested like exception handlers. */
 void push_error_handling(void);
-void pop_error_handling(char **error_message);
+char * pop_error_handling(bool return_message);
 
 
 /* Internal routines called by error handling macros below. */
@@ -184,7 +185,7 @@ void panic_error(const char * filename, int line)
 
 
 /* For ignoring return values even when warn_unused_result is in force. */
-#define IGNORE(e)       do if(e) {;} while (0)
+#define IGNORE(e)       do if(e) ; while (0)
 
 
 /* Debug utility for dumping binary data in ASCII format. */

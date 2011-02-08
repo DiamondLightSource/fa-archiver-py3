@@ -45,8 +45,8 @@ prepare.c
     Prepares a file or volume for use as an FA sniffer archive.
 
 
-Supporting libraries:
----------------------
+Supporting components:
+----------------------
 
 buffer.c buffer.h
     Circular in-memory buffer supporting one writer (sniffer) and multiple
@@ -86,6 +86,10 @@ sniffer.c sniffer.h
 
 socket_server.c socket_server.h
     Interface to FA sniffer clients.
+
+timing.h
+    This is not part of the project proper, but records a useful timing
+    technique.
 
 transform.c transform.h
     Processing of data read from sniffer device, reshapes data on its way to the

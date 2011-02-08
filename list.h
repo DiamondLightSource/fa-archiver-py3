@@ -63,21 +63,19 @@ static inline void list_del(struct list_head *entry)
     } )
 
 
-/* Get the struct for this entry. */
-#define list_entry(ptr, type, member)  container_of(ptr, type, member)
-
 /* Iterates over list head, setting pos to each entry in the list. */
 #define list_for_each(pos, head) \
     for (struct list_head *pos = (head)->next; pos != (head); pos = pos->next)
 
 
 /* list_for_each_entry - iterate over list of given type
- *  type:       the type of the list
- *  member:     the name of the list_struct within the struct.
- *  pos:        the type * to use as a loop cursor.
- *  head:       the head for your list.
- */
+ *  type:       type of the objects on the list
+ *  member:     name of the list_struct within type.
+ *  pos:        name of the list cursor.
+ *  head:       head of the list.
+ * Essentially the same as list_for_each(), except the cursor pos is pointed to
+ * the containing structure at each iteration. */
 #define list_for_each_entry(type, member, pos, head) \
-    for (type *pos = list_entry((head)->next, type, member); \
-    &pos->member != (head); \
-    pos = list_entry(pos->member.next, type, member))
+    for (type *pos = container_of((head)->next, type, member); \
+        &pos->member != (head); \
+        pos = container_of(pos->member.next, type, member))

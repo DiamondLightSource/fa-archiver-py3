@@ -30,7 +30,7 @@
 
 
 /* String used to report protocol version in response to CV command. */
-#define PROTOCOL_VERSION    "0"
+#define PROTOCOL_VERSION    "1.0"
 
 
 static bool __attribute__((format(printf, 2, 3)))
@@ -104,6 +104,18 @@ static bool process_command(int scon, const char *buf)
                 ok = write_string(scon,
                      "%"PRIu32"\n", header->second_decimation);
                 break;
+            case 'T':
+                {
+                    unsigned int block, offset;
+                    uint64_t start;
+                    if (timestamp_to_index(
+                            1, NULL, &block, &offset, &start, NULL))
+                        ok = write_string(scon, "%"PRIu64".%09"PRIu64"\n",
+                            start / 1000000, start % 1000000);
+                    else
+                        ok = write_string(scon, "?\n");
+                }
+                break;
             case 'V':
                 ok = write_string(scon, PROTOCOL_VERSION "\n");
                 break;
@@ -150,15 +162,14 @@ bool report_socket_error(int scon, bool ok)
     {
         /* If all is well write a single null to let the caller know to expect a
          * normal response to follow. */
-        pop_error_handling(NULL);
+        pop_error_handling(false);
         char nul = '\0';
         write_ok = TEST_write(scon, &nul, 1);
     }
     else
     {
         /* If an error is encountered write the error message to the socket. */
-        char *error_message;
-        pop_error_handling(&error_message);
+        char *error_message = pop_error_handling(true);
         write_ok = write_string(scon, "%s\n", error_message);
         free(error_message);
     }
@@ -327,8 +338,7 @@ static void * process_connection(void *context)
         TEST_IO(close(scon)));
 
     /* Report any errors. */
-    char *error_message;
-    pop_error_handling(&error_message);
+    char *error_message = pop_error_handling(true);
     if (!ok)
         log_message("Client %s: %s", client_name, error_message);
     free(error_message);
