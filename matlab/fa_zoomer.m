@@ -24,21 +24,21 @@ data = {};
 % Create the controls.
 global h_pos;
 h_pos = 10;
-h.bpm_list = uicontrol('String', '4', 'Position', position(60), ...
-    'Style', 'edit');
-uicontrol('String', 'Full', 'Position', position(40), ...
+h.bpm_list = control('edit', '4', 60, 'List of BPM FA ids');
+control('pushbutton', 'Full', 40, 'View entire archive history', ...
     'Callback', @full_archive_callback);
-uicontrol('String', '24h', 'Position', position(40), ...
+control('pushbutton', '24h', 40, 'View last 24 hours', ...
     'Callback', @last_day_callback);
-uicontrol('String', 'Zoom',     'Position', position(60), ...
+control('pushbutton', 'Zoom', 60, 'Update zoomed area from archive', ...
     'Callback', @zoom_in_callback);
-uicontrol('String', 'Spectrogram', 'Position', position(100), ...
+control('pushbutton', 'Spectrogram', 100, 'Show as spectrogram', ...
     'Callback', @spectrogram_callback);
-h.message = uicontrol('Position', position(150), 'Style', 'text');
-h.maxpts = uicontrol('Position', position(80), 'Style', 'edit', ...
-    'String', num2str(1e6));
-h.ylim = uicontrol('Position', position(80), 'Style', 'checkbox', ...
-    'String', 'Zoomed', 'Value', 1);
+h.message = control('text', '', 150, ...
+    'Error message or [bpm count] samples/decimation');
+h.maxpts = control('edit', num2str(1e6), 80, ...
+    'Maximum number of sample points');
+h.ylim = control('checkbox', 'Zoomed', 80, ...
+    'Limit vertical scale to +-100um', 'Value', 1);
 clear h_pos;
 
 % Hang onto the controls we need to reference later
@@ -47,11 +47,14 @@ guidata(fig, h);
 last_day_callback(fig, 0);
 
 
-% Return position for control of the specified width on the control line
-function result=position(width)
+% Places control with specified style, value, width  and tooltip.
+function result = control(style, value, width, tooltip, varargin)
 global h_pos;
-result = [h_pos 10 width 20];
+position = [h_pos 10 width 20];
 h_pos = h_pos + width + 5;
+result = uicontrol( ...
+    'Style', style, 'String', value, 'Position', position, ...
+    'TooltipString', tooltip, varargin{:});
 
 
 function full_archive_callback(fig, event)
@@ -140,8 +143,14 @@ end
 function label_axis(n)
 axes = {'X'; 'Y'};
 global data;
-datetick('keeplimits')
-title([datestr(data.day) ' ' axes{n}])
+if diff(data.t([1 end])) <= 2/(24*3600)
+    title([datestr(data.timestamp) ' ' axes{n}])
+    set(gca, 'XTickLabel', num2str( ...
+        get(gca,'XTick').'*24*3600-60*floor(data.t(1)*24*60),'%.4f'))
+else
+    title([datestr(data.day) ' ' axes{n}])
+    datetick('keeplimits')
+end
 
 function message(msg)
 h = guidata(gcf);
