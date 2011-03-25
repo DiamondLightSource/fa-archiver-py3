@@ -1,5 +1,7 @@
 #!/bin/sh
 
+# Runs the FA archiver for the storage ring.  This runs on fa-archiver server.
+
 ARCHIVE_FILE=/dev/mapper/vg2-sniffer1
 ARCHIVE_ARGS=-v
 
