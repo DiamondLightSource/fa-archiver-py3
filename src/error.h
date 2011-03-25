@@ -185,7 +185,7 @@ void panic_error(const char * filename, int line)
 
 
 /* For ignoring return values even when warn_unused_result is in force. */
-#define IGNORE(e)       do if(e) ; while (0)
+#define IGNORE(e)       do if(e) {} while (0)
 
 
 /* Debug utility for dumping binary data in ASCII format. */
