@@ -417,7 +417,11 @@ bool timestamp_to_index(
         low = high;
         *offset = 0;
     }
-    else
+    /* The start timestamp most precede the target timestamp if possible.  */
+    if (start_timestamp != NULL)
+        *start_timestamp = data_index[low].timestamp;
+
+    if (duration != 0)
     {
         /* Compute the offset of the timestamp into the selected block. */
         uint64_t block_start = data_index[low].timestamp;
@@ -439,12 +443,10 @@ bool timestamp_to_index(
     if (samples_available != NULL)
     {
         unsigned int block_count =
-            current > low ? current - low : N - low + current;
+            current >= low ? current - low : N - low + current;
         *samples_available = (uint64_t) block_count * block_size - *offset;
     }
     /* If required return bounding timestamps. */
-    if (start_timestamp != NULL)
-        *start_timestamp = data_index[low].timestamp;
     if (end_timestamp != NULL)
         *end_timestamp = data_index[low].timestamp + data_index[low].duration;
 
