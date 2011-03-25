@@ -51,6 +51,7 @@ static bool show_progress = true;
 static bool request_contiguous = false;
 static const char *data_name = "data";
 static bool all_data = false;
+static bool check_id0 = false;
 
 /* Archiver parameters read from archiver during initialisation. */
 static double sample_frequency;
@@ -200,6 +201,7 @@ static void usage(char *argv0)
 "            %s)\n"
 "   -p:  Specify port to connect to on server (default is %d)\n"
 "   -q   Suppress display of progress of capture on stderr\n"
+"   -z   Check for gaps in ID0 data, otherwise ignored\n"
 "\n"
 "Note that if matlab format is specified and no sample count is specified\n"
 "(interrupted continuous capture or range of times given) then output must be\n"
@@ -317,7 +319,7 @@ static bool parse_opts(int *argc, char ***argv)
     bool ok = true;
     while (ok)
     {
-        switch (getopt(*argc, *argv, "+hRCo:aS:qckn:s:t:b:p:f:"))
+        switch (getopt(*argc, *argv, "+hRCo:aS:qckn:zs:t:b:p:f:"))
         {
             case 'h':   usage(argv0);                               exit(0);
             case 'R':   matlab_format = false;                      break;
@@ -329,6 +331,7 @@ static bool parse_opts(int *argc, char ***argv)
             case 'c':   request_contiguous = true;                  break;
             case 'k':   squeeze_matlab = false;                     break;
             case 'n':   data_name = optarg;                         break;
+            case 'z':   check_id0 = true;                           break;
             case 's':   ok = parse_start(parse_datetime, optarg);   break;
             case 't':   ok = parse_start(parse_today, optarg);      break;
             case 'b':   ok = parse_start(parse_before, optarg);     break;
@@ -440,10 +443,11 @@ static bool request_data(int sock)
         else
             sprintf(count, "N%"PRIu64, sample_count);
         // Send R<source> M<mask> S<start> <end> <options>
-        sprintf(request, "R%sMR%sS%ld.%09ld%sN%s%s%s\n",
+        sprintf(request, "R%sMR%sS%ld.%09ld%sN%s%s%s%s\n",
             format, raw_mask, start.tv_sec, start.tv_nsec, count,
             all_data ? "A" : "",
-            matlab_format ? "TG" : "", request_contiguous ? "C" : "");
+            matlab_format ? "TG" : "", request_contiguous ? "C" : "",
+            check_id0 ? "Z" : "");
     }
     return TEST_write(sock, request, strlen(request));
 }
@@ -609,7 +613,8 @@ static bool write_header(uint64_t frames_written, uint64_t timestamp)
     place_matlab_value(&h, "decimation", miINT32, &decimation);
     place_matlab_value(&h, "f_s",        miDOUBLE, &frequency);
     place_matlab_value(&h, "timestamp",  miDOUBLE, &m_timestamp);
-    place_matlab_vector(&h, "id0", miINT32, id_zero, gap_count + 1);
+    if (check_id0)
+        place_matlab_vector(&h, "id0", miINT32, id_zero, gap_count + 1);
 
     /* Write out the index array tying data back to original BPM ids. */
     uint8_t mask_ids[FA_ENTRY_COUNT];
@@ -666,7 +671,8 @@ static bool capture_and_save(int sock)
         unsigned int frames_written = capture_data(sock);
         ok = ok  &&
             TEST_OK_(continuous_capture || frames_written == sample_count,
-                "Only captured %u of %"PRIu64" frames", frames_written, sample_count);
+                "Only captured %u of %"PRIu64" frames",
+                frames_written, sample_count);
     }
     return ok;
 }
