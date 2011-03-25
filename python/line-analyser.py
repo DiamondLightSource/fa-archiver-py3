@@ -198,7 +198,7 @@ class updater:
         cothread.Spawn(self.run)
 
     def subscription(self):
-        sub = falib.subscription(FA_IDS, t0 = True, server=SERVER)
+        sub = falib.subscription(FA_IDS, server=SERVER)
         mean.reset()
         while True:
             r, t0 = sub.read_t0(SAMPLE_SIZE)
