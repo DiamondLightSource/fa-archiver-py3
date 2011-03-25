@@ -421,6 +421,17 @@ static bool initialise_signal(void)
 }
 
 
+static void format_options(char *options)
+{
+    if (true)                *options++ = 'N';  // Send sample count
+    if (all_data)            *options++ = 'A';  // Send all available data
+    if (matlab_format)       *options++ = 'T';  // Send timestamp
+    if (matlab_format)       *options++ = 'G';  // Send gap list
+    if (request_contiguous)  *options++ = 'C';  // Ensure no gaps in data
+    if (check_id0)           *options++ = 'Z';  // Include ID0 in gap check
+    *options = '\0';
+}
+
 static bool request_data(int sock)
 {
     char raw_mask[RAW_MASK_BYTES+1];
@@ -437,17 +448,16 @@ static bool request_data(int sock)
             case DATA_D:    sprintf(format, "DF%u",  data_mask);    break;
             case DATA_DD:   sprintf(format, "DDF%u", data_mask);    break;
         }
-        char count[64];
+        char end_str[64];
         if (end_specified)
-            sprintf(count, "ES%ld.%09ld", end.tv_sec, end.tv_nsec);
+            sprintf(end_str, "ES%ld.%09ld", end.tv_sec, end.tv_nsec);
         else
-            sprintf(count, "N%"PRIu64, sample_count);
+            sprintf(end_str, "N%"PRIu64, sample_count);
+        char options[64];
+        format_options(options);
         // Send R<source> M<mask> S<start> <end> <options>
-        sprintf(request, "R%sMR%sS%ld.%09ld%sN%s%s%s%s\n",
-            format, raw_mask, start.tv_sec, start.tv_nsec, count,
-            all_data ? "A" : "",
-            matlab_format ? "TG" : "", request_contiguous ? "C" : "",
-            check_id0 ? "Z" : "");
+        sprintf(request, "R%sMR%sS%ld.%09ld%s%s\n",
+            format, raw_mask, start.tv_sec, start.tv_nsec, end_str, options);
     }
     return TEST_write(sock, request, strlen(request));
 }
