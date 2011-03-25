@@ -1,6 +1,7 @@
 #!/bin/sh
 
-ARCHIVE_ARGS='-v /dev/sdb'
+ARCHIVE_FILE=/dev/mapper/vg2-sniffer1
+ARCHIVE_ARGS=-v
 
 cd "$(dirname "$0")"
-build/fa-archiver $ARCHIVE_ARGS
+build/fa-archiver $ARCHIVE_ARGS "$ARCHIVE_FILE"
