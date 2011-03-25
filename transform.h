@@ -28,7 +28,7 @@ bool timestamp_to_index(
 /* Searches a range of index blocks for a gap in the timestamp, returning true
  * iff a gap is found.  *start is updated to the index of the block directly
  * after the first gap and *blocks is decremented accordingly. */
-bool find_gap(unsigned int *start, unsigned int *blocks);
+bool find_gap(bool check_id0, unsigned int *start, unsigned int *blocks);
 const struct data_index * read_index(unsigned int ix);
 
 /* Returns an unlocked pointer to the header: should only be used to access the

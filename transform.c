@@ -456,7 +456,7 @@ bool timestamp_to_index(
 }
 
 
-bool find_gap(unsigned int *start, unsigned int *blocks)
+bool find_gap(bool check_id0, unsigned int *start, unsigned int *blocks)
 {
     struct data_index *ix = &data_index[*start];
     uint64_t timestamp = ix->timestamp + ix->duration;
@@ -470,7 +470,7 @@ bool find_gap(unsigned int *start, unsigned int *blocks)
 
         ix = &data_index[*start];
         int64_t delta_t = ix->timestamp - timestamp;
-        if (ix->id_zero != id_zero  ||
+        if ((check_id0  &&  ix->id_zero != id_zero)  ||
             delta_t < -MAX_DELTA_T  ||  MAX_DELTA_T < delta_t)
             return true;
 
