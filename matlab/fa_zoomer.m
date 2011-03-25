@@ -16,22 +16,30 @@ else
 end
 
 % Create figure with the standard toolbar but no menubar
-fig = figure('MenuBar', 'none', 'Toolbar', 'figure');
+fig = figure('MenuBar', 'none', 'Toolbar', 'figure', ...
+    'Position', [0 0 900 600]);
+global data;
+data = {};
 
 % Create the controls.
-h.bpm_list = uicontrol('String', '4', 'Position', [10 10 60 20], ...
+global h_pos;
+h_pos = 10;
+h.bpm_list = uicontrol('String', '4', 'Position', position(60), ...
     'Style', 'edit');
-uicontrol('String', 'Last day', 'Position', [80 10 60 20], ...
+uicontrol('String', 'Full', 'Position', position(40), ...
+    'Callback', @full_archive_callback);
+uicontrol('String', '24h', 'Position', position(40), ...
     'Callback', @last_day_callback);
-uicontrol('String', 'Zoom',     'Position', [150 10 60 20], ...
+uicontrol('String', 'Zoom',     'Position', position(60), ...
     'Callback', @zoom_in_callback);
-uicontrol('String', 'Spectrogram', 'Position', [220 10 100 20], ...
+uicontrol('String', 'Spectrogram', 'Position', position(100), ...
     'Callback', @spectrogram_callback);
-h.message = uicontrol('Position', [330 10 150 20], 'Style', 'text');
-h.maxpts = uicontrol('Position', [490 10 80 20], 'Style', 'edit', ...
-    'String', num2str(1e7));
-h.ylim = uicontrol('Position', [580 10 80 20], 'Style', 'checkbox', ...
+h.message = uicontrol('Position', position(150), 'Style', 'text');
+h.maxpts = uicontrol('Position', position(80), 'Style', 'edit', ...
+    'String', num2str(1e6));
+h.ylim = uicontrol('Position', position(80), 'Style', 'checkbox', ...
     'String', 'Zoomed', 'Value', 1);
+clear h_pos;
 
 % Hang onto the controls we need to reference later
 guidata(fig, h);
@@ -39,24 +47,30 @@ guidata(fig, h);
 last_day_callback(fig, 0);
 
 
+% Return position for control of the specified width on the control line
+function result=position(width)
+global h_pos;
+result = [h_pos 10 width 20];
+h_pos = h_pos + width + 5;
+
+
+function full_archive_callback(fig, event)
+load_data(fig, [get_archive_start(fig) now], 'D');
+
+
+% Loads data for the last 24 hours
 function last_day_callback(fig, event)
-h = guidata(fig);
-global data;
-
-pvs = str2num(get(h.bpm_list, 'String'));
-
-busy;
-data = fa_load([now-1.5 now], pvs, 'D', h.server);
-plotfa(data);
-describe;
+load_data(fig, [now-1 now], 'D');
 
 
+% Loads data enclosed by the current zoom selection, returned by xlim.
 function zoom_in_callback(fig, event)
 h = guidata(fig);
 global data;
 
-maxdata = str2num(get(h.maxpts, 'String'));
-points = diff(xlim) * 24 * 3600 * 10072 * length(data.ids);
+maxdata = str2num(get(h.maxpts,   'String'));
+pvs     = str2num(get(h.bpm_list, 'String'));
+points = diff(xlim) * 24 * 3600 * 10072 * length(pvs);
 
 type = 'F';
 if points > maxdata
@@ -67,8 +81,18 @@ if points > maxdata
     end
 end
 
+load_data(fig, xlim + data.day, type);
+
+
+% Loads the requested range of data.
+function load_data(fig, range, type)
+h = guidata(fig);
+global data;
+
+pvs = str2num(get(h.bpm_list, 'String'));
+
 busy;
-data = fa_load(xlim+data.day, data.ids, type, h.server);
+data = fa_load(range, pvs, type, h.server);
 plotfa(data);
 describe;
 
@@ -107,6 +131,7 @@ for n = 1:2
         plot(d.t, 1e-3 * squeeze(d.data(n, :, :)))
     end
 
+    xlim([d.t(1) d.t(end)]);
     if get(h.ylim, 'Value'); ylim([-100 100]); end
     label_axis(n)
 end
@@ -126,8 +151,19 @@ function busy
 message('Busy');
 drawnow;
 
-function describe
 % Prints description of currently plotted data
+function describe
 global data;
 message(sprintf('[%d] %d/%d', ...
     length(data.ids), length(data.data), data.decimation))
+
+
+% Interrogates start time from archiver.
+function start = get_archive_start(fig)
+h = guidata(gcf);
+[r, start_secs] = system(['echo CT | nc ' h.server ' 8888']);
+if r ~= 0
+    error(start_secs)
+end
+% Convert Unix epoch time in seconds into Matlab epoch in days.
+start = 719529 + str2num(start_secs) / 3600 / 24;

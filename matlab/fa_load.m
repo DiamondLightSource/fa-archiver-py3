@@ -15,7 +15,6 @@
 %   d = object containing all of the data
 function d = fa_load(tse, mask, type, server)
 fa_capture = 'fa-capture';
-% fa_capture = '/home/mga83/epics/fa-archiver/build/fa-capture';
 if nargin < 3
     type = 'F';
 end
