@@ -199,6 +199,13 @@ static void show_progress(int n, int final_n)
 }
 
 
+/* This routine can be rewritten as simply (after removing the O_DIRECT flag on
+ * the open() call below):
+ *
+ *  return TEST_0(posix_fallocate(file_fd, written, file_size - written));
+ *
+ * but there is one down side: we can't show progress for what is a very time
+ * consuming operation. */
 static bool fill_zeros(int file_fd, int written)
 {
     uint32_t block_size = 512*K;

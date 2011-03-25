@@ -50,6 +50,11 @@ bool initialise_disk_writer(const char *file_name, uint32_t *input_block_size)
     uint64_t disk_size;
     return
         TEST_IO_(
+            /* I am told, eg http://lkml.org/lkml/2007/1/10/233, see also
+             * http://kerneltrap.org/node/7563, to use madvise() and
+             * posix_fadvise() instead of O_DIRECT.  However I'm not persuaded,
+             * the pattern of access in this application is specialised enough
+             * that I think O_DIRECT is appropriate. */
             disk_fd = open(file_name, O_RDWR | O_DIRECT | O_LARGEFILE),
             "Unable to open archive file \"%s\"", file_name)  &&
         lock_archive(disk_fd)  &&
