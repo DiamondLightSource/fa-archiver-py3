@@ -7,9 +7,11 @@ TOP = $(CURDIR)
 BUILD_DIR = $(CURDIR)/build
 SRCDIR = $(CURDIR)/src
 
-all $(filter-out all clean $(BUILD_DIR),$(MAKECMDGOALS)): $(BUILD_DIR)
-	VPATH=$(SRCDIR) $(MAKE) SRCDIR=$(SRCDIR) TOP=$(TOP) \
-            -C $(BUILD_DIR) -f $(SRCDIR)/Makefile $@
+MAKE_BUILD = \
+    VPATH=$(SRCDIR) $(MAKE) TOP=$(TOP) -C $(BUILD_DIR) -f $(SRCDIR)/Makefile
+
+all $(filter-out all clean install $(BUILD_DIR),$(MAKECMDGOALS)): $(BUILD_DIR)
+	$(MAKE_BUILD) $@
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
@@ -17,4 +19,9 @@ $(BUILD_DIR):
 clean:
 	rm -rf $(BUILD_DIR)
 
-.PHONY: all clean
+install:
+	$(MAKE_BUILD) install
+	make -C $(TOP)/python install
+	make -C $(TOP)/matlab install
+
+.PHONY: all clean install

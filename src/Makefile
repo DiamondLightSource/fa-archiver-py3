@@ -1,5 +1,8 @@
 # This Makefile is invoked by makefile after setting the working directory to
 # the $(BUILD_DIR) directory.
+ifndef TOP
+$(error Do not call this make file directly)
+endif
 
 # Any special installation instructions are picked up from Makefile.private
 # which is created by the dls-release process.
@@ -88,15 +91,9 @@ $(foreach target,$(BUILD),$(eval $(expand_build)))
 include $(patsubst %.c,%.d,$(foreach target,$(BUILD),$($(target)_SRCS)))
 
 
-# Installation: we install all the built executables in $(SCRIPT_DIR) and
-# install a lightly edited wrapper to run fa-viewer.
-
-FA_SUBST = s:^PYTHON=.*$$:PYTHON="$(PYTHON)":; \
-           s:^HERE=.*$$:HERE="$(SRCDIR)"/python:
-
+# Installation: we install all the built executables in $(SCRIPT_DIR)
 install: $(BUILD_NAMES)
-	[ -n '$(SCRIPT_DIR)' -a -n '$(PYTHON)' ] || { \
-            echo >&2 Must define SCRIPT_DIR and PYTHON; false; }
+	[ -n '$(SCRIPT_DIR)' ] || { echo >&2 Must define SCRIPT_DIR; false; }
 	$(INSTALL) $^ $(SCRIPT_DIR)
-	sed <$(SRCDIR)/python/fa-viewer >$(SCRIPT_DIR)/fa-viewer '$(FA_SUBST)'
-	chmod +x $(SCRIPT_DIR)/fa-viewer
+
+.PHONY: install
