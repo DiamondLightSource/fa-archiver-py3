@@ -39,7 +39,7 @@ h.maxpts = control('edit', num2str(1e6), 80, ...
     'Maximum number of sample points');
 h.ylim = control('checkbox', 'Zoomed', 80, ...
     'Limit vertical scale to +-100um', 'Value', 1);
-clear h_pos;
+clear global h_pos;
 
 % Hang onto the controls we need to reference later
 guidata(fig, h);

@@ -7,3 +7,7 @@ fa_ids_file = '/home/ops/diagnostics/concentrator/fa-ids.sr';
 
 allnames_i(allids+1) = allnames;
 names = allnames(ids+1);
+% An annoying little hack: handling cells for single values causes trouble.
+if length(names) == 1
+    names = cell2mat(names);
+end
