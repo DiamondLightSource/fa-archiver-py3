@@ -4,6 +4,8 @@
 # to the $(BUILD_DIR) directory.
 
 TOP = $(CURDIR)
+-include $(TOP)/Makefile.private
+
 BUILD_DIR = $(CURDIR)/build
 SRCDIR = $(CURDIR)/src
 
