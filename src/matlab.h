@@ -27,5 +27,6 @@ unsigned int count_data_bits(unsigned int mask);
 int compute_mask_ids(uint8_t *array, filter_mask_t mask);
 
 /* Converts a timestamp in FA sniffer format (microseconds in Unix epoch) to a
- * timestamp in matlab format (double days in Matlab epoch). */
-double matlab_timestamp(uint64_t timestamp);
+ * timestamp in matlab format (double days in Matlab epoch).  As matlab times
+ * are normally in local time the local time offset is also passed. */
+double matlab_timestamp(uint64_t timestamp, time_t local_offset);

@@ -6,6 +6,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <unistd.h>
+#include <time.h>
 
 #include "sniffer.h"
 #include "mask.h"
@@ -173,7 +174,7 @@ unsigned int count_data_bits(unsigned int mask)
 }
 
 
-double matlab_timestamp(uint64_t timestamp)
+double matlab_timestamp(uint64_t timestamp, time_t local_offset)
 {
-    return MATLAB_EPOCH + (1e-6 * timestamp) / SECS_PER_DAY;
+    return MATLAB_EPOCH + (1e-6 * timestamp + local_offset) / SECS_PER_DAY;
 }

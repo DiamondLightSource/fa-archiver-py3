@@ -52,6 +52,7 @@ static bool request_contiguous = false;
 static const char *data_name = "data";
 static bool all_data = false;
 static bool check_id0 = false;
+static bool offset_matlab_times = true;
 
 /* Archiver parameters read from archiver during initialisation. */
 static double sample_frequency;
@@ -202,6 +203,8 @@ static void usage(char *argv0)
 "   -p:  Specify port to connect to on server (default is %d)\n"
 "   -q   Suppress display of progress of capture on stderr\n"
 "   -z   Check for gaps in ID0 data, otherwise ignored\n"
+"   -Z   Use UTC timestamps for matlab timestamps, otherwise local time is\n"
+"        used including any local daylight saving offset.\n"
 "\n"
 "Note that if matlab format is specified and no sample count is specified\n"
 "(interrupted continuous capture or range of times given) then output must be\n"
@@ -211,14 +214,29 @@ static void usage(char *argv0)
 }
 
 
+/* Computes the offset from local time to UTC.  This is needed to fix up matlab
+ * timestamps. */
+static time_t local_time_offset(void)
+{
+    if (offset_matlab_times)
+    {
+        time_t now = time(NULL);
+        struct tm tm;
+        localtime_r(&now, &tm);
+        return timegm(&tm) - now;
+    }
+    else
+        return 0;
+}
+
+
 /* Returns seconds at midnight this morning for time of day relative timestamp
  * specification.  This uses the current timezone. */
 static time_t midnight_today(void)
 {
-    time_t now;
-    ASSERT_IO(now = time(NULL));
+    time_t now = time(NULL);
     struct tm tm;
-    ASSERT_NULL(localtime_r(&now, &tm));
+    localtime_r(&now, &tm);
     tm.tm_sec = 0;
     tm.tm_min = 0;
     tm.tm_hour = 0;
@@ -319,7 +337,7 @@ static bool parse_opts(int *argc, char ***argv)
     bool ok = true;
     while (ok)
     {
-        switch (getopt(*argc, *argv, "+hRCo:aS:qckn:zs:t:b:p:f:"))
+        switch (getopt(*argc, *argv, "+hRCo:aS:qckn:zZs:t:b:p:f:"))
         {
             case 'h':   usage(argv0);                               exit(0);
             case 'R':   matlab_format = false;                      break;
@@ -332,6 +350,7 @@ static bool parse_opts(int *argc, char ***argv)
             case 'k':   squeeze_matlab = false;                     break;
             case 'n':   data_name = optarg;                         break;
             case 'z':   check_id0 = true;                           break;
+            case 'Z':   offset_matlab_times = false;                break;
             case 's':   ok = parse_start(parse_datetime, optarg);   break;
             case 't':   ok = parse_start(parse_today, optarg);      break;
             case 'b':   ok = parse_start(parse_before, optarg);     break;
@@ -579,6 +598,7 @@ static bool read_t0(int sock)
 
 static bool read_gap_list(int sock)
 {
+    time_t local_offset = local_time_offset();
     bool ok =
         TEST_read(sock, &gap_count, sizeof(uint32_t))  &&
         TEST_OK_(gap_count < MAX_GAP_COUNT,
@@ -596,7 +616,8 @@ static bool read_gap_list(int sock)
             ok = TEST_read(sock, &gap_data, sizeof(gap_data));
             data_index[i] = gap_data.data_index;
             id_zero[i] = gap_data.id_zero;
-            gap_timestamps[i] = matlab_timestamp(gap_data.timestamp);
+            gap_timestamps[i] =
+                matlab_timestamp(gap_data.timestamp, local_offset);
         }
     }
     return ok;
@@ -612,7 +633,7 @@ static bool write_header(uint64_t frames_written, uint64_t timestamp)
         false                                       // Sample number
     };
     uint32_t decimation = get_decimation();
-    double m_timestamp = matlab_timestamp(timestamp);
+    double m_timestamp = matlab_timestamp(timestamp, local_time_offset());
     double frequency = sample_frequency / decimation;
 
     char mat_header[4096];
