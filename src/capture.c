@@ -23,6 +23,7 @@
 #include "mask.h"
 #include "matlab.h"
 #include "parse.h"
+#include "reader.h"
 
 
 #define DEFAULT_SERVER      "fa-archiver.cs.diamond.ac.uk"
@@ -109,6 +110,8 @@ static bool read_response(int sock, char *buf, size_t buflen)
 }
 
 
+/* Parses expected server response to CFdD command: should be three newline
+ * terminated numbers. */
 static bool parse_archive_parameters(const char **string)
 {
     return
@@ -120,6 +123,8 @@ static bool parse_archive_parameters(const char **string)
         parse_char(string, '\n');
 }
 
+/* Interrogates server for the nominal sample frequency and the decimation
+ * factors. */
 static bool read_archive_parameters(void)
 {
     int sock;
@@ -135,6 +140,7 @@ static bool read_archive_parameters(void)
 }
 
 
+/* Returns configured decimation factor. */
 static unsigned int get_decimation(void)
 {
     switch (data_format)
@@ -241,6 +247,7 @@ static time_t midnight_today(void)
 }
 
 
+/* Parses time in hh:mm:ss[Y] format representing time today or yesterday. */
 static bool parse_today(const char **string, struct timespec *ts)
 {
     return
@@ -251,6 +258,7 @@ static bool parse_today(const char **string, struct timespec *ts)
 }
 
 
+/* Returns +ve number if ts1 > ts2, -ve if ts1 < ts2, 0 if ts1 == ts2. */
 static int compare_ts(struct timespec *ts1, struct timespec *ts2)
 {
     if (ts1->tv_sec == ts2->tv_sec)
@@ -260,6 +268,9 @@ static int compare_ts(struct timespec *ts1, struct timespec *ts2)
 }
 
 
+/* Parses data format description in format
+ *  F | d[n] | D[n]
+ * where n is a three bit data mask. */
 static bool parse_data_format(const char **string, enum data_format *format)
 {
     if (read_char(string, 'F'))
@@ -290,6 +301,7 @@ static bool parse_data_format(const char **string, enum data_format *format)
 }
 
 
+/* Parses time of day in hh:mm:ss interpreted as time before now. */
 static bool parse_before(const char **string, struct timespec *ts)
 {
     return
@@ -298,6 +310,7 @@ static bool parse_before(const char **string, struct timespec *ts)
 }
 
 
+/* Parses one or two timestamps of the same format possibly separated by ~. */
 static bool parse_interval(
     const char **string,
     bool (*parser)(const char **string, struct timespec *ts))
@@ -311,6 +324,7 @@ static bool parse_interval(
 }
 
 
+/* Parse wrapper for parsing a timestamp or timestamp interval. */
 static bool parse_start(
     bool (*parser)(const char **string, struct timespec *ts),
     const char *string)
@@ -321,7 +335,8 @@ static bool parse_start(
 }
 
 
-
+/* Parses command line switches, updates *argc, *argv to point first remaining
+ * argument. */
 static bool parse_opts(int *argc, char ***argv)
 {
     char *argv0 = (*argv)[0];
@@ -369,6 +384,8 @@ static bool parse_opts(int *argc, char ***argv)
 }
 
 
+/* Parses a sample count as either a number of samples or a duration in seconds.
+ * Must be called after decimation parameters have been read from server. */
 static bool parse_samples(const char **string, uint64_t *result)
 {
     bool ok = parse_uint64(string, result);
@@ -379,6 +396,7 @@ static bool parse_samples(const char **string, uint64_t *result)
 }
 
 
+/* Parses all command line arguments. */
 static bool parse_args(int argc, char **argv)
 {
     return
@@ -386,12 +404,16 @@ static bool parse_args(int argc, char **argv)
         TEST_OK_(argc == 1  ||  argc == 2,
             "Wrong number of arguments.  Try `capture -h` for help.")  &&
         DO_PARSE("capture mask", parse_mask, argv[0], capture_mask)  &&
-        read_archive_parameters()  &&           // Needed for parse_samples
+        /* Note that we have to interrogate the archive parameters after parsing
+         * the server settings, but before we parse the sample count, because
+         * this uses the decimation settings we read. */
+        read_archive_parameters()  &&
         IF_(argc == 2,
             DO_PARSE("sample count", parse_samples, argv[1], &sample_count));
 }
 
 
+/* Performs final sanity checking on all parsed arguments. */
 static bool validate_args(void)
 {
     return
@@ -412,16 +434,17 @@ static bool validate_args(void)
 
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-/* Data capture */
+/* Common data capture */
 
 
+/* Capture of data can be interrupted by Ctrl-C.  This is simply implemented by
+ * resetting the running flag which is polled during capture. */
 static volatile bool running = true;
 
 static void interrupt_capture(int signum)
 {
     running = false;
 }
-
 
 static bool initialise_signal(void)
 {
@@ -435,6 +458,8 @@ static bool initialise_signal(void)
 }
 
 
+/* Formats data request options for archive data request.  See reader.c for
+ * definitions of these options. */
 static void format_options(char *options)
 {
     if (true)                *options++ = 'N';  // Send sample count
@@ -446,6 +471,8 @@ static void format_options(char *options)
     *options = '\0';
 }
 
+
+/* Sends request for archived or live data to archiver. */
 static bool request_data(int sock)
 {
     char raw_mask[RAW_MASK_BYTES+1];
@@ -499,7 +526,7 @@ static bool check_response(int sock)
 }
 
 
-
+/* Show progress of capture on stderr. */
 static void update_progress(unsigned int frames_written, size_t frame_size)
 {
     const char *progress = "|/-\\";
@@ -578,6 +605,21 @@ static bool capture_data(int sock, unsigned int *frames_written)
 }
 
 
+/* Coordination of raw data capture. */
+static bool capture_raw_data(int sock)
+{
+    unsigned int frames_written;
+    return
+        capture_data(sock, &frames_written)  &&
+        TEST_OK_(continuous_capture || frames_written == sample_count,
+            "Only captured %u of %"PRIu64" frames",
+            frames_written, sample_count);
+}
+
+
+
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+/* Matlab data capture */
 
 /* Gap list read from server. */
 #define MAX_GAP_COUNT   128     // Sanity limit
@@ -586,6 +628,8 @@ static uint32_t data_index[MAX_GAP_COUNT];
 static uint32_t id_zero[MAX_GAP_COUNT];
 static double gap_timestamps[MAX_GAP_COUNT];
 
+
+/* Reads id 0 from server. */
 static bool read_t0(int sock)
 {
     gap_count = 0;
@@ -593,6 +637,8 @@ static bool read_t0(int sock)
 }
 
 
+/* Reads list of contiguous data blocks from server, see reader.c for detailed
+ * definition. */
 static bool read_gap_list(int sock, time_t local_offset)
 {
     bool ok =
@@ -603,12 +649,7 @@ static bool read_gap_list(int sock, time_t local_offset)
     {
         for (unsigned int i = 0; ok && i <= gap_count; i ++)
         {
-            struct {
-                uint32_t data_index;
-                uint32_t id_zero;
-                uint64_t timestamp;
-            } gap_data;
-
+            struct gap_data gap_data;
             ok = TEST_read(sock, &gap_data, sizeof(gap_data));
             data_index[i] = gap_data.data_index;
             id_zero[i] = gap_data.id_zero;
@@ -620,6 +661,8 @@ static bool read_gap_list(int sock, time_t local_offset)
 }
 
 
+/* Writes complete matlab header including size of captured data and auxilliary
+ * data.  May be called twice if data size changes. */
 static bool write_header(
     uint64_t frames_written, uint64_t timestamp, time_t local_offset)
 {
@@ -669,6 +712,7 @@ static bool write_header(
 }
 
 
+/* Coordination of matlab data capture. */
 static bool capture_matlab_data(int sock)
 {
     unsigned int frames_written;
@@ -690,16 +734,13 @@ static bool capture_matlab_data(int sock)
             write_header(frames_written, timestamp, local_offset));
 }
 
-static bool capture_raw_data(int sock)
-{
-    unsigned int frames_written;
-    return
-        capture_data(sock, &frames_written)  &&
-        TEST_OK_(continuous_capture || frames_written == sample_count,
-            "Only captured %u of %"PRIu64" frames",
-            frames_written, sample_count);
-}
 
+
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+/* Top level control */
+
+
+/* Captures open data stream to configured output file. */
 static bool capture_and_save(int sock)
 {
     return
@@ -711,6 +752,7 @@ static bool capture_and_save(int sock)
 }
 
 
+/* Captures requested data from archiver and saves to file. */
 int main(int argc, char **argv)
 {
     char *server = getenv("FA_ARCHIVE_SERVER");

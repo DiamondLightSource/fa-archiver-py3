@@ -315,11 +315,7 @@ static bool send_gaplist(
     unsigned int ix_block = ix_start;
     for (unsigned int i = 0;  ok  &&  i <= gap_count;  i ++)
     {
-        struct {
-            uint32_t data_index;
-            uint32_t id_zero;
-            uint64_t timestamp;
-        } gap_data;
+        struct gap_data gap_data;
         const struct data_index *data_index = read_index(ix_block);
         gap_data.timestamp = data_index->timestamp;
         gap_data.id_zero = data_index->id_zero;
