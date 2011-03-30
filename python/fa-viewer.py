@@ -5,6 +5,8 @@ require('cothread')
 
 import os, sys
 import optparse
+import re
+import glob
 import numpy
 from PyQt4 import Qwt5, QtGui, QtCore, uic
 
@@ -15,6 +17,8 @@ import falib
 X_colour = QtGui.QColor(64, 64, 255)    # QtCore.Qt.blue is too dark
 Y_colour = QtCore.Qt.red
 
+# Default location used if no location specified on command line.
+DEFAULT_LOCATION = 'SR'
 
 
 # ------------------------------------------------------------------------------
@@ -604,30 +608,42 @@ INITIAL_MODE = 0
 # This is the implementation of the viewer as a Qt display application.
 
 
-# The format of BPM_list is (Haskell type syntax):
-#   [(group_name, [(bpm_name, bpm_id)])]
-# Ie, a list of group names, and for each group a list of bpm name and id pairs.
 
-def storage_bpms():
-    cells = [('Other', [])] + [
-        ('Cell %d' % (c+1),
-         [('SR%02dC-DI-EBPM-%02d' % (c+1, n+1), 7*c+n+1) for n in range(7)])
-        for c in range(24)]
-    cells[21][1].append(('SR21C-DI-EBPM-08', 169))
-    cells[13][1].extend(
-        [('SR13S-DI-EBPM-%02d' % (n+1), 170+n) for n in range(2)])
-    return cells
+def load_bpm_list(filename):
+    '''Loads list of ids and bpms from given file.'''
+    for line in file(filename).readlines():
+        if line and line[0] != '#':
+            id_bpm = line.split()
+            if len(id_bpm) == 2:
+                id, bpm = id_bpm
+                yield (int(id), bpm)
 
-def booster_bpms():
-    # Complete black magic computation of booster bpm cells!
-    return [('Other', [])] + [('Booster',
-        [('BR%02dC-DI-EBPM-%02d' % (((2*n + 6) // 11) % 4 + 1, n + 1), n + 1)
-            for n in range(22)])]
+def compute_bpm_groups(filename, groups, patterns):
+    '''Computes the list of groups and BPM/FA mappings to be presented to the
+    user.  The format of the computed list is:
+        [(group_name, [(bpm_name, bpm_id)])]
+    Ie, a list of group names, and for each group a list of bpm name and id
+    pairs.'''
+    group_dict = dict((group, []) for group in groups)
+    for id, bpm in load_bpm_list(filename):
+        for match, pattern, replace in patterns:
+            if re.match(match, bpm):
+                key = re.sub(pattern, replace, bpm)
+                group_dict[key].append((bpm, id))
+                break
+    return [('Other', [])] + [(group, group_dict[group]) for group in groups]
 
-
-BPM_list = storage_bpms()
-# Start on BPM #1 -- as sensible a default as any
-INITIAL_BPM = 0
+def load_bpm_defs(location, full_path):
+    '''Loads BPM definitions for the specified location.  Returns the name and
+    port of the server and the appropriate group pattern list.'''
+    if not full_path:
+        location = os.path.join(
+            os.path.dirname(__file__), '%s.viewer.conf' % location)
+    bpm_defs = {}
+    execfile(location, bpm_defs)
+    groups = compute_bpm_groups(
+        bpm_defs['BPM_LIST'], bpm_defs['GROUPS'], bpm_defs['PATTERNS'])
+    return bpm_defs['FA_SERVER'], bpm_defs.get('FA_PORT', 8888), groups
 
 
 Timebase_list = [
@@ -639,6 +655,7 @@ Timebase_list = [
 INITIAL_TIMEBASE = 3
 
 SCROLL_THRESHOLD = 10000
+
 
 class SpyMouse(QtCore.QObject):
     MouseMove = QtCore.pyqtSignal(QtCore.QPoint)
@@ -905,33 +922,32 @@ class KeyFilter(QtCore.QObject):
         return False
 
 
-# Argument parsing
-def option_booster(option, opt, value, parser):
-    parser.values.booster = True
-    parser.values.server = '172.23.234.70'
+def parse_options():
+    locations = [
+        re.sub('.*/([^/]*)\.viewer\.conf', r'\1', conf)
+        for conf in glob.glob(
+            os.path.join(os.path.dirname(__file__), '*.viewer.conf'))]
+    parser = optparse.OptionParser(usage = '''\
+    fa-viewer [-f] [location]
 
-parser = optparse.OptionParser(usage = '''\
-Usage: fa-viewer [options]
+    Display live Fast Acquisition data from EBPM data stream.  The location can
+    be one of %s, or full path to location file if -f specified.
+    The default location is %s.''' % (', '.join(locations), DEFAULT_LOCATION))
+    parser.add_option(
+        '-f', dest = 'full_path', default = False, action = 'store_true',
+        help = 'Location is full path to location file')
+    options, arglist = parser.parse_args()
+    if len(arglist) > 1:
+        parser.error('Unexpected arguments')
+    if arglist:
+        location = arglist[0]
+    else:
+        location = DEFAULT_LOCATION
+    return load_bpm_defs(location, options.full_path)
 
-Display live Fast Acquisition data from EBPM data stream''')
-parser.add_option(
-    '-S', dest = 'server', default = falib.DEFAULT_SERVER,
-    help = 'FA archive server used to provide data feed')
-parser.add_option(
-    '-p', dest = 'port', default = falib.DEFAULT_PORT, type = 'int',
-    help = 'Port number on server')
-parser.add_option(
-    '-B', dest = 'booster', default = False, action = 'callback',
-    callback = option_booster,
-    help = 'Configure BPM list and server for booster')
-options, arglist = parser.parse_args()
-if arglist:
-    parser.error('Unexpected arguments')
 
-if options.booster:
-    BPM_list = booster_bpms()
-
-F_S = falib.get_sample_frequency(server=options.server, port=options.port)
+server, port, BPM_list = parse_options()
+F_S = falib.get_sample_frequency(server = server, port = port)
 
 qapp = cothread.iqt()
 key_filter = KeyFilter()
@@ -939,8 +955,7 @@ qapp.installEventFilter(key_filter)
 
 # create and show form
 ui_viewer = uic.loadUi(os.path.join(os.path.dirname(__file__), 'viewer.ui'))
-ui_viewer.show()
 # Bind code to form
-s = Viewer(ui_viewer, options.server, options.port)
+s = Viewer(ui_viewer, server, port)
 
 cothread.WaitForQuit()
