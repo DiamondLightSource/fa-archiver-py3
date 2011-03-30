@@ -58,7 +58,7 @@ result = uicontrol( ...
 
 
 function full_archive_callback(fig, event)
-load_data(fig, [get_archive_start(fig) now], 'D');
+load_data(fig, [now-2000 now], 'D');    % Go back as far as possible!
 
 
 % Loads data for the last 24 hours
@@ -165,14 +165,3 @@ function describe
 global data;
 message(sprintf('[%d] %d/%d', ...
     length(data.ids), length(data.data), data.decimation))
-
-
-% Interrogates start time from archiver.
-function start = get_archive_start(fig)
-h = guidata(gcf);
-[r, start_secs] = system(['echo CT | nc ' h.server ' 8888']);
-if r ~= 0
-    error(start_secs)
-end
-% Convert Unix epoch time in seconds into Matlab epoch in days.
-start = 719529 + str2num(start_secs) / 3600 / 24;
