@@ -640,7 +640,7 @@ def load_bpm_defs(location, full_path):
         location = os.path.join(
             os.path.dirname(__file__), '%s.viewer.conf' % location)
     bpm_defs = {}
-    execfile(location, bpm_defs)
+    execfile(location, {}, bpm_defs)
     groups = compute_bpm_groups(
         bpm_defs['BPM_LIST'], bpm_defs['GROUPS'], bpm_defs['PATTERNS'])
     return bpm_defs['FA_SERVER'], bpm_defs.get('FA_PORT', 8888), groups

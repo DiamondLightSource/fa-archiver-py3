@@ -6,4 +6,4 @@ ARCHIVE_FILE=/dev/mapper/vg2-sniffer1
 ARCHIVE_ARGS=-v
 
 cd "$(dirname "$0")"
-build/fa-archiver $ARCHIVE_ARGS "$ARCHIVE_FILE"
+exec build/fa-archiver $ARCHIVE_ARGS "$ARCHIVE_FILE"
