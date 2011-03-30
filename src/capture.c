@@ -218,15 +218,10 @@ static void usage(char *argv0)
  * timestamps. */
 static time_t local_time_offset(void)
 {
-    if (offset_matlab_times)
-    {
-        time_t now = time(NULL);
-        struct tm tm;
-        localtime_r(&now, &tm);
-        return timegm(&tm) - now;
-    }
-    else
-        return 0;
+    time_t now = time(NULL);
+    struct tm tm;
+    localtime_r(&now, &tm);
+    return timegm(&tm) - now;
 }
 
 
@@ -534,35 +529,37 @@ static void reset_progress(void)
 
 /* This routine reads data from sock and writes out complete frames until either
  * the sample count is reached or the read is interrupted. */
-static unsigned int capture_data(int sock)
+static bool capture_data(int sock, unsigned int *frames_written)
 {
     size_t frame_size =
         count_data_bits(data_mask) *
         count_mask_bits(capture_mask) * FA_ENTRY_SIZE;
-    unsigned int frames_written = 0;
     char buffer[BUFFER_SIZE];
     unsigned int residue = 0;   // Partial frame received, not yet written out
-    while (running  &&  (sample_count == 0  ||  frames_written < sample_count))
+    bool ok = true;             // Only treat write failures as errors
+    *frames_written = 0;
+    while (running  &&  (sample_count == 0  ||  *frames_written < sample_count))
     {
         int rx = read(sock, buffer + residue, BUFFER_SIZE - residue);
         if (rx == -1)
         {
             TEST_OK_(errno == EINTR, "Error reading from server");
-            break;
+            break;              // Truncated input needed be a failure
         }
         else if (rx == 0)
-            break;
+            break;              // Normal end of input
 
         rx = rx + residue;
         unsigned int frames_read = rx / frame_size;
-        if (sample_count > 0  &&  frames_read > (sample_count - frames_written))
-            frames_read = sample_count - frames_written;
+        if (sample_count > 0 && frames_read > (sample_count - *frames_written))
+            frames_read = sample_count - *frames_written;
         unsigned int to_write = frames_read * frame_size;
         if (frames_read > 0)
         {
-            if (!TEST_write(output_file, buffer, to_write))
+            ok = TEST_write(output_file, buffer, to_write);
+            if (!ok)
                 break;
-            frames_written += frames_read;
+            *frames_written += frames_read;
         }
 
         /* For lazy simplicity just move any unwritten partial frames to the
@@ -572,12 +569,12 @@ static unsigned int capture_data(int sock)
             memmove(buffer, buffer + to_write, residue);
 
         if (show_progress)
-            update_progress(frames_written, frame_size);
+            update_progress(*frames_written, frame_size);
     }
 
     if (show_progress)
         reset_progress();
-    return frames_written;
+    return ok;
 }
 
 
@@ -596,9 +593,8 @@ static bool read_t0(int sock)
 }
 
 
-static bool read_gap_list(int sock)
+static bool read_gap_list(int sock, time_t local_offset)
 {
-    time_t local_offset = local_time_offset();
     bool ok =
         TEST_read(sock, &gap_count, sizeof(uint32_t))  &&
         TEST_OK_(gap_count < MAX_GAP_COUNT,
@@ -624,7 +620,8 @@ static bool read_gap_list(int sock)
 }
 
 
-static bool write_header(uint64_t frames_written, uint64_t timestamp)
+static bool write_header(
+    uint64_t frames_written, uint64_t timestamp, time_t local_offset)
 {
     bool squeeze[4] = {
         false,                                      // X, Y
@@ -633,7 +630,7 @@ static bool write_header(uint64_t frames_written, uint64_t timestamp)
         false                                       // Sample number
     };
     uint32_t decimation = get_decimation();
-    double m_timestamp = matlab_timestamp(timestamp, local_time_offset());
+    double m_timestamp = matlab_timestamp(timestamp, local_offset);
     double frequency = sample_frequency / decimation;
 
     char mat_header[4096];
@@ -672,40 +669,45 @@ static bool write_header(uint64_t frames_written, uint64_t timestamp)
 }
 
 
+static bool capture_matlab_data(int sock)
+{
+    unsigned int frames_written;
+    uint64_t timestamp;
+    time_t local_offset = offset_matlab_times ? local_time_offset() : 0;
+    return
+        TEST_read(sock, &timestamp, sizeof(uint64_t))  &&
+        IF_ELSE(continuous_capture,
+            read_t0(sock),
+            read_gap_list(sock, local_offset))  &&
+        write_header(sample_count, timestamp, local_offset)  &&
+        capture_data(sock, &frames_written)  &&
+        IF_(frames_written != sample_count,
+            /* For an incomplete capture, probably an interrupted continuous
+             * capture, we need to rewrite the header with the correct
+             * capture count. */
+            TEST_IO_(lseek(output_file, 0, SEEK_SET),
+                "Cannot update matlab file, file not seekable")  &&
+            write_header(frames_written, timestamp, local_offset));
+}
+
+static bool capture_raw_data(int sock)
+{
+    unsigned int frames_written;
+    return
+        capture_data(sock, &frames_written)  &&
+        TEST_OK_(continuous_capture || frames_written == sample_count,
+            "Only captured %u of %"PRIu64" frames",
+            frames_written, sample_count);
+}
+
 static bool capture_and_save(int sock)
 {
-    bool ok = true;
-    if (!continuous_capture)
-        ok = TEST_read(sock, &sample_count, sizeof(uint64_t));
-
-    if (matlab_format)
-    {
-        unsigned int frames_written;
-        uint64_t timestamp;
-        ok = ok  &&
-            TEST_read(sock, &timestamp, sizeof(uint64_t))  &&
-            IF_ELSE(continuous_capture,
-                read_t0(sock),
-                read_gap_list(sock))  &&
-            write_header(sample_count, timestamp)  &&
-            DO_(frames_written = capture_data(sock))  &&
-            IF_(frames_written != sample_count,
-                /* For an incomplete capture, probably an interrupted continuous
-                 * capture, we need to rewrite the header with the correct
-                 * capture count. */
-                TEST_IO_(lseek(output_file, 0, SEEK_SET),
-                    "Cannot update matlab file, file not seekable")  &&
-                write_header(frames_written, timestamp));
-    }
-    else
-    {
-        unsigned int frames_written = capture_data(sock);
-        ok = ok  &&
-            TEST_OK_(continuous_capture || frames_written == sample_count,
-                "Only captured %u of %"PRIu64" frames",
-                frames_written, sample_count);
-    }
-    return ok;
+    return
+        IF_(!continuous_capture,
+            TEST_read(sock, &sample_count, sizeof(uint64_t)))  &&
+        IF_ELSE(matlab_format,
+            capture_matlab_data(sock),
+            capture_raw_data(sock));
 }
 
 
