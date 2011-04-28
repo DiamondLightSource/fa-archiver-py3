@@ -14,6 +14,7 @@
 #include "error.h"
 #include "sniffer.h"
 #include "mask.h"
+#include "buffer.h"
 #include "transform.h"
 #include "disk_writer.h"
 #include "locking.h"
@@ -295,12 +296,8 @@ static unsigned int timestamp_index = 0;
 
 
 /* Adds a minor block to the timestamp array. */
-static void index_minor_block(const void *block, struct timespec *ts)
+static void index_minor_block(const void *block, uint64_t timestamp)
 {
-    /* Convert timestamp to our working representation in microseconds in the
-     * current epoch. */
-    uint64_t timestamp = ts_to_microseconds(ts);
-
     if (timestamp_index == 0)
     {
         first_timestamp = timestamp;
@@ -503,21 +500,15 @@ const struct decimated_data * get_dd_area(void)
 /* Top level control. */
 
 
-uint64_t ts_to_microseconds(struct timespec *ts)
-{
-    return 1000000 * (uint64_t) ts->tv_sec + ts->tv_nsec / 1000;
-}
-
-
 /* Processes a single block of raw frames read from the internal circular
  * buffer, transposing for efficient read and generating decimations as
  * appropriate.  Schedules write to disk as appropriate when buffer is full
  * enough. */
-void process_block(const void *block, struct timespec *ts)
+void process_block(const void *block, uint64_t timestamp)
 {
     if (block)
     {
-        index_minor_block(block, ts);
+        index_minor_block(block, timestamp);
         transpose_block(block);
         decimate_block(block);
         bool must_write = advance_block();

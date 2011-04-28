@@ -200,18 +200,17 @@ bool report_socket_error(int scon, bool ok)
 
 
 static bool send_subscription(
-    int scon, struct reader_state *reader, struct timespec *ts, bool want_t0,
+    int scon, struct reader_state *reader, uint64_t timestamp,
+    bool want_timestamp, bool want_t0,
     filter_mask_t mask, const void **block)
 {
-    bool ok = true;
-    if (ts)
-    {
-        uint64_t timestamp = ts_to_microseconds(ts);
-        ok = TEST_write(scon, &timestamp, sizeof(uint64_t));
-    }
-    if (ok  &&  want_t0)
-        /* The first word in the block is the T0 timestamp. */
-        ok = TEST_write(scon, *block, sizeof(uint32_t));
+    /* The transmitted block optionally begins with the timestamp and T0 values,
+     * in that order, if requested. */
+    bool ok =
+        IF_(want_timestamp,
+            TEST_write(scon, &timestamp, sizeof(uint64_t)))  &&
+        IF_(want_t0,
+            TEST_write(scon, *block, sizeof(uint32_t)));
 
     size_t block_size = reader_block_size(reader);
     while (ok)
@@ -250,15 +249,15 @@ static bool process_subscribe(int scon, const char *buf)
     /* See if we can start the subscription, report the final status to the
      * caller. */
     struct reader_state *reader = open_reader(buffer, false);
-    struct timespec ts;
-    const void *block = get_read_block(reader, NULL, &ts);
+    uint64_t timestamp;
+    const void *block = get_read_block(reader, NULL, &timestamp);
     bool start_ok = TEST_NULL_(block, "No data currently available");
     bool ok = report_socket_error(scon, start_ok);
 
     /* Send the requested subscription if all is well. */
     if (start_ok  &&  ok)
         ok = send_subscription(
-            scon, reader, want_timestamp ? &ts : NULL, want_t0, mask, &block);
+            scon, reader, timestamp, want_timestamp, want_t0, mask, &block);
 
     /* Clean up resources.  Rather important to get this right, as this can
      * happen many times. */

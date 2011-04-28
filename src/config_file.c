@@ -14,8 +14,8 @@
 #include "config_file.h"
 
 
-/* Absurdly long line size. */
-#define LINE_SIZE 1024
+/* Need quite a long line size to handle line joining for array reads. */
+#define LINE_SIZE 4096
 
 #define NAME_LENGTH 40
 

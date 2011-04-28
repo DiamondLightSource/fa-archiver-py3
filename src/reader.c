@@ -17,6 +17,7 @@
 #include "sniffer.h"
 #include "mask.h"
 #include "parse.h"
+#include "buffer.h"
 #include "transform.h"
 #include "locking.h"
 #include "disk.h"

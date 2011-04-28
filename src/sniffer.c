@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -26,38 +27,37 @@ static struct buffer *fa_block_buffer;
 static const char *fa_sniffer_device;
 
 
-
-static void dummy_data(void *data, int block_size)
+static void fill_dummy_block(struct fa_row *block, size_t block_size)
 {
-    static uint32_t dummy_t = 0;
-    struct fa_entry *output = data;
     unsigned int frame_count = block_size / FA_FRAME_SIZE;
     for (unsigned int i = 0; i < frame_count; i ++)
     {
         for (int j = 0; j < FA_ENTRY_COUNT; j ++)
         {
+            struct fa_entry *output = &block[i].row[j];
             if (j == 0)
             {
-                output->x = dummy_t;
-                output->y = dummy_t;
+                output->x = i;
+                output->y = i;
             }
             else
             {
-                uint32_t int_phase = dummy_t * j * 7000;
+                uint32_t int_phase = i * j * 7000;
                 double phase = 2 * M_PI * int_phase / (double) ULONG_MAX;
                 output->x = (int32_t) 50000 * sin(phase);
                 output->y = (int32_t) 50000 * cos(phase);
             }
-            output ++;
         }
-        dummy_t += 1;
     }
-    usleep(100 * frame_count);
 }
+
 
 static void * dummy_sniffer_thread(void *context)
 {
     const size_t fa_block_size = buffer_block_size(fa_block_buffer);
+    struct fa_row *dummy_block = malloc(fa_block_size);
+    fill_dummy_block(dummy_block, fa_block_size);
+
     while (true)
     {
         void *buffer = get_write_block(fa_block_buffer);
@@ -68,10 +68,13 @@ static void * dummy_sniffer_thread(void *context)
         }
         else
         {
-            dummy_data(buffer, fa_block_size);
+            memcpy(buffer, dummy_block, fa_block_size);
+            usleep(100 * fa_block_size / FA_FRAME_SIZE);
+
             struct timespec ts;
             ASSERT_IO(clock_gettime(CLOCK_REALTIME, &ts));
-            release_write_block(fa_block_buffer, false, &ts);
+            release_write_block(
+                fa_block_buffer, false, ts_to_microseconds(&ts));
         }
     }
     return NULL;
@@ -105,7 +108,7 @@ static void * sniffer_thread(void *context)
              * last frame. */
             struct timespec ts;
             ASSERT_IO(clock_gettime(CLOCK_REALTIME, &ts));
-            release_write_block(fa_block_buffer, gap, &ts);
+            release_write_block(fa_block_buffer, gap, ts_to_microseconds(&ts));
             if (gap)
             {
                 if (!in_gap)

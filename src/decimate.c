@@ -224,13 +224,13 @@ static int out_pointer;
 
 
 /* Advance the output by one row or mark a gap in incoming data. */
-static void advance_write_block(bool gap, struct timespec *ts)
+static void advance_write_block(bool gap, uint64_t timestamp)
 {
     if (advance_index(&out_pointer, output_sample_count)  ||  gap)
     {
         /* Ought to correct the timestamp here by the filter group delay and the
          * difference between the two data blocks. */
-        release_write_block(decimation_buffer, gap, ts);
+        release_write_block(decimation_buffer, gap, timestamp);
         block_out = get_write_block(decimation_buffer);
 
         /* In the presence of a gap we ought to reset all the filters. */
@@ -240,7 +240,7 @@ static void advance_write_block(bool gap, struct timespec *ts)
 
 /* CIC: repeated integration steps on every input sample, decimate by selected
  * decimation factor, differentiation of each output sample. */
-static void decimate_block(const struct fa_row *block_in, struct timespec *ts)
+static void decimate_block(const struct fa_row *block_in, uint64_t timestamp)
 {
     int sample_count_in = fa_block_size / FA_FRAME_SIZE;
     for (int in = 0; in < sample_count_in; in ++)
@@ -257,7 +257,7 @@ static void decimate_block(const struct fa_row *block_in, struct timespec *ts)
             {
                 filter_output(&block_out[out_pointer]);
                 update_t0(&block_out[out_pointer], t0);
-                advance_write_block(false, ts);
+                advance_write_block(false, timestamp);
             }
         }
     }
@@ -274,16 +274,17 @@ static void * decimation_thread(void *context)
 
     while (running)
     {
-        struct timespec ts;
-        const struct fa_row *block_in = get_read_block(reader, NULL, &ts);
+        uint64_t timestamp;
+        const struct fa_row *block_in =
+            get_read_block(reader, NULL, &timestamp);
         if (block_in)
         {
-            decimate_block(block_in, &ts);
+            decimate_block(block_in, timestamp);
             release_read_block(reader);
         }
         else
             /* Mark a gap if can't get a read block. */
-            advance_write_block(true, &ts);
+            advance_write_block(true, timestamp);
     }
     return NULL;
 }

@@ -14,7 +14,6 @@
 
 #include "list.h"
 #include "error.h"
-#include "sniffer.h"
 #include "locking.h"
 
 #include "buffer.h"
@@ -25,7 +24,7 @@ struct frame_info {
      * associated frame in frame_buffer[] is valid. */
     bool gap;
     /* Timestamp for completion of this frame. */
-    struct timespec ts;
+    uint64_t timestamp;
 };
 
 
@@ -146,7 +145,7 @@ void close_reader(struct reader_state *reader)
 
 
 const void * get_read_block(
-    struct reader_state *reader, int *backlog, struct timespec *ts)
+    struct reader_state *reader, int *backlog, uint64_t *timestamp)
 {
     struct buffer *buffer = reader->buffer;
     void *block;
@@ -180,8 +179,8 @@ const void * get_read_block(
         else
         {
             block = get_buffer(buffer, reader->index_out);
-            if (ts)
-                *ts = buffer->frame_info[reader->index_out].ts;
+            if (timestamp)
+                *timestamp = buffer->frame_info[reader->index_out].timestamp;
         }
     }
 
@@ -248,13 +247,13 @@ void * get_write_block(struct buffer *buffer)
 }
 
 
-void release_write_block(struct buffer *buffer, bool gap, struct timespec *ts)
+void release_write_block(struct buffer *buffer, bool gap, uint64_t timestamp)
 {
     gap = gap || buffer->write_blocked;
 
     LOCK(buffer->lock);
     buffer->frame_info[buffer->buffer_index_in].gap = gap;
-    buffer->frame_info[buffer->buffer_index_in].ts = *ts;
+    buffer->frame_info[buffer->buffer_index_in].timestamp = timestamp;
     advance_index(buffer, &buffer->buffer_index_in);
 
     /* Let all readers know if they've suffered an underflow. */
@@ -288,6 +287,11 @@ size_t buffer_block_size(struct buffer *buffer)
 size_t reader_block_size(struct reader_state *reader)
 {
     return buffer_block_size(reader->buffer);
+}
+
+uint64_t ts_to_microseconds(const struct timespec *ts)
+{
+    return 1000000 * (uint64_t) ts->tv_sec + ts->tv_nsec / 1000;
 }
 
 

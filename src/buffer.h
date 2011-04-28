@@ -26,6 +26,9 @@ struct buffer;
 /* A single reader connected to a buffer. */
 struct reader_state;
 
+/* All buffered times are represented in microseconds in the Unix epoch. */
+uint64_t ts_to_microseconds(const struct timespec *ts);
+
 
 /* Prepares central memory buffer. */
 bool create_buffer(
@@ -43,7 +46,7 @@ size_t reader_block_size(struct reader_state *reader);
 void * get_write_block(struct buffer *buffer);
 /* Releases the previously reserved write block: only call if non-NULL value
  * returned by get_write_block(). */
-void release_write_block(struct buffer *buffer, bool gap, struct timespec *ts);
+void release_write_block(struct buffer *buffer, bool gap, uint64_t timestamp);
 
 
 /* Creates a new reading connection to the buffer. */
@@ -55,10 +58,10 @@ void close_reader(struct reader_state *reader);
  * returns pointer to data to be read.  If there is a gap in the available
  * data then NULL is returned, and release_write_block() should not be called
  * before calling get_read_block() again.
- *    If ts is not NULL then on a successful block read the timestamp of the
- * returned data is written to *ts. */
+ *    If timestamp is not NULL then on a successful block read the timestamp of
+ * the returned data is written to *timestamp. */
 const void * get_read_block(
-    struct reader_state *reader, int *backlog, struct timespec *ts);
+    struct reader_state *reader, int *backlog, uint64_t *timestamp);
 /* Releases the write block.  If false is returned then the block was
  * overwritten while locked due to reader underrun; however, if the reader was
  * opened with reserved_reader set this is guaranteed not to happen.  Only

@@ -11,7 +11,7 @@ struct decimated_data {
 
 /* Processes a single input block by transposing and decimation.  If a major
  * block is filled then it is also written to disk. */
-void process_block(const void *read_block, struct timespec *ts);
+void process_block(const void *read_block, uint64_t timestamp);
 
 
 /* Interlocked access. */
@@ -34,10 +34,6 @@ const struct data_index * read_index(unsigned int ix);
 /* Returns an unlocked pointer to the header: should only be used to access the
  * constant header fields. */
 const struct disk_header *get_header(void);
-
-/* Converts time in seconds and nanoseconds (struct timespec) in the Unix epoch
- * into the appropriate internal representation, in 64-bit microseconds. */
-uint64_t ts_to_microseconds(struct timespec *ts);
 
 
 bool initialise_transform(

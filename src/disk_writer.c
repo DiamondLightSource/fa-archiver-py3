@@ -151,9 +151,9 @@ static void * transform_thread(void *context)
 {
     while (writer_running)
     {
-        struct timespec ts;
-        const void *block = get_read_block(reader, NULL, &ts);
-        process_block(block, &ts);
+        uint64_t timestamp;
+        const void *block = get_read_block(reader, NULL, &timestamp);
+        process_block(block, timestamp);
         if (block)
             release_read_block(reader);
     }
