@@ -222,6 +222,8 @@ class decimation:
         self.selector.blockSignals(True)
         self.selector.clear()
         valid_items = filter(self.filter, self.item_list)
+        if not valid_items:
+            valid_items = self.item_list[:1]
         self.selector.addItems(['%d:1' % n for n in valid_items])
 
         if self.decimation not in valid_items:
@@ -340,7 +342,7 @@ class mode_raw(mode_common):
         self.set_visible()
 
 
-def scaled_abs_fft(value, sample_frequency, windowed=True, axis=0):
+def scaled_abs_fft(value, sample_frequency, windowed=False, axis=0):
     '''Returns the fft of value (along axis 0) scaled so that values are in
     units per sqrt(Hz).  The magnitude of the first half of the spectrum is
     returned.'''
@@ -577,14 +579,15 @@ class mode_integrated(mode_common):
     def set_timebase(self, sample_count, sample_frequency):
         self.sample_frequency = sample_frequency
         self.xmax = sample_frequency / 2
-        self.counts = compute_gaps(sample_count // 2 - 1, FFT_LOGF_POINTS)
-        self.xaxis = sample_frequency * numpy.cumsum(self.counts) / sample_count
+        self.counts = compute_gaps(sample_count // 2 - 1, FFT_LOGF_POINTS)[1:]
+        self.xaxis = sample_frequency * (
+            numpy.cumsum(self.counts) + 1) / sample_count
         self.xmin = self.xaxis[0]
 
     def compute(self, value):
         N = len(value)
         fft2 = condense(
-            scaled_abs_fft(value, self.sample_frequency)[1:]**2, self.counts)
+            scaled_abs_fft(value, self.sample_frequency)[2:]**2, self.counts)
         return numpy.sqrt(
             self.sample_frequency / N * numpy.cumsum(fft2, axis=0))
 
