@@ -4,7 +4,20 @@
 # to the $(BUILD_DIR) directory.
 
 TOP = $(CURDIR)
+
+# Any special installation instructions are picked up from Makefile.private
+# which is created by the dls-release process.
+#    The following symbols are used by this make file to configure the
+# installation and should be defined in this file:
+#
+#    PREFIX         Root of installation
+#    SCRIPT_DIR     Where the executables should be installed
+#    PYTHON         Path to Python executable
 -include $(TOP)/Makefile.private
+export PYTHON
+export PREFIX
+export SCRIPT_DIR
+
 
 BUILD_DIR = $(CURDIR)/build
 SRCDIR = $(CURDIR)/src

@@ -4,16 +4,6 @@ ifndef TOP
 $(error Do not call this make file directly)
 endif
 
-# Any special installation instructions are picked up from Makefile.private
-# which is created by the dls-release process.
-#    The following symbols are used by this make file to configure the
-# installation and should be defined in this file:
-#
-#    SCRIPT_DIR     Where the executables should be installed
-#    PYTHON         Path to Python executable
--include $(TOP)/Makefile.private
-
-
 PROGRAM_PREFIX = fa-
 
 SHELL = bash
@@ -93,7 +83,9 @@ include $(patsubst %.c,%.d,$(foreach target,$(BUILD),$($(target)_SRCS)))
 
 # Installation: we install all the built executables in $(SCRIPT_DIR)
 install: $(BUILD_NAMES)
-	[ -n '$(SCRIPT_DIR)' ] || { echo >&2 Must define SCRIPT_DIR; false; }
+ifndef SCRIPT_DIR
+	echo >&2 Must define SCRIPT_DIR; false
+endif
 	$(INSTALL) $^ $(SCRIPT_DIR)
 
-.PHONY: install
+.PHONY: all install
