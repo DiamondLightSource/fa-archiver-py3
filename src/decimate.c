@@ -40,9 +40,10 @@ static pthread_t decimate_id;
 
 
 /* CIC configuration settings read from configuration file. */
-static int decimation_factor;               // Overall data reduction
+static int decimation_factor;               // CIC decimation factor
 static struct int_array history_length;     // Differentiation history lengths
 static struct double_array compensation_filter; // Smoothes out overall response
+static int filter_decimation = 1;           // Extra decimation at FIR stage
 static int output_sample_count = 100;       // Samples per output block
 static int output_block_count = 10;         // Total number of buffered blocks
 
@@ -51,6 +52,7 @@ static const struct config_entry config_table[] = {
     CONFIG(decimation_factor,   parse_int),
     CONFIG(history_length,      parse_int_array),
     CONFIG(compensation_filter, parse_double_array),
+    CONFIG(filter_decimation,   parse_int, OPTIONAL),
     CONFIG(output_sample_count, parse_int, OPTIONAL),
     CONFIG(output_block_count,  parse_int, OPTIONAL),
 };
@@ -73,7 +75,8 @@ static bool initialise_configuration(void)
     bool ok =
         TEST_OK_(decimation_factor > 1, "Invalid decimation factor")  &&
         TEST_OK_(history_length.count > 0, "No CIC stages given")  &&
-        TEST_OK_(compensation_filter.count > 0, "Empty compensation filter");
+        TEST_OK_(compensation_filter.count > 0, "Empty compensation filter")  &&
+        TEST_OK_(filter_decimation > 0, "Invalid filter decimation");
     if (!ok)
         return false;
 
@@ -116,6 +119,23 @@ static bool initialise_configuration(void)
 static int decimation_counter;
 /* Tracks position in the compensation filter buffer. */
 static int filter_index;
+/* Keeps count of output filter extra decimation. */
+static int output_counter;
+
+
+/* Helper routine for cycling index pointers: advances and returns true iff the
+ * index has cycled. */
+static bool advance_index(int *ix, int limit)
+{
+    *ix += 1;
+    if (*ix >= limit)
+    {
+        *ix = 0;
+        return true;
+    }
+    else
+        return false;
+}
 
 
 /* Helper macro for repeated pattern in accumulate().  Note that t0 is
@@ -153,8 +173,7 @@ static void differentiate(
     {
         struct fa_row_int64 *history =
             &cic_histories[stage][cic_history_index[stage]];
-        cic_history_index[stage] =
-            (cic_history_index[stage] + 1) % history_length.data[stage];
+        advance_index(&cic_history_index[stage], history_length.data[stage]);
 
         for (int i = 1; i < FA_ENTRY_COUNT; i ++)
         {
@@ -171,10 +190,6 @@ static void differentiate(
 /* Convolves compensation filter with the waiting output buffer. */
 static void filter_output(struct fa_row *row_out)
 {
-    filter_index += 1;
-    if (filter_index >= compensation_filter.count)
-        filter_index = 0;
-
     struct fa_row_double accumulator;
     memset(&accumulator, 0, sizeof(accumulator));
     for (int j = 0; j < compensation_filter.count; j ++)
@@ -211,14 +226,14 @@ static int out_pointer;
 /* Advance the output by one row or mark a gap in incoming data. */
 static void advance_write_block(bool gap, struct timespec *ts)
 {
-    out_pointer += 1;
-    if (gap  ||  out_pointer >= output_sample_count)
+    if (advance_index(&out_pointer, output_sample_count)  ||  gap)
     {
         /* Ought to correct the timestamp here by the filter group delay and the
          * difference between the two data blocks. */
         release_write_block(decimation_buffer, gap, ts);
-        out_pointer = 0;
         block_out = get_write_block(decimation_buffer);
+
+        /* In the presence of a gap we ought to reset all the filters. */
     }
 }
 
@@ -233,14 +248,17 @@ static void decimate_block(const struct fa_row *block_in, struct timespec *ts)
         const struct fa_entry *t0 = &block_in->row[0];
         const struct fa_row_int64 *row = accumulate(block_in++);
 
-        decimation_counter += 1;
-        if (decimation_counter >= decimation_factor)
+        if (advance_index(&decimation_counter, decimation_factor))
         {
-            decimation_counter = 0;
             differentiate(row, &filter_buffer[filter_index]);
-            filter_output(&block_out[out_pointer]);
-            update_t0(&block_out[out_pointer], t0);
-            advance_write_block(false, ts);
+            advance_index(&filter_index, compensation_filter.count);
+
+            if (advance_index(&output_counter, filter_decimation))
+            {
+                filter_output(&block_out[out_pointer]);
+                update_t0(&block_out[out_pointer], t0);
+                advance_write_block(false, ts);
+            }
         }
     }
 }
@@ -273,7 +291,7 @@ static void * decimation_thread(void *context)
 
 int get_decimation_factor(void)
 {
-    return decimation_factor;
+    return decimation_factor * filter_decimation;
 }
 
 
