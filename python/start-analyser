@@ -1,6 +1,6 @@
 #!/bin/sh
 
-PYIOC_VERSION=1-5
+PYIOC_VERSION=2-1
 PYIOC=/dls_sw/prod/R3.14.11/support/pythonSoftIoc/$PYIOC_VERSION/pythonIoc
 # PYIOC=/home/mga83/epics/pythonSoftIoc/pythonIoc
 

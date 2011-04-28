@@ -6,66 +6,60 @@ require('cothread==1.17')
 require('iocbuilder==3.3')
 
 import sys
+import os
+import re
 
-import builder
+from softioc import builder
+from softioc import softioc
 import numpy
 import cothread
 from cothread import catools
 
 import falib
 
+
 if len(sys.argv) > 1:
-    if sys.argv[1] == 'BR':
-        BOOSTER = True
-        SERVER = '172.23.234.70'
-    elif sys.argv[1] == 'SR':
-        BOOSTER = False
-        SERVER = 'fa-archiver.cs.diamond.ac.uk'
-    else:
-        print 'Unrecognised ring specification'
-        sys.exit(1)
+    location = sys.argv[1]
 else:
-    print 'Specify BR or SR'
-    sys.exit(1)
+    location = 'SR'
+
+# Import configuration settings from specified configuration file
+execfile(
+    os.path.join(os.path.dirname(__file__), '%s.viewer.conf' % location),
+    globals())
+
+
+builder.SetDeviceName('%s-DI-FAAN-01' % location)
+
 
 
 SAMPLE_SIZE = 10000
 # Nominal sample frequency used to compute exitation waveform.
 F_S = 10072
 
-if BOOSTER:
-    builder.SetDeviceName('BR-DI-FAAN-01')
-else:
-    builder.SetDeviceName('SR-DI-FAAN-01')
 
 
 # ------------------------------------------------------------------------------
 # Computation of BPM id, largely lifted from CS-DI-IOC-01/monitor.py
 
-STRAIGHTS = [13]        # Expect straights 9 and 10 later on
-STRAIGHT_ID = [174]     # Starting BPM id for each straight
+def load_bpm_list():
+    '''Loads list of ids and bpms from given file.'''
+    for line in file(BPM_LIST).readlines():
+        if line and line[0] != '#':
+            id_bpm = line.split()
+            if len(id_bpm) == 2:
+                id, bpm = id_bpm
+                id = int(id)
+                if id in BPM_ID_RANGE:
+                    yield (id, bpm)
 
-def flatten(ll):
-    '''Flattens a list of lists into a single list.'''
-    return [x for l in ll for x in l]
+id_bpm_list = list(load_bpm_list())
+FA_IDS = [id for id, bpm in id_bpm_list]
+MAKE_ID_PATTERN = re.compile(MAKE_ID_PATTERN)
+BPM_ids = [
+    MAKE_ID_FN(*MAKE_ID_PATTERN.match(bpm).groups())
+    for id, bpm in id_bpm_list]
 
-def make_bpms(straight, cell):
-    return flatten([
-        [straight(c+1, n+1) for n in range(2) if c+1 in STRAIGHTS] +
-        [cell(c+1, n+1) for n in range(7)]
-        for c in range(24)])
-
-if BOOSTER:
-    BPM_ids = range(1, 23)
-    FA_IDS = BPM_ids
-else:
-    BPM_ids = make_bpms(
-        lambda c, n: c - 0.2 + 0.1*n,
-        lambda c, n: c + 0.1*n)
-    # List of BPM FA ids to be monitored: 168 arc BPMs plus the straights
-    FA_IDS = make_bpms(
-        lambda c, n: STRAIGHT_ID[STRAIGHTS.index(c)] + n - 1,
-        lambda c, n: 7 * (c - 1) + n)
 
 builder.Waveform('BPMID', BPM_ids)
 
@@ -198,7 +192,7 @@ class updater:
         cothread.Spawn(self.run)
 
     def subscription(self):
-        sub = falib.subscription(FA_IDS, server=SERVER)
+        sub = falib.subscription(FA_IDS, server=FA_SERVER)
         mean.reset()
         while True:
             r, t0 = sub.read_t0(SAMPLE_SIZE)
@@ -259,6 +253,5 @@ updater = updater()
 
 # Finally fire up the IOC
 builder.LoadDatabase()
-from softioc import *
-iocInit()
-interactive_ioc(globals())
+softioc.iocInit()
+softioc.interactive_ioc()
