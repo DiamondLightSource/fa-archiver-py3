@@ -146,6 +146,13 @@
        </widget>
       </item>
       <item>
+       <widget class="QCheckBox" name="full_data">
+        <property name="text">
+         <string>Full Data</string>
+        </property>
+       </widget>
+      </item>
+      <item>
        <spacer name="horizontalSpacer">
         <property name="orientation">
          <enum>Qt::Horizontal</enum>

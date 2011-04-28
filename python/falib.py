@@ -78,7 +78,7 @@ class connection:
 
 
 class subscription(connection):
-    '''s = subscription(bpm_list, server, port)
+    '''s = subscription(bpm_list, decimated, server, port)
 
     Creates a stream connection to the given FA archiver server (or the default
     server if not specified) returning continuous data for the selected bpms.
@@ -86,12 +86,15 @@ class subscription(connection):
     connection to the server doesn't overflow.
     '''
 
-    def __init__(self, mask, **kargs):
+    def __init__(self, mask, decimated=False, **kargs):
         connection.__init__(self, **kargs)
         self.mask = normalise_mask(mask)
         self.count = count_mask(self.mask)
+        self.decimated = decimated
 
-        self.sock.send('SR%sZ\n' % format_mask(self.mask))
+        flags = 'Z'
+        if decimated: flags = flags + 'D'
+        self.sock.send('SR%s%s\n' % (format_mask(self.mask), flags))
         c = self.recv(1)
         if c != chr(0):
             raise self.Error((c + self.recv())[:-1])    # Discard trailing \n
@@ -114,19 +117,19 @@ class subscription(connection):
         return data, t0
 
 
-class sample_frequency(connection):
-    def __init__(self, **kargs):
-        connection.__init__(self, **kargs)
-        self.sock.send('CF\n')
-        self.frequency = float(self.recv())
+def server_command(command, **kargs):
+    server = connection(**kargs)
+    server.sock.send(command)
+    result = server.recv()
+    server.close()
+    return result
 
 
 def get_sample_frequency(**kargs):
-    try:
-        return sample_frequency(**kargs).frequency
-    except:
-        # If get fails fall back to nominal default.
-        return 10072.0
+    return float(server_command('CF\n', **kargs))
+
+def get_decimation(**kargs):
+    return int(server_command('CC\n', **kargs))
 
 
 if __name__ == '__main__':

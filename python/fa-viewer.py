@@ -61,17 +61,18 @@ class monitor:
         self.on_connect = on_connect
         self.on_eof = on_eof
         self.buffer = buffer(buffer_size)
-        self.read_size = read_size
         self.update_size = read_size
         self.notify_size = read_size
         self.data_ready = 0
         self.running = False
+        self.decimated = False
 
     def start(self):
         assert not self.running, 'Strange: we are already running'
         try:
             self.subscription = falib.subscription(
-                [self.id], server=self.server, port=self.port)
+                [self.id], server = self.server, port = self.port,
+                decimated = self.decimated)
         except Exception, message:
             self.on_eof('Unable to connect to server: %s' % message)
         else:
@@ -84,10 +85,13 @@ class monitor:
             self.running = False
             self.task.Wait()
 
-    def set_id(self, id):
+    def set_channel(self, id=None, decimated=None):
         running = self.running
         self.stop()
-        self.id = id
+        if id is not None:
+            self.id = id
+        if decimated is not None:
+            self.decimated = decimated
         if running:
             self.start()
 
@@ -103,16 +107,15 @@ class monitor:
         self.on_connect()
         while self.running:
             try:
-                block = self.subscription.read(self.read_size)[:,0,:]
+                block = self.subscription.read(self.update_size)[:,0,:]
             except Exception, exception:
                 stop_reason = str(exception)
                 self.running = False
             else:
                 self.buffer.write(block)
-                self.data_ready += self.read_size
-                if self.data_ready >= self.update_size:
-                    self.on_event(self.read())
-                    self.data_ready -= self.update_size
+                self.data_ready += self.update_size
+                self.on_event(self.read())
+                self.data_ready -= self.update_size
         self.subscription.close()
         self.on_eof(stop_reason)
 
@@ -130,8 +133,6 @@ class monitor:
 # FFT).  These modes and their user support functionality are implemented by the
 # classes below, one for each display mode.
 
-
-F_S = 10072.0
 
 # Unicode characters
 char_times  = u'\u00D7'             # Multiplication sign
@@ -261,7 +262,7 @@ class mode_raw(mode_common):
 
         self.selector = decimation(
             self, parent, self.Decimations,
-            lambda d: 50*d < self.timebase, self.set_decimation)
+            lambda d: 50*d < self.sample_count, self.set_decimation)
         self.decimation = self.selector.decimation
 
         self.maxx = parent.makecurve(X_colour, True)
@@ -287,22 +288,23 @@ class mode_raw(mode_common):
         mode_common.set_enable(self, enabled)
         self.set_visible(enabled)
 
-    def set_timebase(self, timebase):
-        self.timebase = timebase
-        if timebase <= 10000:
+    def set_timebase(self, sample_count, sample_frequency):
+        self.sample_count = sample_count
+        duration = sample_count / sample_frequency
+        if duration <= 1:
             self.xunits = 'ms'
             self.scale = 1e3
         else:
             self.xunits = 's'
             self.scale = 1.0
-        self.xmax = self.scale / F_S * timebase
+        self.xmax = self.scale * duration
 
         self.selector.update()
 
     def set_decimation(self, decimation):
         self.decimation = decimation
-        self.xaxis = self.scale / F_S * \
-            decimation * numpy.arange(self.timebase / decimation)
+        sample_count = self.sample_count / decimation
+        self.xaxis = self.xmax * numpy.arange(sample_count) / sample_count
         self.set_visible()
         if self.decimation != 1:
             self.qt_diff.setChecked(False)
@@ -318,8 +320,9 @@ class mode_raw(mode_common):
         if self.decimation == 1:
             mean = value
         else:
-            value = value.reshape(
-                (len(value)/self.decimation, self.decimation, 2))
+            points = len(value) // self.decimation
+            value = value[:points * self.decimation].reshape(
+                (points, self.decimation, 2))
             mean = numpy.mean(value, axis=1)
             min = numpy.min(value, axis=1)
             max = numpy.max(value, axis=1)
@@ -337,7 +340,7 @@ class mode_raw(mode_common):
         self.set_visible()
 
 
-def scaled_abs_fft(value, windowed=True, axis=0):
+def scaled_abs_fft(value, sample_frequency, windowed=True, axis=0):
     '''Returns the fft of value (along axis 0) scaled so that values are in
     units per sqrt(Hz).  The magnitude of the first half of the spectrum is
     returned.'''
@@ -359,12 +362,13 @@ def scaled_abs_fft(value, windowed=True, axis=0):
     fft = fft[slice]
 
     # Finally scale the result into units per sqrt(Hz)
-    return numpy.abs(fft) * numpy.sqrt(2.0 / (F_S * N))
+    return numpy.abs(fft) * numpy.sqrt(2.0 / (sample_frequency * N))
 
-def fft_timebase(timebase, scale=1.0):
+def fft_timebase(sample_count, sample_frequency, scale=1.0):
     '''Returns a waveform suitable for an FFT timebase with the given number of
     points.'''
-    return scale * F_S * numpy.arange(timebase // 2) / timebase
+    return scale * sample_frequency * \
+        numpy.arange(sample_count // 2) / sample_count
 
 
 class mode_fft(mode_common):
@@ -372,12 +376,11 @@ class mode_fft(mode_common):
     xname = 'Frequency'
     yname = 'Amplitude'
     xshortname = 'f'
-    xunits = 'kHz'
+    xunits = 'Hz'
     xscale = Qwt5.QwtLinearScaleEngine
     yscale = Qwt5.QwtLog10ScaleEngine
     xticks = 5
     xmin = 0
-    xmax = 1e-3 * F_S / 2
     ymin_normal = 1e-4
     ymax = 1
 
@@ -396,18 +399,21 @@ class mode_fft(mode_common):
 
         self.selector = decimation(
             self, parent, self.Decimations,
-            lambda d: 1000 * d <= self.timebase, self.set_decimation)
+            lambda d: 1000 * d <= self.sample_count, self.set_decimation)
 
         self.set_squared_state(False)
         self.decimation = self.selector.decimation
 
-    def set_timebase(self, timebase):
-        self.timebase = timebase
+    def set_timebase(self, sample_count, sample_frequency):
+        self.sample_count = sample_count
+        self.sample_frequency = sample_frequency
+        self.xmax = sample_frequency / 2
         self.selector.update()
 
     def set_decimation(self, decimation):
         self.decimation = decimation
-        self.xaxis = fft_timebase(self.timebase // self.decimation, 1e-3)
+        self.xaxis = fft_timebase(
+            self.sample_count // self.decimation, self.sample_frequency)
 
     def set_squared_state(self, show_squared):
         self.show_squared = show_squared
@@ -425,14 +431,18 @@ class mode_fft(mode_common):
     def compute(self, value):
         windowed = self.windowed.isChecked()
         if self.decimation == 1:
-            result = scaled_abs_fft(value, windowed = windowed)
+            result = scaled_abs_fft(
+                value, self.sample_frequency, windowed = windowed)
         else:
             # Compute a decimated fft by segmenting the waveform (by reshaping),
             # computing the fft of each segment, and computing the mean power of
             # all the resulting transforms.
             N = len(value)
-            value = value.reshape((self.decimation, N//self.decimation, 2))
-            fft = scaled_abs_fft(value, windowed = windowed, axis=1)
+            points = len(value) // self.decimation
+            value = value[:points * self.decimation].reshape(
+                (self.decimation, points, 2))
+            fft = scaled_abs_fft(
+                value, self.sample_frequency, windowed = windowed, axis=1)
             result = numpy.sqrt(numpy.mean(fft**2, axis=0))
         if self.show_squared:
             return result ** 2
@@ -475,19 +485,21 @@ class mode_fft_logf(mode_common):
     xscale = Qwt5.QwtLog10ScaleEngine
     yscale = Qwt5.QwtLog10ScaleEngine
     xticks = 10
-    xmax = F_S / 2
 
     Filters = [1, 10, 100]
 
-    def set_timebase(self, timebase):
-        self.counts = compute_gaps(timebase//2 - 1, FFT_LOGF_POINTS)
-        self.xaxis = F_S * numpy.cumsum(self.counts) / timebase
+    def set_timebase(self, sample_count, sample_frequency):
+        self.sample_frequency = sample_frequency
+        self.xmax = sample_frequency / 2
+        self.counts = compute_gaps(sample_count // 2 - 1, FFT_LOGF_POINTS)
+        self.xaxis = sample_frequency * numpy.cumsum(self.counts) / sample_count
         self.xmin = self.xaxis[0]
         self.reset = True
 
     def compute(self, value):
         windowed = self.windowed.isChecked()
-        fft = scaled_abs_fft(value, windowed = windowed)[1:]
+        fft = scaled_abs_fft(
+            value, self.sample_frequency, windowed = windowed)[1:]
         fft_logf = numpy.sqrt(
             condense(fft**2, self.counts) / self.counts[:,None])
         if self.scalef:
@@ -559,19 +571,22 @@ class mode_integrated(mode_common):
     xscale = Qwt5.QwtLog10ScaleEngine
     yscale = Qwt5.QwtLog10ScaleEngine
     xticks = 10
-    xmax = F_S / 2
     ymin = 1e-3
     ymax = 10
 
-    def set_timebase(self, timebase):
-        self.counts = compute_gaps(timebase//2 - 1, 5000)
-        self.xaxis = F_S * numpy.cumsum(self.counts) / timebase
+    def set_timebase(self, sample_count, sample_frequency):
+        self.sample_frequency = sample_frequency
+        self.xmax = sample_frequency / 2
+        self.counts = compute_gaps(sample_count // 2 - 1, FFT_LOGF_POINTS)
+        self.xaxis = sample_frequency * numpy.cumsum(self.counts) / sample_count
         self.xmin = self.xaxis[0]
 
     def compute(self, value):
         N = len(value)
-        fft2 = condense(scaled_abs_fft(value)[1:]**2, self.counts)
-        return numpy.sqrt(F_S / N * numpy.cumsum(fft2, axis=0))
+        fft2 = condense(
+            scaled_abs_fft(value, self.sample_frequency)[1:]**2, self.counts)
+        return numpy.sqrt(
+            self.sample_frequency / N * numpy.cumsum(fft2, axis=0))
 
     def __init__(self, parent):
         mode_common.__init__(self, parent)
@@ -701,7 +716,7 @@ class Viewer:
 
         self.monitor = monitor(
             server, port, self.on_data_update, self.on_connect, self.on_eof,
-            500000, 1000)
+            500000, 10000)
 
         # Prepare the selections in the controls
         ui.timebase.addItems([l[0] for l in Timebase_list])
@@ -715,6 +730,7 @@ class Viewer:
         ui.statusbar.addPermanentWidget(ui.position_xy)
         ui.status_message = QtGui.QLabel('', ui.statusbar)
         ui.statusbar.addWidget(ui.status_message)
+
 
         # For each possible display mode create the initial state used to manage
         # that display mode and set up the initial display mode.
@@ -736,11 +752,15 @@ class Viewer:
         ui.mode.currentIndexChanged.connect(self.set_mode)
         ui.run.clicked.connect(self.toggle_running)
         ui.show_curves.currentIndexChanged.connect(self.show_curves)
+        ui.full_data.clicked.connect(self.set_full_data)
 
         # Initial control settings: these all trigger GUI related actions.
         self.channel_ix = 0
+        self.full_data = not decimation_factor
         ui.channel_group.setCurrentIndex(1)
         ui.timebase.setCurrentIndex(INITIAL_TIMEBASE)
+        if not decimation_factor:
+            ui.full_data.setVisible(False)
 
         # Go!
         self.monitor.start()
@@ -826,14 +846,21 @@ class Viewer:
         bpm = BPM_list[self.group_index][1][ix]
         self.channel = bpm[1]
         self.bpm_name = 'BPM: %s (id %d)' % (bpm[0], self.channel)
-        self.monitor.set_id(self.channel)
+        self.monitor.set_channel(
+            id = self.channel, decimated = not self.full_data)
 
     def set_channel_id(self):
         channel = int(self.ui.channel_id.text())
         if channel != self.channel:
             self.channel = channel
             self.bpm_name = 'BPM id %d' % channel
-            self.monitor.set_id(channel)
+            self.monitor.set_channel(id = channel)
+
+    def set_full_data(self, full_data):
+        self.full_data = full_data
+        self.monitor.set_channel(decimated = not full_data)
+        self.update_timebase()
+        self.reset_mode()
 
     def rescale_graph(self):
         self.mode.rescale(self.monitor.read())
@@ -845,10 +872,18 @@ class Viewer:
         self.plot.replot()
 
     def set_timebase(self, ix):
-        new_timebase = Timebase_list[ix][1]
-        self.timebase = new_timebase
-        self.monitor.resize(new_timebase, min(new_timebase, SCROLL_THRESHOLD))
+        self.timebase = Timebase_list[ix][1]
+        self.update_timebase()
         self.reset_mode()
+
+    def update_timebase(self):
+        timebase = self.timebase
+        if self.full_data:
+            factor = 1
+        else:
+            factor = decimation_factor
+        self.monitor.resize(
+            timebase / factor, min(timebase, SCROLL_THRESHOLD) / factor)
 
     def set_mode(self, ix):
         self.mode.set_enable(False)
@@ -905,7 +940,14 @@ class Viewer:
     # Handling
 
     def reset_mode(self):
-        self.mode.set_timebase(self.timebase)
+        sample_count = self.timebase
+        sample_frequency = F_S
+        if not self.full_data:
+            sample_count /= decimation_factor
+            sample_frequency /= decimation_factor
+        # Unify the above with self.set_timebase?
+        self.mode.set_timebase(sample_count, sample_frequency)
+
         self.mode.show_xy(self.show_x, self.show_y)
 
         x = Qwt5.QwtPlot.xBottom
@@ -965,6 +1007,12 @@ def parse_options():
 
 server, port, BPM_list = parse_options()
 F_S = falib.get_sample_frequency(server = server, port = port)
+try:
+    decimation_factor = falib.get_decimation(server = server, port = port)
+except:
+    # Assume unable to receive decimation because not supported by server
+    decimation_factor = 0
+
 
 qapp = cothread.iqt()
 key_filter = KeyFilter()
