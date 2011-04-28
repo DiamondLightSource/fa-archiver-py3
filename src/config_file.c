@@ -27,28 +27,32 @@ static bool parse_array(
     const char **string, parser_t parse_type,
     struct void_array *result, size_t type_size)
 {
-    /* We take our arrays to be self sizing.  This means we need some way to
-     * determine the size.  It's going to be easiest to simply parse the data
-     * twice. */
-    const char *array_string = *string;
-    char dummy[type_size];
+    /* Start with a sensible upper bound for the number of values and allocate
+     * enough for this; we'll then resize back down when we're done.  There
+     * can't be more than one element every two characters as separators are
+     * mandatory in this parser. */
+    int initial_count = (strlen(*string) + 1) / 2;
+    char *data = malloc(type_size * initial_count);
     int count = 0;
-    while (parse_whitespace(string)  &&  **string != '\0')
+    bool ok = true;
+    bool whitespace = true;     // Did we see whitespace before this?
+    while (ok  &&  **string != 0)
     {
-        if (!parse_type(string, dummy))
-            return false;
+        ok =
+            TEST_OK(count < initial_count)  &&
+            TEST_OK_(whitespace, "Whitespace separator expected")  &&
+            parse_type(string, data + type_size * count);
+        whitespace = skip_whitespace(string);
         count += 1;
     }
-
-    /* We assume that nothing can go wrong on the second pass! */
-    result->count = count;
-    result->data = malloc(type_size * count);
-    for (int i = 0; i < count; i++)
+    if (ok)
     {
-        parse_whitespace(&array_string);
-        parse_type(&array_string, (char *) result->data + i * type_size);
+        result->count = count;
+        result->data = realloc(data, type_size * count);
     }
-    return true;
+    else
+        free(data);
+    return ok;
 }
 
 
@@ -102,7 +106,7 @@ static bool do_parse_line(
     const struct config_entry *config_table, size_t config_size, bool *seen)
 {
     const char *string = line_buffer;
-    parse_whitespace(&string);
+    skip_whitespace(&string);
     if (*string == '\0'  ||  *string == '#')
         /* Empty line or comment, can just ignore. */
         return true;
@@ -110,25 +114,28 @@ static bool do_parse_line(
     /* We'll report all errors on this line against file name and line. */
     push_error_handling();
 
-    /* A valid name is simply
-     *  name = <parse>
-     * but the details of the parse end up being a little involved.  One
-     * annoyance is we have to deliberately skip whitespace. */
+    /* A valid definition is
+     *
+     *  name<opt-whitespace>=<opt-whitespace><parse><opt-whitespace>
+     *
+     * The optional whitespace which our parser doesn't support makes the parse
+     * a lot more long winded than it otherwise ought to be. */
     char name[NAME_LENGTH];
     int ix;
     bool ok =
         parse_name(&string, name, NAME_LENGTH)  &&
-        parse_whitespace(&string)  &&
+        DO_(skip_whitespace(&string))  &&
         parse_char(&string, '=')  &&
+        DO_(skip_whitespace(&string))  &&
         lookup_name(name, config_table, config_size, &ix)  &&
         config_table[ix].parser(&string, config_table[ix].result)  &&
-        parse_whitespace(&string)  &&
+        DO_(skip_whitespace(&string))  &&
         parse_eos(&string);
 
     /* Report parse error. */
     char *error = pop_error_handling(true);
     if (!ok)
-        print_error("Error parsing %s, line %d, offset %d: %s",
+        print_error("Error parsing %s, line %d, offset %zd: %s",
             file_name, line_number, string - line_buffer, error);
     free(error);
 
@@ -145,12 +152,13 @@ static bool do_parse_line(
  * character.  Also returns an error if the buffer is filled. */
 static bool read_one_line(
     FILE *input, char *line_buffer, size_t line_length,
-    size_t *length_read, bool *eof)
+    int line_number, size_t *length_read, bool *eof)
 {
     errno = 0;
     *eof = fgets(line_buffer, line_length, input) == NULL;
     if (*eof)
-        return TEST_OK_(errno == 0, "Error reading file");
+        return TEST_OK_(errno == 0,
+            "Error reading file on line %d", line_number);
     else
     {
         *length_read = strlen(line_buffer);
@@ -163,7 +171,7 @@ static bool read_one_line(
         }
         else
             return TEST_OK_(*length_read + 1 < line_length,
-                "Read buffer overflowed");
+                "Read buffer overflow on line %d", line_number);
     }
 }
 
@@ -179,14 +187,17 @@ static bool read_line(
     while (ok  &&  !*eof  &&  want_line)
     {
         size_t length_read = 0;
-        ok = read_one_line(input, line_buffer, line_length, &length_read, eof);
+        *line_number += 1;
+        ok = read_one_line(
+            input, line_buffer, line_length, *line_number, &length_read, eof);
         want_line = ok  &&  !*eof  &&
             length_read > 0  &&  line_buffer[length_read - 1] == '\\';
         if (want_line)
         {
             line_buffer += length_read - 1;
             line_length -= length_read - 1;
-            ok = TEST_OK_(line_length > 2, "Run out of read buffer");
+            ok = TEST_OK_(line_length > 2,
+                "Run out of read buffer on line %d", *line_number);
         }
     }
     return ok;

@@ -63,7 +63,9 @@ static bool initialise_configuration(void)
 {
     /* Some sanity checking on parameters. */
     bool ok =
-        TEST_OK_(decimation_factor > 1, "Invalid decimation factor");
+        TEST_OK_(decimation_factor > 1, "Invalid decimation factor")  &&
+        TEST_OK_(history_length.count > 0, "No CIC stages given")  &&
+        TEST_OK_(compensation_filter.count > 0, "Empty compensation filter");
     if (!ok)
         return false;
 

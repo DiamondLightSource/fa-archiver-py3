@@ -21,9 +21,18 @@ bool parse_eos(const char **string)
 
 bool parse_whitespace(const char **string)
 {
+    return TEST_OK_(skip_whitespace(string), "Whitespace expected");
+}
+
+bool skip_whitespace(const char **string)
+{
+    bool seen = false;
     while (isspace(**string))
+    {
         *string += 1;
-    return true;
+        seen = true;
+    }
+    return seen;
 }
 
 

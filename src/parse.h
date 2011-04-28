@@ -38,8 +38,10 @@ bool read_char(const char **string, char ch);
 /* Like read_char(), but generates an error if ch is not found. */
 bool parse_char(const char **string, char ch);
 
-/* Skips over whitespace, always succeeds. */
+/* Parses over whitespace, fails if not found. */
 bool parse_whitespace(const char **string);
+/* Skips over optional whitespace, returns true if whitespace seen. */
+bool skip_whitespace(const char **string);
 
 /* Wraps parsing of a complete string and generation of a suitable error
  * message. */
