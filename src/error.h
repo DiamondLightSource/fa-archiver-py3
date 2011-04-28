@@ -49,6 +49,8 @@
 
 /* Controls whether to emit log_message() output. */
 void verbose_logging(bool verbose);
+/* Controls whether to print timestamps on logged message output. */
+void timestamp_logging(bool timestamps);
 
 /* Before this is called all messages are sent to stderr, afterwards all are
  * sent to syslog with the given identification mark.*/

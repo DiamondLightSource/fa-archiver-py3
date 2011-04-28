@@ -76,19 +76,28 @@ static bool save_message(char *message)
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /* Error handling and logging. */
 
-DECLARE_LOCKING(lock);
+/* Lock used to prevent interleaving of logs from multiple threads. */
+DECLARE_LOCKING(log_lock);
 
 
 /* Determines whether error messages go to stderr or syslog. */
 static bool daemon_mode = false;
 /* Determines whether to log non-error messages. */
-static bool verbose = false;
+static bool log_verbose = false;
+/* Timestamp each log message. */
+static bool log_timestamps = false;
 
 
-void verbose_logging(bool verbose_)
+void verbose_logging(bool verbose)
 {
-    verbose = verbose_;
+    log_verbose = verbose;
 }
+
+void timestamp_logging(bool timestamps)
+{
+    log_timestamps = timestamps;
+}
+
 
 void start_logging(const char *ident)
 {
@@ -97,22 +106,49 @@ void start_logging(const char *ident)
 }
 
 
+static void print_timestamp(struct timespec *timestamp)
+{
+    /* Convert ns into microseconds, the extra ns detail is a bit much. */
+    int usec = (timestamp->tv_nsec + 500) / 1000;
+    if (usec >= 1000000)
+    {
+        usec -= 1000000;
+        timestamp->tv_sec += 1;
+    }
+
+    /* Print the result in local time. */
+    struct tm tm;
+    localtime_r(&timestamp->tv_sec, &tm);
+
+    fprintf(stderr, "%04d-%02d-%02d %02d:%02d:%02d.%06d: ",
+        1900 + tm.tm_year, tm.tm_mon + 1, tm.tm_mday,
+        tm.tm_hour, tm.tm_min, tm.tm_sec, usec);
+}
+
+
 void vlog_message(int priority, const char *format, va_list args)
 {
-    LOCK(lock);
+    /* Get the timestamp before entering the lock for more honest times. */
+    struct timespec now;
+    if (log_timestamps)
+        clock_gettime(CLOCK_REALTIME, &now);
+
+    LOCK(log_lock);
     if (daemon_mode)
         vsyslog(priority, format, args);
     else
     {
+        if (log_timestamps)
+            print_timestamp(&now);
         vfprintf(stderr, format, args);
         fprintf(stderr, "\n");
     }
-    UNLOCK(lock);
+    UNLOCK(log_lock);
 }
 
 void log_message(const char * message, ...)
 {
-    if (verbose)
+    if (log_verbose)
     {
         va_list args;
         va_start(args, message);

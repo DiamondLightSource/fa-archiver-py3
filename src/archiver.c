@@ -68,6 +68,7 @@ static void usage(void)
 "    -d:  Specify device to use for FA sniffer (default /dev/fa_sniffer0)\n"
 "    -b:  Specify number of buffered input blocks (default %u)\n"
 "    -v   Specify verbose output\n"
+"    -t   Output timestamps with logs.  No effect when logging to syslog\n"
 "    -D   Run as a daemon\n"
 "    -p:  Write PID to specified file\n"
 "    -s:  Specify server socket (default 8888)\n"
@@ -83,11 +84,12 @@ static bool process_options(int *argc, char ***argv)
     bool ok = true;
     while (ok)
     {
-        switch (getopt(*argc, *argv, "+hd:b:vDp:s:FH"))
+        switch (getopt(*argc, *argv, "+hd:b:vtDp:s:FH"))
         {
             case 'h':   usage();                                    exit(0);
             case 'd':   fa_sniffer_device = optarg;                 break;
             case 'v':   verbose_logging(true);                      break;
+            case 't':   timestamp_logging(true);                    break;
             case 'D':   daemon_mode = true;                         break;
             case 'p':   pid_filename = optarg;                      break;
             case 'F':   fa_sniffer_device = NULL;                   break;
