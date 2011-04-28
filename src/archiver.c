@@ -58,7 +58,9 @@ static unsigned int buffer_blocks = BUFFER_BLOCKS;
 static int server_socket = 8888;
 /* Decimation configuration file. */
 static const char *decimation_config = NULL;
-
+/* Enable floating point exceptions.  Useful for debugging, but can cause
+ * archiver to halt unexpectedly. */
+static bool floating_point_exception = false;
 
 
 static void usage(void)
@@ -78,6 +80,7 @@ static void usage(void)
 "    -p:  Write PID to specified file\n"
 "    -s:  Specify server socket (default 8888)\n"
 "    -F   Run dummy sniffer with dummy data.\n"
+"    -E   Enable floating point exceptions (debug only)\n"
         , argv0, buffer_blocks);
 }
 
@@ -88,7 +91,7 @@ static bool process_options(int *argc, char ***argv)
     bool ok = true;
     while (ok)
     {
-        switch (getopt(*argc, *argv, "+hc:d:b:vtDp:s:F"))
+        switch (getopt(*argc, *argv, "+hc:d:b:vtDp:s:FE"))
         {
             case 'h':   usage();                                    exit(0);
             case 'c':   decimation_config = optarg;                 break;
@@ -98,6 +101,7 @@ static bool process_options(int *argc, char ***argv)
             case 'D':   daemon_mode = true;                         break;
             case 'p':   pid_filename = optarg;                      break;
             case 'F':   fa_sniffer_device = NULL;                   break;
+            case 'E':   floating_point_exception = true;            break;
             case 'b':
                 ok = DO_PARSE("buffer blocks",
                     parse_uint, optarg, &buffer_blocks);
@@ -219,7 +223,9 @@ int main(int argc, char **argv)
     bool ok =
         process_args(argc, argv)  &&
         initialise_signals()  &&
-        TEST_IO(feenableexcept(FE_DIVBYZERO | FE_INVALID | FE_OVERFLOW))  &&
+        IF_(floating_point_exception,
+            TEST_IO(feenableexcept(
+                FE_DIVBYZERO | FE_INVALID | FE_OVERFLOW)))  &&
         initialise_disk_writer(output_filename, &input_block_size)  &&
         create_buffer(&fa_block_buffer, input_block_size, buffer_blocks)  &&
         IF_(decimation_config, initialise_decimation(decimation_config))  &&
