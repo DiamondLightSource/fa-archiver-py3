@@ -121,18 +121,74 @@ static bool do_parse_line(
         parse_whitespace(&string)  &&
         parse_char(&string, '=')  &&
         lookup_name(name, config_table, config_size, &ix)  &&
-        TEST_OK_(!seen[ix], "Parameter %s repeated", name)  &&
         config_table[ix].parser(&string, config_table[ix].result)  &&
         parse_whitespace(&string)  &&
-        parse_eos(&string)  &&
-        DO_(seen[ix] = true);
+        parse_eos(&string);
 
-    /* Report any error. */
+    /* Report parse error. */
     char *error = pop_error_handling(true);
     if (!ok)
-        print_error("Error parsing %s, line %d: %s at offset %d",
-            file_name, line_number, error, string - line_buffer);
+        print_error("Error parsing %s, line %d, offset %d: %s",
+            file_name, line_number, string - line_buffer, error);
     free(error);
+
+    return ok &&
+        /* Perform post parse validation. */
+        TEST_OK_(!seen[ix],
+            "Parameter %s repeated on line %d", name, line_number)  &&
+        DO_(seen[ix] = true);
+}
+
+
+/* Wraps the slightly annoying behaviour of fgets.  Returns error status and eof
+ * separately, returns length of line read, and removes trailing newline
+ * character.  Also returns an error if the buffer is filled. */
+static bool read_one_line(
+    FILE *input, char *line_buffer, size_t line_length,
+    size_t *length_read, bool *eof)
+{
+    errno = 0;
+    *eof = fgets(line_buffer, line_length, input) == NULL;
+    if (*eof)
+        return TEST_OK_(errno == 0, "Error reading file");
+    else
+    {
+        *length_read = strlen(line_buffer);
+        ASSERT_OK(*length_read > 0);
+        if (line_buffer[*length_read - 1] == '\n')
+        {
+            *length_read -= 1;
+            line_buffer[*length_read] = '\0';
+            return true;
+        }
+        else
+            return TEST_OK_(*length_read + 1 < line_length,
+                "Read buffer overflowed");
+    }
+}
+
+
+/* Reads a single line after joining lines with trailing \ characters.  Fails if
+ * line buffer overflows or fgets fails, sets *eof on end of file. */
+static bool read_line(
+    FILE *input, char *line_buffer, size_t line_length,
+    int *line_number, bool *eof)
+{
+    bool ok = true;
+    bool want_line = true;
+    while (ok  &&  !*eof  &&  want_line)
+    {
+        size_t length_read = 0;
+        ok = read_one_line(input, line_buffer, line_length, &length_read, eof);
+        want_line = ok  &&  !*eof  &&
+            length_read > 0  &&  line_buffer[length_read - 1] == '\\';
+        if (want_line)
+        {
+            line_buffer += length_read - 1;
+            line_length -= length_read - 1;
+            ok = TEST_OK_(line_length > 2, "Run out of read buffer");
+        }
+    }
     return ok;
 }
 
@@ -145,34 +201,33 @@ bool config_parse_file(
     if (!TEST_NULL_(input, "Unable to open config file \"%s\"", file_name))
         return false;
 
-    /* Array of seen flags for each configuration entry. */
+    /* Array of seen flags for each configuration entry, used to ensure that
+     * every needed configuration setting is set. */
     bool seen[config_size];
     memset(seen, 0, sizeof(seen));
 
     /* Process each line in the file. */
     bool ok = true;
-    int line = 1;
-    char line_buffer[LINE_SIZE];
-    while (ok  &&  fgets(line_buffer, sizeof(line_buffer), input))
+    bool eof = false;
+    int line_number = 0;
+    while (ok  &&  !eof)
     {
-        int length = strlen(line_buffer);
+        char line_buffer[LINE_SIZE];
         ok =
-            TEST_OK(length > 0)  &&
-            TEST_OK_(line_buffer[length - 1] == '\n',
-                "Line %d possibly truncated", line)  &&
-            DO_(line_buffer[length - 1] = '\n')  &&
-            do_parse_line(
-                file_name, line, line_buffer,
-                config_table, config_size, seen);
-        line += 1;
+            read_line(
+                input, line_buffer, sizeof(line_buffer), &line_number, &eof)  &&
+            IF_(!eof,
+                do_parse_line(
+                    file_name, line_number, line_buffer,
+                    config_table, config_size, seen));
     }
+    fclose(input);
 
     /* Check that all required entries were present. */
-    errno = 0;
+    errno = 0;      // Can linger over into error reporting
     for (size_t i = 0; ok  &&  i < config_size; i ++)
         ok = TEST_OK_(seen[i]  ||  config_table[i].optional,
             "No value specified for parameter: %s", config_table[i].name);
 
-    fclose(input);
     return ok;
 }
