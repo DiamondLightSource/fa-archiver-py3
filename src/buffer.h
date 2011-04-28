@@ -43,7 +43,7 @@ size_t reader_block_size(struct reader_state *reader);
 void * get_write_block(struct buffer *buffer);
 /* Releases the previously reserved write block: only call if non-NULL value
  * returned by get_write_block(). */
-void release_write_block(struct buffer *buffer, bool gap);
+void release_write_block(struct buffer *buffer, bool gap, struct timespec *ts);
 
 
 /* Creates a new reading connection to the buffer. */

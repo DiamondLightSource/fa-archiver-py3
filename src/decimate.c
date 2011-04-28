@@ -63,6 +63,7 @@ static int *cic_history_index;
 
 static struct fa_row_int64 *filter_buffer;
 static double filter_scaling;
+static int group_delay;
 
 
 /* Called after successful parsing of the configuration file. */
@@ -89,14 +90,19 @@ static bool initialise_configuration(void)
     filter_buffer = calloc(
         compensation_filter.count, sizeof(struct fa_row_int64));
 
-    /* Compute scaling factor for overall unit DC response for the entire filter
-     * chain. */
+    /* Compute scaling factor for overall unit DC response and group delay for
+     * the entire filter chain. */
     filter_scaling = 0;
+    int filter_length = compensation_filter.count;
     for (int i = 0; i < compensation_filter.count; i ++)
         filter_scaling += compensation_filter.data[i];
     for (int i = 0; i < history_length.count; i ++)
+    {
         filter_scaling *= decimation_factor * history_length.data[i];
+        filter_length += history_length.data[i] - 1;
+    }
     filter_scaling = 1 / filter_scaling;
+    group_delay = filter_length / 2;
 
     return true;
 }
@@ -112,9 +118,10 @@ static int decimation_counter;
 static int filter_index;
 
 
-/* Helper macro for repeated pattern in accumulate(). */
+/* Helper macro for repeated pattern in accumulate().  Note that t0 is
+ * untouched. */
 #define ACCUMULATE_ROW(accumulator, row_in) \
-    do for (int i = 0; i < FA_ENTRY_COUNT; i ++) \
+    do for (int i = 1; i < FA_ENTRY_COUNT; i ++) \
     { \
         (accumulator)->row[i].x += (row_in)->row[i].x; \
         (accumulator)->row[i].y += (row_in)->row[i].y; \
@@ -149,7 +156,7 @@ static void differentiate(
         cic_history_index[stage] =
             (cic_history_index[stage] + 1) % history_length.data[stage];
 
-        for (int i = 0; i < FA_ENTRY_COUNT; i ++)
+        for (int i = 1; i < FA_ENTRY_COUNT; i ++)
         {
             struct fa_entry_int64 in = row_in->row[i];
             row_out->row[i].x = in.x - history->row[i].x;
@@ -175,18 +182,25 @@ static void filter_output(struct fa_row *row_out)
         double coeff = compensation_filter.data[j];
         struct fa_row_int64 *row =
             &filter_buffer[(filter_index + j) % compensation_filter.count];
-        for (int i = 0; i < FA_ENTRY_COUNT; i ++)
+        for (int i = 1; i < FA_ENTRY_COUNT; i ++)
         {
             accumulator.row[i].x += coeff * row->row[i].x;
             accumulator.row[i].y += coeff * row->row[i].y;
         }
     }
 
-    for (int i = 0; i < FA_ENTRY_COUNT; i ++)
+    for (int i = 1; i < FA_ENTRY_COUNT; i ++)
     {
         row_out->row[i].x = (int) (filter_scaling * accumulator.row[i].x);
         row_out->row[i].y = (int) (filter_scaling * accumulator.row[i].y);
     }
+}
+
+
+static void update_t0(struct fa_row *row_out, const struct fa_entry *t0)
+{
+    row_out->row[0].x = t0->x - group_delay;
+    row_out->row[0].y = t0->y - group_delay;
 }
 
 
@@ -200,7 +214,9 @@ static void advance_write_block(bool gap, struct timespec *ts)
     out_pointer += 1;
     if (gap  ||  out_pointer >= output_sample_count)
     {
-        release_write_block(decimation_buffer, gap);
+        /* Ought to correct the timestamp here by the filter group delay and the
+         * difference between the two data blocks. */
+        release_write_block(decimation_buffer, gap, ts);
         out_pointer = 0;
         block_out = get_write_block(decimation_buffer);
     }
@@ -214,6 +230,7 @@ static void decimate_block(const struct fa_row *block_in, struct timespec *ts)
     int sample_count_in = fa_block_size / FA_FRAME_SIZE;
     for (int in = 0; in < sample_count_in; in ++)
     {
+        const struct fa_entry *t0 = &block_in->row[0];
         const struct fa_row_int64 *row = accumulate(block_in++);
 
         decimation_counter += 1;
@@ -222,6 +239,7 @@ static void decimate_block(const struct fa_row *block_in, struct timespec *ts)
             decimation_counter = 0;
             differentiate(row, &filter_buffer[filter_index]);
             filter_output(&block_out[out_pointer]);
+            update_t0(&block_out[out_pointer], t0);
             advance_write_block(false, ts);
         }
     }

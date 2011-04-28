@@ -248,19 +248,13 @@ void * get_write_block(struct buffer *buffer)
 }
 
 
-void release_write_block(struct buffer *buffer, bool gap)
+void release_write_block(struct buffer *buffer, bool gap, struct timespec *ts)
 {
     gap = gap || buffer->write_blocked;
 
-    /* Get the time this block was written.  This is close enough to the
-     * completion of the FA sniffer read to be a good timestamp for the last
-     * frame. */
-    struct timespec ts;
-    ASSERT_IO(clock_gettime(CLOCK_REALTIME, &ts));
-
     LOCK(buffer->lock);
     buffer->frame_info[buffer->buffer_index_in].gap = gap;
-    buffer->frame_info[buffer->buffer_index_in].ts = ts;
+    buffer->frame_info[buffer->buffer_index_in].ts = *ts;
     advance_index(buffer, &buffer->buffer_index_in);
 
     /* Let all readers know if they've suffered an underflow. */

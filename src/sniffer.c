@@ -69,7 +69,9 @@ static void * dummy_sniffer_thread(void *context)
         else
         {
             dummy_data(buffer, fa_block_size);
-            release_write_block(fa_block_buffer, false);
+            struct timespec ts;
+            ASSERT_IO(clock_gettime(CLOCK_REALTIME, &ts));
+            release_write_block(fa_block_buffer, false, &ts);
         }
     }
     return NULL;
@@ -97,7 +99,13 @@ static void * sniffer_thread(void *context)
             bool gap =
                 read(fa_sniffer, buffer, fa_block_size) <
                     (ssize_t) fa_block_size;
-            release_write_block(fa_block_buffer, gap);
+
+            /* Get the time this block was written.  This is close enough to the
+             * completion of the FA sniffer read to be a good timestamp for the
+             * last frame. */
+            struct timespec ts;
+            ASSERT_IO(clock_gettime(CLOCK_REALTIME, &ts));
+            release_write_block(fa_block_buffer, gap, &ts);
             if (gap)
             {
                 if (!in_gap)

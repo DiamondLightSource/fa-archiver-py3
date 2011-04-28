@@ -82,6 +82,9 @@ $(foreach target,$(BUILD),$(eval $(expand_build)))
             sed '1s/:/ $@:/' >$@
 include $(patsubst %.c,%.d,$(foreach target,$(BUILD),$($(target)_SRCS)))
 
+# Target for assembler build for code generation inspection.
+%.s: %.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) -S $<
 
 # Installation: we install all the built executables in $(SCRIPT_DIR)
 install: $(BUILD_NAMES)
