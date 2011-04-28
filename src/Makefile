@@ -57,6 +57,7 @@ archiver_SRCS += socket_server.c    # Socket server
 archiver_SRCS += transform.c        # Data transformation and access
 archiver_SRCS += reader.c           # Sniffer data readout
 archiver_SRCS += decimate.c         # Continuous data reduction
+archiver_SRCS += config_file.c      # Config file parsing
 
 # FA archive preparation
 prepare_SRCS += prepare.c           # Command line interface

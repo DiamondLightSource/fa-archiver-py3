@@ -222,6 +222,8 @@ int main(int argc, char **argv)
         TEST_IO(feenableexcept(FE_DIVBYZERO | FE_INVALID | FE_OVERFLOW))  &&
         initialise_disk_writer(output_filename, &input_block_size)  &&
         create_buffer(&fa_block_buffer, input_block_size, buffer_blocks)  &&
+        IF_(decimation_config, initialise_decimation(decimation_config))  &&
+
         maybe_daemonise()  &&
         /* All the thread initialisation must be done after daemonising, as of
          * course threads don't survive across the daemon() call!  Alas, this
@@ -229,8 +231,7 @@ int main(int argc, char **argv)
         start_disk_writer(fa_block_buffer)  &&
         initialise_sniffer(fa_block_buffer, fa_sniffer_device)  &&
         IF_(decimation_config,
-            initialise_decimation(
-                decimation_config, fa_block_buffer, &decimated_buffer))  &&
+            start_decimation(fa_block_buffer, &decimated_buffer))  &&
         initialise_server(fa_block_buffer, decimated_buffer, server_socket)  &&
         initialise_reader(output_filename)  &&
         DO_(run_archiver());

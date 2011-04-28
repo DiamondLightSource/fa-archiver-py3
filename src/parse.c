@@ -7,6 +7,7 @@
 #include <stdarg.h>
 #include <time.h>
 #include <errno.h>
+#include <ctype.h>
 
 #include "error.h"
 #include "parse.h"
@@ -16,6 +17,13 @@
 bool parse_eos(const char **string)
 {
     return TEST_OK_(**string == '\0', "Unexpected character");
+}
+
+bool parse_whitespace(const char **string)
+{
+    while (isspace(**string))
+        *string += 1;
+    return true;
 }
 
 
