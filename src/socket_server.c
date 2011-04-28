@@ -121,10 +121,9 @@ static bool process_command(int scon, const char *buf)
                 break;
             case 'M':
                 {
-                    char string[RAW_MASK_BYTES+2];
-                    int n = format_raw_mask(get_header()->archive_mask, string);
-                    strcpy(string + n, "\n");
-                    ok = write_string(scon, string);
+                    char string[RAW_MASK_BYTES + 1];
+                    format_raw_mask(get_header()->archive_mask, string);
+                    ok = write_string(scon, "%s\n", string);
                 }
                 break;
 
