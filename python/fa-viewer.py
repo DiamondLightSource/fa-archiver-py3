@@ -337,10 +337,17 @@ class mode_raw(mode_common):
         self.set_visible()
 
 
-def scaled_abs_fft(value, axis=0):
+def scaled_abs_fft(value, windowed=True, axis=0):
     '''Returns the fft of value (along axis 0) scaled so that values are in
     units per sqrt(Hz).  The magnitude of the first half of the spectrum is
     returned.'''
+    if windowed:
+        # The Hann window is good enough.  In some cases the Hamming window
+        # looks a bit better, but then I'd need a choice of windows.  Not really
+        # the point here, so just go for the simplest...
+        window = 1 + numpy.cos(
+            numpy.linspace(-numpy.pi, numpy.pi, value.shape[axis]))
+        value = value * window[:, None]
     fft = numpy.fft.fft(value, axis=axis)
 
     # This trickery below is simply implementing fft[:N//2] where the slicing is
@@ -379,6 +386,9 @@ class mode_fft(mode_common):
     def __init__(self, parent):
         mode_common.__init__(self, parent)
 
+        self.windowed = QtGui.QCheckBox('Windowed', parent.ui)
+        self.addWidget(self.windowed)
+
         squared = QtGui.QCheckBox(
             '%s%s/Hz' % (micrometre, char_squared), parent.ui)
         squared.stateChanged.connect(self.set_squared)
@@ -413,15 +423,16 @@ class mode_fft(mode_common):
         self.parent.reset_mode()
 
     def compute(self, value):
+        windowed = self.windowed.isChecked()
         if self.decimation == 1:
-            result = scaled_abs_fft(value)
+            result = scaled_abs_fft(value, windowed = windowed)
         else:
             # Compute a decimated fft by segmenting the waveform (by reshaping),
             # computing the fft of each segment, and computing the mean power of
             # all the resulting transforms.
             N = len(value)
             value = value.reshape((self.decimation, N//self.decimation, 2))
-            fft = scaled_abs_fft(value, axis=1)
+            fft = scaled_abs_fft(value, windowed = windowed, axis=1)
             result = numpy.sqrt(numpy.mean(fft**2, axis=0))
         if self.show_squared:
             return result ** 2
@@ -454,6 +465,8 @@ def condense(value, counts):
     return sums
 
 
+FFT_LOGF_POINTS = 5000
+
 class mode_fft_logf(mode_common):
     mode_name = 'FFT (log f)'
     xname = 'Frequency'
@@ -467,13 +480,14 @@ class mode_fft_logf(mode_common):
     Filters = [1, 10, 100]
 
     def set_timebase(self, timebase):
-        self.counts = compute_gaps(timebase//2 - 1, 1000)
+        self.counts = compute_gaps(timebase//2 - 1, FFT_LOGF_POINTS)
         self.xaxis = F_S * numpy.cumsum(self.counts) / timebase
         self.xmin = self.xaxis[0]
         self.reset = True
 
     def compute(self, value):
-        fft = scaled_abs_fft(value)[1:]
+        windowed = self.windowed.isChecked()
+        fft = scaled_abs_fft(value, windowed = windowed)[1:]
         fft_logf = numpy.sqrt(
             condense(fft**2, self.counts) / self.counts[:,None])
         if self.scalef:
@@ -492,6 +506,9 @@ class mode_fft_logf(mode_common):
 
     def __init__(self, parent):
         mode_common.__init__(self, parent)
+
+        self.windowed = QtGui.QCheckBox('Windowed', parent.ui)
+        self.addWidget(self.windowed)
 
         check_scalef = QtGui.QCheckBox('scale by f', parent.ui)
         self.addWidget(check_scalef)
