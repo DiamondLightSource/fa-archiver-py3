@@ -83,7 +83,7 @@ static bool initialise_configuration(void)
     /* One accumulator for each stage. */
     cic_accumulators = calloc(
         history_length.count, sizeof(struct fa_row_int64));
-    /* Array of history buffers for variable length differentiation stage. */
+    /* Array of history buffers for variable length comb stage. */
     cic_histories = calloc(history_length.count, sizeof(struct fa_row_int64 *));
     for (int i = 0; i < history_length.count; i ++)
         cic_histories[i] = calloc(
@@ -165,8 +165,8 @@ static const struct fa_row_int64 * accumulate(const struct fa_row *row_in)
 }
 
 
-/* Performs repeated differentiation of raw decimated data. */
-static void differentiate(
+/* Performs repeated comb filter of raw decimated data. */
+static void comb(
     const struct fa_row_int64 *row_in, struct fa_row_int64 *row_out)
 {
     for (int stage = 0; stage < history_length.count; stage ++)
@@ -239,7 +239,7 @@ static void advance_write_block(bool gap, uint64_t timestamp)
 
 
 /* CIC: repeated integration steps on every input sample, decimate by selected
- * decimation factor, differentiation of each output sample. */
+ * decimation factor, comb filter of each output sample. */
 static void decimate_block(const struct fa_row *block_in, uint64_t timestamp)
 {
     int sample_count_in = fa_block_size / FA_FRAME_SIZE;
@@ -250,7 +250,7 @@ static void decimate_block(const struct fa_row *block_in, uint64_t timestamp)
 
         if (advance_index(&decimation_counter, decimation_factor))
         {
-            differentiate(row, &filter_buffer[filter_index]);
+            comb(row, &filter_buffer[filter_index]);
             advance_index(&filter_index, compensation_filter.count);
 
             if (advance_index(&output_counter, filter_decimation))
