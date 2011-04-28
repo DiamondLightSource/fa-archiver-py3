@@ -39,7 +39,7 @@ static bool page_aligned(uint64_t offset, const char *description)
 
 bool initialise_header(
     struct disk_header *header,
-    filter_mask_t archive_mask,
+    struct filter_mask *archive_mask,
     uint64_t file_size,
     uint32_t input_block_size,
     uint32_t output_block_size,
@@ -55,7 +55,7 @@ bool initialise_header(
     header->version = DISK_VERSION;
 
     /* Capture parameters. */
-    copy_mask(header->archive_mask, archive_mask);
+    copy_mask(&header->archive_mask, archive_mask);
     header->archive_mask_count = archive_mask_count;
     header->first_decimation = first_decimation;
     header->second_decimation = second_decimation;
@@ -143,10 +143,10 @@ bool validate_header(struct disk_header *header, uint64_t file_size)
 
         /* Data capture parameter validation. */
         TEST_OK_(
-            count_mask_bits(header->archive_mask) ==
+            count_mask_bits(&header->archive_mask) ==
                 header->archive_mask_count,
             "Inconsistent archive mask: %d != %"PRIu32,
-                count_mask_bits(header->archive_mask),
+                count_mask_bits(&header->archive_mask),
                 header->archive_mask_count)  &&
         TEST_OK_(header->archive_mask_count > 0, "Empty capture mask")  &&
         TEST_OK_(header->total_data_size <= file_size,
@@ -263,9 +263,9 @@ void print_header(FILE *out, struct disk_header *header)
 {
     char mask_string[RAW_MASK_BYTES+1];
     char format_string[256];
-    format_raw_mask(header->archive_mask, mask_string);
+    format_raw_mask(&header->archive_mask, mask_string);
     if (!format_mask(
-            header->archive_mask, format_string, sizeof(format_string)))
+            &header->archive_mask, format_string, sizeof(format_string)))
         sprintf(format_string, "...");
     double sample_frequency =
         header->major_sample_count * 1e6 / header->last_duration;

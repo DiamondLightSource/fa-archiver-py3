@@ -151,7 +151,7 @@ static void transpose_block(const void *read_block)
     unsigned int written = 0;
     for (unsigned int id = 0; id < FA_ENTRY_COUNT; id ++)
     {
-        if (test_mask_bit(header->archive_mask, id))
+        if (test_mask_bit(&header->archive_mask, id))
         {
             transpose_column(
                 read_block + FA_ENTRY_SIZE * id, fa_block(written));
@@ -211,7 +211,7 @@ static void decimate_block(const void *read_block)
     unsigned int written = 0;
     for (unsigned int id = 0; id < FA_ENTRY_COUNT; id ++)
     {
-        if (test_mask_bit(header->archive_mask, id))
+        if (test_mask_bit(&header->archive_mask, id))
         {
             decimate_column(read_block + FA_ENTRY_SIZE * id, d_block(written));
             written += 1;
@@ -268,7 +268,7 @@ static void double_decimate_block(void)
     unsigned int written = 0;
     for (unsigned int id = 0; id < FA_ENTRY_COUNT; id ++)
     {
-        if (test_mask_bit(header->archive_mask, id))
+        if (test_mask_bit(&header->archive_mask, id))
         {
             decimate_decimation(input, output, header->second_decimation);
             input += header->d_sample_count;

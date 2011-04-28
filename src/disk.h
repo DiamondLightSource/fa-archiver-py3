@@ -66,7 +66,7 @@ struct disk_header {
     unsigned char version;      // Simple version number
 
     /* Description of data capture parameters. */
-    filter_mask_t archive_mask; // List of BPM ids archived in this file
+    struct filter_mask archive_mask; // List of BPM ids archived in this file
     uint32_t archive_mask_count; // Number of BPMs captured in this file
     uint32_t first_decimation;  // Decimation factors
     uint32_t second_decimation;
@@ -154,7 +154,7 @@ static inline int d_data_offset(struct disk_header *header, int sample, int id)
  * These parameters determine the layout and operation of the archiver. */
 bool initialise_header(
     struct disk_header *header,
-    filter_mask_t archive_mask,
+    struct filter_mask *archive_mask,
     uint64_t disk_size,
     uint32_t input_block_size,
     uint32_t output_block_size,

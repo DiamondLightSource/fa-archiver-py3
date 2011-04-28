@@ -36,7 +36,7 @@ static char *argv0;
 static const char * file_name;
 static bool file_size_given = false;
 static uint64_t file_size;
-static filter_mask_t archive_mask;
+static struct filter_mask archive_mask;
 static uint32_t input_block_size = 512 * K;
 static uint32_t output_block_size = 512 * K;
 static uint32_t first_decimation = 64;
@@ -142,7 +142,7 @@ static bool process_args(int argc, char **argv)
         return
             process_opts(&argc, &argv)  &&
             TEST_OK_(argc == 2, "Try -h for usage")  &&
-            DO_PARSE("capture mask", parse_mask, argv[0], archive_mask)  &&
+            DO_PARSE("capture mask", parse_mask, argv[0], &archive_mask)  &&
             DO_(file_name = argv[1]);
 }
 
@@ -173,7 +173,7 @@ static bool write_new_header(int file_fd, int *written)
     bool ok =
         TEST_NULL(header = valloc(DISK_HEADER_SIZE))  &&
         initialise_header(header,
-            archive_mask, file_size,
+            &archive_mask, file_size,
             input_block_size, output_block_size,
             first_decimation, second_decimation, sample_frequency)  &&
         TEST_IO(lseek(file_fd, 0, SEEK_SET))  &&

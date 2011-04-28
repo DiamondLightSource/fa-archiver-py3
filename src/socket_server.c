@@ -130,7 +130,7 @@ static bool process_command(int scon, const char *buf)
             case 'M':
                 {
                     char string[RAW_MASK_BYTES + 1];
-                    format_raw_mask(get_header()->archive_mask, string);
+                    format_raw_mask(&get_header()->archive_mask, string);
                     ok = write_string(scon, "%s\n", string);
                 }
                 break;
@@ -162,7 +162,7 @@ static bool process_command(int scon, const char *buf)
  * If both T and Z are specified then the timestamp is sent first before T0.
  */
 static bool parse_subscription(
-    const char **string, filter_mask_t mask,
+    const char **string, struct filter_mask *mask,
     struct buffer **buffer, bool *want_timestamp, bool *want_t0)
 {
     return
@@ -202,7 +202,7 @@ bool report_socket_error(int scon, bool ok)
 static bool send_subscription(
     int scon, struct reader_state *reader, uint64_t timestamp,
     bool want_timestamp, bool want_t0,
-    filter_mask_t mask, const void **block)
+    struct filter_mask *mask, const void **block)
 {
     /* The transmitted block optionally begins with the timestamp and T0 values,
      * in that order, if requested. */
@@ -238,11 +238,11 @@ static bool process_subscribe(int scon, const char *buf)
     push_error_handling();
 
     /* Parse the incoming request. */
-    filter_mask_t mask;
+    struct filter_mask mask;
     bool want_timestamp = false, want_t0 = false;
     struct buffer *buffer = fa_block_buffer;
     if (!DO_PARSE(
-            "subscription", parse_subscription, buf, mask,
+            "subscription", parse_subscription, buf, &mask,
             &buffer, &want_timestamp, &want_t0))
         return report_socket_error(scon, false);
 
@@ -257,7 +257,7 @@ static bool process_subscribe(int scon, const char *buf)
     /* Send the requested subscription if all is well. */
     if (start_ok  &&  ok)
         ok = send_subscription(
-            scon, reader, timestamp, want_timestamp, want_t0, mask, &block);
+            scon, reader, timestamp, want_timestamp, want_t0, &mask, &block);
 
     /* Clean up resources.  Rather important to get this right, as this can
      * happen many times. */

@@ -49,7 +49,7 @@ static size_t lookup_size(int format)
 }
 
 
-int compute_mask_ids(uint8_t *array, filter_mask_t mask)
+int compute_mask_ids(uint8_t *array, struct filter_mask *mask)
 {
     int count = 0;
     for (int bit = 0; bit < 256; bit ++)

@@ -110,7 +110,8 @@ struct iter_mask {
 
 
 /* Converts an external mask into indexes into the archive. */
-static bool mask_to_archive(const filter_mask_t mask, struct iter_mask *iter)
+static bool mask_to_archive(
+    const struct filter_mask *mask, struct iter_mask *iter)
 {
     const struct disk_header *header = get_header();
     unsigned int ix = 0;
@@ -120,12 +121,12 @@ static bool mask_to_archive(const filter_mask_t mask, struct iter_mask *iter)
     {
         if (test_mask_bit(mask, i))
         {
-            ok = TEST_OK_(test_mask_bit(header->archive_mask, i),
+            ok = TEST_OK_(test_mask_bit(&header->archive_mask, i),
                 "BPM %d not in archive", i);
             iter->index[n] = ix;
             n += 1;
         }
-        if (test_mask_bit(header->archive_mask, i))
+        if (test_mask_bit(&header->archive_mask, i))
             ix += 1;
     }
     iter->count = n;
@@ -399,7 +400,7 @@ static bool transfer_data(
 
 /* Result of parsing a read command. */
 struct read_parse {
-    filter_mask_t read_mask;        // List of BPMs to be read
+    struct filter_mask read_mask;   // List of BPMs to be read
     uint64_t samples;               // Requested number of samples
     uint64_t start;                 // Data start (in microseconds into epoch)
     uint64_t end;                   // Data end (alternative to count)
@@ -428,7 +429,7 @@ static bool read_data(int scon, struct read_parse *parse)
         IF_(parse->only_contiguous,
             check_run(parse->reader,
                 parse->check_id0, ix_block, offset, samples))  &&
-        mask_to_archive(parse->read_mask, &iter)  &&
+        mask_to_archive(&parse->read_mask, &iter)  &&
         lock_buffers(&read_buffers, iter.count)  &&
         TEST_IO(archive = open(archive_filename, O_RDONLY));
     bool write_ok = report_socket_error(scon, ok);
@@ -714,7 +715,7 @@ static bool parse_read_request(const char **string, struct read_parse *parse)
         parse_char(string, 'R')  &&
         parse_source(string, parse)  &&
         parse_char(string, 'M')  &&
-        parse_mask(string, parse->read_mask)  &&
+        parse_mask(string, &parse->read_mask)  &&
         parse_time_or_seconds(string, &parse->start)  &&
         parse_end(string, &parse->end, &parse->samples)  &&
         parse_options(string, parse);

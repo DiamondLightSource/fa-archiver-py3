@@ -37,7 +37,7 @@ enum data_format { DATA_FA, DATA_D, DATA_DD };
 static int port = 8888;
 static const char *server_name = DEFAULT_SERVER;
 static const char *output_filename = NULL;
-static filter_mask_t capture_mask;
+static struct filter_mask capture_mask;
 static bool matlab_format = true;
 static bool squeeze_matlab = true;
 static bool continuous_capture = false;
@@ -403,7 +403,7 @@ static bool parse_args(int argc, char **argv)
         parse_opts(&argc, &argv)  &&
         TEST_OK_(argc == 1  ||  argc == 2,
             "Wrong number of arguments.  Try `capture -h` for help.")  &&
-        DO_PARSE("capture mask", parse_mask, argv[0], capture_mask)  &&
+        DO_PARSE("capture mask", parse_mask, argv[0], &capture_mask)  &&
         /* Note that we have to interrogate the archive parameters after parsing
          * the server settings, but before we parse the sample count, because
          * this uses the decimation settings we read. */
@@ -476,7 +476,7 @@ static void format_options(char *options)
 static bool request_data(int sock)
 {
     char raw_mask[RAW_MASK_BYTES+1];
-    format_raw_mask(capture_mask, raw_mask);
+    format_raw_mask(&capture_mask, raw_mask);
     char request[1024];
     if (continuous_capture)
         sprintf(request, "SR%s%s\n", raw_mask, matlab_format ? "TZ" : "");
@@ -560,7 +560,7 @@ static bool capture_data(int sock, unsigned int *frames_written)
 {
     size_t frame_size =
         count_data_bits(data_mask) *
-        count_mask_bits(capture_mask) * FA_ENTRY_SIZE;
+        count_mask_bits(&capture_mask) * FA_ENTRY_SIZE;
     char buffer[BUFFER_SIZE];
     unsigned int residue = 0;   // Partial frame received, not yet written out
     bool ok = true;             // Only treat write failures as errors
@@ -689,7 +689,7 @@ static bool write_header(
 
     /* Write out the index array tying data back to original BPM ids. */
     uint8_t mask_ids[FA_ENTRY_COUNT];
-    int mask_length = compute_mask_ids(mask_ids, capture_mask);
+    int mask_length = compute_mask_ids(mask_ids, &capture_mask);
     place_matlab_vector(&h, "ids", miUINT8, mask_ids, mask_length);
 
     /* Write out the gap list data. */

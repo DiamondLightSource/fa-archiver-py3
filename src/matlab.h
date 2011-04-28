@@ -24,7 +24,7 @@ void place_matlab_vector(
     void *data, int vector_length);
 
 unsigned int count_data_bits(unsigned int mask);
-int compute_mask_ids(uint8_t *array, filter_mask_t mask);
+int compute_mask_ids(uint8_t *array, struct filter_mask *mask);
 
 /* Converts a timestamp in FA sniffer format (microseconds in Unix epoch) to a
  * timestamp in matlab format (double days in Matlab epoch).  As matlab times
