@@ -180,59 +180,71 @@ bool report_socket_error(int scon, bool ok)
 }
 
 
+static bool send_subscription(
+    int scon, struct reader_state *reader, struct timespec *ts, bool want_t0,
+    filter_mask_t mask, const void **block)
+{
+    bool ok = true;
+    if (ts)
+    {
+        uint64_t timestamp = ts_to_microseconds(ts);
+        ok = TEST_write(scon, &timestamp, sizeof(uint64_t));
+    }
+    if (ok  &&  want_t0)
+        /* The first word in the block is the T0 timestamp. */
+        ok = TEST_write(scon, *block, sizeof(uint32_t));
+
+    size_t block_size = reader_block_size(reader);
+    while (ok)
+    {
+        ok = FINALLY(
+            write_frames(scon, mask, *block, block_size / FA_FRAME_SIZE),
+            // Always do this, even if write_frames fails.
+            TEST_OK_(release_read_block(reader),
+                "Write underrun to client"));
+        if (ok)
+            ok = TEST_NULL_(
+                *block = get_read_block(reader, NULL, NULL),
+                "Gap in subscribed data");
+        else
+            *block = NULL;
+    }
+    return ok;
+}
+
+
 /* A subscription is a command of the form S<mask> where <mask> is a mask
  * specification as described in mask.h.  The default mask is empty. */
 static bool process_subscribe(int scon, const char *buf)
 {
-    filter_mask_t mask;
     push_error_handling();
-    bool want_timestamp = false, want_t0 = false;
-    struct reader_state *reader = NULL;
-    struct timespec ts;
-    const void *block = NULL;
-    size_t fa_block_size = buffer_block_size(fa_block_buffer);
 
-    bool start_ok =
-        DO_PARSE(
+    /* Parse the incoming request. */
+    filter_mask_t mask;
+    bool want_timestamp = false, want_t0 = false;
+    if (!DO_PARSE(
             "subscription", parse_subscription, buf, mask,
-            &want_timestamp, &want_t0)  &&
-        DO_(reader = open_reader(fa_block_buffer, false))  &&
-        TEST_NULL_(
-            block = get_read_block(reader, NULL, &ts),
-            "No data currently available");
+            &want_timestamp, &want_t0))
+        return report_socket_error(scon, false);
+
+    /* See if we can start the subscription, report the final status to the
+     * caller. */
+    struct reader_state *reader = open_reader(fa_block_buffer, false);
+    struct timespec ts;
+    const void *block = get_read_block(reader, NULL, &ts);
+    bool start_ok = TEST_NULL_(block, "No data currently available");
     bool ok = report_socket_error(scon, start_ok);
 
+    /* Send the requested subscription if all is well. */
     if (start_ok  &&  ok)
-    {
-        if (want_timestamp)
-        {
-            uint64_t timestamp = ts_to_microseconds(&ts);
-            ok = TEST_write(scon, &timestamp, sizeof(uint64_t));
-        }
-        if (ok  &&  want_t0)
-            /* The first word in the block is the T0 timestamp. */
-            ok = TEST_write(scon, block, sizeof(uint32_t));
+        ok = send_subscription(
+            scon, reader, want_timestamp ? &ts : NULL, want_t0, mask, &block);
 
-        while (ok)
-        {
-            ok = FINALLY(
-                write_frames(scon, mask, block, fa_block_size / FA_FRAME_SIZE),
-                // Always do this, even if write_frames fails.
-                TEST_OK_(release_read_block(reader),
-                    "Write underrun to client"));
-            if (ok)
-                ok = TEST_NULL_(
-                    block = get_read_block(reader, NULL, NULL),
-                    "Gap in subscribed data");
-            else
-                block = NULL;
-        }
-    }
-
+    /* Clean up resources.  Rather important to get this right, as this can
+     * happen many times. */
     if (block != NULL)
         release_read_block(reader);
-    if (reader != NULL)
-        close_reader(reader);
+    close_reader(reader);
 
     return ok;
 }
