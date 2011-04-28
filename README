@@ -101,3 +101,40 @@ To do
 
 * Implement separate archive for decimated data so that this can be read out at
   a sensible pace.
+
+Notes on SSE
+------------
+
+Here is the SSE stuff that used to be in transform.c (see commit c30eee83 in the
+pcie sniffer driver, or svn commit 50921):
+
+#include <xmmintrin.h>
+
+    /* This call is an SSE intrinsic, defined in xmmintrin.h, only enabled
+     * if -msse specified on the command line.  The effect of this is to use
+     * the MMX register for transferring a single FA entry, but more to the
+     * point, write combining is used on the output.  This means that the
+     * output block is never fetched into cache, which should significantly
+     * speed up processing.
+     *    Alas, the documentation for this is pretty poor.
+     *
+     * References include:
+     *  http://lwn.net/Articles/255364/
+     *      Ulrich Drepper on memory optimisation
+     *  http://www.redjam.com/codeplay/documentation/intrinsics.html
+     *      Lists intrinsics for another compiler
+     *  http://math.nju.edu.cn/help/mathhpc/doc/intel/cc/
+     *  mergedProjects/intref_cls/
+     *      Documents Intel intrinsics. 
+     *  www.info.univ-angers.fr/~richer/ens/l3info/ao/intel_intrinsics.pdf
+     *      Intel Intrinsic Reference, document 312482-003US. */
+    _mm_stream_pi((__m64 *) output++, *(__m64 *) input);
+    input += FA_ENTRY_COUNT;
+    _mm_stream_pi((__m64 *) output++, *(__m64 *) input);
+    *output ++ = *input;
+
+    /* After performing the transpose with SSE above we have to reset the
+     * floating point state as otherwise subsequent floating point arithmetic
+     * will fail mysteriously. */
+    _mm_empty();
+

@@ -19,7 +19,7 @@ export PREFIX
 export SCRIPT_DIR
 
 
-BUILD_DIR = $(CURDIR)/build
+BUILD_DIR = $(CURDIR)/build-$(shell uname -m)
 SRCDIR = $(CURDIR)/src
 
 MAKE_BUILD = \
