@@ -20,22 +20,34 @@
  * gracefully. */
 
 
+/* Circular buffer with support for single writer and multiple independent
+ * readers and optional support for timestamps. */
+struct buffer;
+/* A single reader connected to a buffer. */
+struct reader_state;
+
 
 /* Prepares central memory buffer. */
-bool initialise_buffer(size_t block_size, size_t block_count);
+bool create_buffer(
+    struct buffer **buffer, size_t block_size, size_t block_count);
+
+/* Interrogates buffer block size. */
+size_t buffer_block_size(struct buffer *buffer);
+/* Similar helper routine when we only have a reader in our hands. */
+size_t reader_block_size(struct reader_state *reader);
 
 /* Reserves the next slot in the buffer for writing. An entire contiguous
  * block of block_size bytes is returned, or NULL if the disk writer has
  * underrun and hasn't caught up yet -- in this case the writer needs to back
  * off and try again later. */
-void * get_write_block(void);
+void * get_write_block(struct buffer *buffer);
 /* Releases the previously reserved write block: only call if non-NULL value
  * returned by get_write_block(). */
-void release_write_block(bool gap);
+void release_write_block(struct buffer *buffer, bool gap);
 
 
 /* Creates a new reading connection to the buffer. */
-struct reader_state * open_reader(bool reserved_reader);
+struct reader_state * open_reader(struct buffer *buffer, bool reserved_reader);
 /* Closes a previously opened reader connection. */
 void close_reader(struct reader_state *reader);
 
@@ -57,9 +69,4 @@ bool release_read_block(struct reader_state *reader);
 void stop_reader(struct reader_state *reader);
 
 /* Can be used to temporarily halt or resume buffered writing. */
-void enable_buffer_write(bool enabled);
-
-
-/* The block size (in bytes) used by the buffer is a global variable
- * initialised by initialise_buffer and left constant thereafter. */
-extern size_t fa_block_size;
+void enable_buffer_write(struct buffer *buffer, bool enabled);

@@ -73,7 +73,6 @@ static void usage(void)
 "    -p:  Write PID to specified file\n"
 "    -s:  Specify server socket (default 8888)\n"
 "    -F   Run dummy sniffer with dummy data.\n"
-"    -H   Start archiver in halted state (debug only)\n"
         , argv0, buffer_blocks);
 }
 
@@ -84,7 +83,7 @@ static bool process_options(int *argc, char ***argv)
     bool ok = true;
     while (ok)
     {
-        switch (getopt(*argc, *argv, "+hd:b:vtDp:s:FH"))
+        switch (getopt(*argc, *argv, "+hd:b:vtDp:s:F"))
         {
             case 'h':   usage();                                    exit(0);
             case 'd':   fa_sniffer_device = optarg;                 break;
@@ -93,7 +92,6 @@ static bool process_options(int *argc, char ***argv)
             case 'D':   daemon_mode = true;                         break;
             case 'p':   pid_filename = optarg;                      break;
             case 'F':   fa_sniffer_device = NULL;                   break;
-            case 'H':   enable_buffer_write(false);                 break;
             case 'b':
                 ok = DO_PARSE("buffer blocks",
                     parse_uint, optarg, &buffer_blocks);
@@ -208,19 +206,20 @@ static void run_archiver(void)
 int main(int argc, char **argv)
 {
     uint32_t input_block_size;
+    struct buffer *fa_block_buffer;
     bool ok =
         process_args(argc, argv)  &&
         initialise_signals()  &&
         TEST_IO(feenableexcept(FE_DIVBYZERO | FE_INVALID | FE_OVERFLOW))  &&
         initialise_disk_writer(output_filename, &input_block_size)  &&
+        create_buffer(&fa_block_buffer, input_block_size, buffer_blocks)  &&
         maybe_daemonise()  &&
         /* All the thread initialisation must be done after daemonising, as of
          * course threads don't survive across the daemon() call!  Alas, this
          * means that many startup errors go into syslog rather than stderr. */
-        initialise_buffer(input_block_size, buffer_blocks)  &&
-        start_disk_writer()  &&
-        initialise_sniffer(fa_sniffer_device)  &&
-        initialise_server(server_socket)  &&
+        start_disk_writer(fa_block_buffer)  &&
+        initialise_sniffer(fa_block_buffer, fa_sniffer_device)  &&
+        initialise_server(fa_block_buffer, server_socket)  &&
         initialise_reader(output_filename)  &&
         DO_(run_archiver());
 

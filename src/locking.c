@@ -11,6 +11,12 @@
 #include "locking.h"
 
 
+void initialise_locking(struct locking *locking)
+{
+    ASSERT_0(pthread_mutex_init(&locking->mutex, NULL));
+    ASSERT_0(pthread_cond_init(&locking->signal, NULL));
+}
+
 void do_lock(struct locking *locking)
 {
     ASSERT_0(pthread_mutex_lock(&locking->mutex));

@@ -17,6 +17,8 @@ struct locking {
 #define UNLOCK(locking) \
     pthread_cleanup_pop(true)
 
+void initialise_locking(struct locking *locking);
+
 void do_lock(struct locking *locking);
 void do_unlock(struct locking *locking);
 void psignal(struct locking *locking);

@@ -20,13 +20,6 @@
 #include "buffer.h"
 
 
-size_t fa_block_size;               // Bytes in one buffer block
-
-static size_t block_count;          // Number of blocks in buffer
-/* Note that the frame buffer needs to be page aligned to work nicely with
- * unbuffered direct disk IO. */
-static void * frame_buffer;         // In RAM buffer of captured FA frames
-
 struct frame_info {
     /* True if this frame is a gap and contains no true data, false if the
      * associated frame in frame_buffer[] is valid. */
@@ -34,28 +27,48 @@ struct frame_info {
     /* Timestamp for completion of this frame. */
     struct timespec ts;
 };
-static struct frame_info * frame_info;
 
-static size_t buffer_index_in = 0;  // Write pointer, in blocks
+
+struct buffer
+{
+    /* Size of individual buffer blocks. */
+    size_t block_size;
+    /* Number of blocks in buffer. */
+    size_t block_count;
+    /* Contiguous array of blocks, page aligned to work nicely with unbuffered
+     * direct disk IO. */
+    void * frame_buffer;
+    /* Frame information including gap marks and timestamps. */
+    struct frame_info * frame_info;
+
+    /* Lock and pthread signal structure. */
+    struct locking lock;
+
+    /* Write pointer. */
+    size_t buffer_index_in;
+    /* Flag to halt writes for debugging. */
+    bool write_blocked;
+
+    /* Lists of readers. */
+    struct list_head all_readers;
+    struct list_head reserved_readers;
+};
 
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /* Miscellaneous support routines.                                           */
 
 
-DECLARE_LOCKING(lock);
-
-
-static void advance_index(size_t *index)
+static void advance_index(struct buffer *buffer, size_t *index)
 {
     *index += 1;
-    if (*index >= block_count)
-        *index -= block_count;
+    if (*index >= buffer->block_count)
+        *index -= buffer->block_count;
 }
 
-static void * get_buffer(size_t index)
+static void * get_buffer(struct buffer *buffer, size_t index)
 {
-    return frame_buffer + index * fa_block_size;
+    return buffer->frame_buffer + index * buffer->block_size;
 }
 
 
@@ -65,6 +78,7 @@ static void * get_buffer(size_t index)
 
 struct reader_state
 {
+    struct buffer *buffer;          // Associated buffer
     size_t index_out;               // Next block to read
     bool underflowed;               // Set if buffer overrun for this reader
     bool running;                   // Used to halt reader
@@ -74,16 +88,13 @@ struct reader_state
 };
 
 
-LIST_HEAD(all_readers);
-LIST_HEAD(reserved_readers);
-
-/* Iterators for these two lists. */
-#define for_all_readers(reader) \
+/* Iterators for the two lists of readers. */
+#define for_all_readers(buffer, reader) \
     list_for_each_entry( \
-        struct reader_state, list_entry, reader, &all_readers)
-#define for_reserved_readers(reader) \
+        struct reader_state, list_entry, reader, &buffer->all_readers)
+#define for_reserved_readers(buffer, reader) \
     list_for_each_entry( \
-        struct reader_state, reserved_entry, reader, &reserved_readers)
+        struct reader_state, reserved_entry, reader, &buffer->reserved_readers)
 
 
 /* Updates the backlog count.  This is computed as the maximum number of
@@ -92,29 +103,30 @@ LIST_HEAD(reserved_readers);
  * are written. */
 static void update_backlog(struct reader_state *reader)
 {
-    int backlog = buffer_index_in - reader->index_out;
+    int backlog = reader->buffer->buffer_index_in - reader->index_out;
     if (backlog < 0)
-        backlog += block_count;
+        backlog += reader->buffer->block_count;
 
     if (backlog > reader->backlog)
         reader->backlog = backlog;
 }
 
 
-struct reader_state * open_reader(bool reserved_reader)
+struct reader_state * open_reader(struct buffer *buffer, bool reserved_reader)
 {
     struct reader_state *reader = malloc(sizeof(struct reader_state));
+    reader->buffer = buffer;
     reader->underflowed = false;
     reader->backlog = 0;
     reader->running = true;
     INIT_LIST_HEAD(&reader->reserved_entry);
 
-    LOCK(lock);
-    reader->index_out = buffer_index_in;
-    list_add_tail(&reader->list_entry, &all_readers);
+    LOCK(buffer->lock);
+    reader->index_out = buffer->buffer_index_in;
+    list_add_tail(&reader->list_entry, &buffer->all_readers);
     if (reserved_reader)
-        list_add_tail(&reader->reserved_entry, &reserved_readers);
-    UNLOCK(lock);
+        list_add_tail(&reader->reserved_entry, &buffer->reserved_readers);
+    UNLOCK(buffer->lock);
 
     return reader;
 }
@@ -122,10 +134,12 @@ struct reader_state * open_reader(bool reserved_reader)
 
 void close_reader(struct reader_state *reader)
 {
-    LOCK(lock);
+    struct buffer *buffer = reader->buffer;
+
+    LOCK(buffer->lock);
     list_del(&reader->list_entry);
     list_del(&reader->reserved_entry);
-    UNLOCK(lock);
+    UNLOCK(buffer->lock);
 
     free(reader);
 }
@@ -134,67 +148,71 @@ void close_reader(struct reader_state *reader)
 const void * get_read_block(
     struct reader_state *reader, int *backlog, struct timespec *ts)
 {
-    void *buffer;
-    LOCK(lock);
+    struct buffer *buffer = reader->buffer;
+    void *block;
+    LOCK(buffer->lock);
     if (reader->underflowed)
     {
         /* If we were underflowed then perform a complete reset of the read
-         * stream.  Discard everything in the buffer and start again.  This
+         * stream.  Discard everything in the block and start again.  This
          * helps the writer which can rely on this.  We'll also start by
          * reporting a synthetic gap. */
-        reader->index_out = buffer_index_in;
+        reader->index_out = buffer->buffer_index_in;
         reader->underflowed = false;
-        buffer = NULL;
+        block = NULL;
     }
     else
     {
         /* If we're on the tail of the writer then we have to wait for a new
-         * entry in the buffer, unless writing is currently halted. */
-        while (reader->running  &&  reader->index_out == buffer_index_in)
-            pwait(&lock);
+         * entry in the block, unless writing is currently halted. */
+        while (reader->running  &&
+               reader->index_out == buffer->buffer_index_in)
+            pwait(&buffer->lock);
         if (!reader->running)
-            buffer = NULL;
-        else if (frame_info[reader->index_out].gap)
+            block = NULL;
+        else if (buffer->frame_info[reader->index_out].gap)
         {
             /* Nothing to actually read at this point, just return gap
              * indicator instead. */
-            buffer = NULL;
-            advance_index(&reader->index_out);
+            block = NULL;
+            advance_index(buffer, &reader->index_out);
         }
         else
         {
-            buffer = get_buffer(reader->index_out);
+            block = get_buffer(buffer, reader->index_out);
             if (ts)
-                *ts = frame_info[reader->index_out].ts;
+                *ts = buffer->frame_info[reader->index_out].ts;
         }
     }
 
     if (backlog)
     {
-        *backlog = reader->backlog * fa_block_size;
+        *backlog = reader->backlog * buffer->block_size;
         reader->backlog = 0;
     }
-    UNLOCK(lock);
-    return buffer;
+    UNLOCK(buffer->lock);
+    return block;
 }
 
 
 void stop_reader(struct reader_state *reader)
 {
-    LOCK(lock);
+    struct buffer *buffer = reader->buffer;
+    LOCK(buffer->lock);
     reader->running = false;
-    psignal(&lock);
-    UNLOCK(lock);
+    psignal(&buffer->lock);
+    UNLOCK(buffer->lock);
 }
 
 
 bool release_read_block(struct reader_state *reader)
 {
+    struct buffer *buffer = reader->buffer;
     bool underflow;
-    LOCK(lock);
-    advance_index(&reader->index_out);
+    LOCK(buffer->lock);
+    advance_index(buffer, &reader->index_out);
     underflow = reader->underflowed;
-    UNLOCK(lock);
+    UNLOCK(buffer->lock);
     return !underflow;
 }
 
@@ -203,37 +221,36 @@ bool release_read_block(struct reader_state *reader)
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /* Writer routines.                                                          */
 
-static bool write_blocked = false;  // Used to halt writes for debugging
-
 /* Checks for the presence of a blocking reserved reader. */
-static bool blocking_readers(void)
+static bool blocking_readers(struct buffer *buffer)
 {
-    for_reserved_readers(reader)
-        if (buffer_index_in == reader->index_out  &&  reader->underflowed)
+    for_reserved_readers(buffer, reader)
+        if (buffer->buffer_index_in == reader->index_out  &&
+            reader->underflowed)
             return true;
     return false;
 }
 
 
-void * get_write_block(void)
+void * get_write_block(struct buffer *buffer)
 {
-    void *buffer;
-    LOCK(lock);
-    if (blocking_readers())
+    void *block;
+    LOCK(buffer->lock);
+    if (blocking_readers(buffer))
         /* There's a reserved reader not finished with the next block yet.
          * Bail and try again later. */
-        buffer = NULL;
+        block = NULL;
     else
         /* Normal case, just write into the current in pointer. */
-        buffer = get_buffer(buffer_index_in);
-    UNLOCK(lock);
-    return buffer;
+        block = get_buffer(buffer, buffer->buffer_index_in);
+    UNLOCK(buffer->lock);
+    return block;
 }
 
 
-void release_write_block(bool gap)
+void release_write_block(struct buffer *buffer, bool gap)
 {
-    gap = gap || write_blocked;
+    gap = gap || buffer->write_blocked;
 
     /* Get the time this block was written.  This is close enough to the
      * completion of the FA sniffer read to be a good timestamp for the last
@@ -241,43 +258,63 @@ void release_write_block(bool gap)
     struct timespec ts;
     ASSERT_IO(clock_gettime(CLOCK_REALTIME, &ts));
 
-    LOCK(lock);
-    frame_info[buffer_index_in].gap = gap;
-    frame_info[buffer_index_in].ts = ts;
-    advance_index(&buffer_index_in);
+    LOCK(buffer->lock);
+    buffer->frame_info[buffer->buffer_index_in].gap = gap;
+    buffer->frame_info[buffer->buffer_index_in].ts = ts;
+    advance_index(buffer, &buffer->buffer_index_in);
 
     /* Let all readers know if they've suffered an underflow. */
-    for_all_readers(reader)
+    for_all_readers(buffer, reader)
     {
-        if (buffer_index_in == reader->index_out)
+        if (buffer->buffer_index_in == reader->index_out)
             /* Whoops.  We've collided with a reader.  Mark the reader as
              * underflowed. */
             reader->underflowed = true;
         else
             update_backlog(reader);
     }
-    psignal(&lock);
-    UNLOCK(lock);
+    psignal(&buffer->lock);
+    UNLOCK(buffer->lock);
 }
 
 
-void enable_buffer_write(bool enabled)
+void enable_buffer_write(struct buffer *buffer, bool enabled)
 {
-    write_blocked = !enabled;
+    buffer->write_blocked = !enabled;
 }
 
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
-
-
-bool initialise_buffer(size_t _block_size, size_t _block_count)
+size_t buffer_block_size(struct buffer *buffer)
 {
-    fa_block_size = _block_size;
-    block_count = _block_count;
+    return buffer->block_size;
+}
+
+size_t reader_block_size(struct reader_state *reader)
+{
+    return buffer_block_size(reader->buffer);
+}
+
+
+bool create_buffer(
+    struct buffer **buffer, size_t block_size, size_t block_count)
+{
+    if (!TEST_NULL(*buffer = malloc(sizeof(struct buffer))))
+        return false;
+
+    (*buffer)->block_size = block_size;
+    (*buffer)->block_count = block_count;
+    /* The frame buffer must be page aligned, because we're going to write to
+     * disk with direct I/O. */
+    (*buffer)->frame_buffer = valloc(block_count * block_size);
+    (*buffer)->frame_info = malloc(block_count * sizeof(struct frame_info));
+    initialise_locking(&(*buffer)->lock);
+    (*buffer)->buffer_index_in = 0;
+    (*buffer)->write_blocked = false;
+    INIT_LIST_HEAD(&(*buffer)->all_readers);
+    INIT_LIST_HEAD(&(*buffer)->reserved_readers);
     return
-        /* The frame buffer must be page aligned, because we're going to write
-         * to disk with direct I/O. */
-        TEST_NULL(frame_buffer = valloc(block_count * fa_block_size))  &&
-        TEST_NULL(frame_info = malloc(block_count * sizeof(struct frame_info)));
+        TEST_NULL((*buffer)->frame_buffer)  &&
+        TEST_NULL((*buffer)->frame_info);
 }

@@ -33,6 +33,10 @@
 #define PROTOCOL_VERSION    "1.0"
 
 
+/* Block buffer for full resolution FA data. */
+static struct buffer *fa_block_buffer;
+
+
 static bool __attribute__((format(printf, 2, 3)))
     write_string(int sock, const char *format, ...)
 {
@@ -86,11 +90,11 @@ static bool process_command(int scon, const char *buf)
             case 'H':
                 log_message("Temporary halt command received");
                 ok = write_string(scon, "Halted\n");
-                enable_buffer_write(false);
+                enable_buffer_write(fa_block_buffer, false);
                 break;
             case 'R':
                 log_message("Resume command received");
-                enable_buffer_write(true);
+                enable_buffer_write(fa_block_buffer, true);
                 break;
 
             case 'F':
@@ -186,12 +190,13 @@ static bool process_subscribe(int scon, const char *buf)
     struct reader_state *reader = NULL;
     struct timespec ts;
     const void *block = NULL;
+    size_t fa_block_size = buffer_block_size(fa_block_buffer);
 
     bool start_ok =
         DO_PARSE(
             "subscription", parse_subscription, buf, mask,
             &want_timestamp, &want_t0)  &&
-        DO_(reader = open_reader(false))  &&
+        DO_(reader = open_reader(fa_block_buffer, false))  &&
         TEST_NULL_(
             block = get_read_block(reader, NULL, &ts),
             "No data currently available");
@@ -367,8 +372,9 @@ static void * run_server(void *context)
 
 static pthread_t server_thread;
 
-bool initialise_server(int port)
+bool initialise_server(struct buffer *buffer, int port)
 {
+    fa_block_buffer = buffer;
     struct sockaddr_in sin = {
         .sin_family = AF_INET,
         .sin_addr.s_addr = INADDR_ANY,

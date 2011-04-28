@@ -8,6 +8,7 @@ struct fa_entry { int32_t x, y; };
 #define FA_ENTRY_COUNT  256
 #define FA_FRAME_SIZE   (FA_ENTRY_COUNT * FA_ENTRY_SIZE)
 
-bool initialise_sniffer(const char * device_name);
+struct buffer;
+bool initialise_sniffer(struct buffer *buffer, const char * device_name);
 
 void terminate_sniffer(void);

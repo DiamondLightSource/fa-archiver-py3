@@ -22,6 +22,7 @@
 
 static pthread_t sniffer_id;
 
+static struct buffer *fa_block_buffer;
 static const char *fa_sniffer_device;
 
 
@@ -56,9 +57,10 @@ static void dummy_data(void *data, int block_size)
 
 static void * dummy_sniffer_thread(void *context)
 {
+    const size_t fa_block_size = buffer_block_size(fa_block_buffer);
     while (true)
     {
-        void *buffer = get_write_block();
+        void *buffer = get_write_block(fa_block_buffer);
         if (buffer == NULL)
         {
             log_message("dummy sniffer unable to write block");
@@ -67,7 +69,7 @@ static void * dummy_sniffer_thread(void *context)
         else
         {
             dummy_data(buffer, fa_block_size);
-            release_write_block(false);
+            release_write_block(fa_block_buffer, false);
         }
     }
     return NULL;
@@ -76,6 +78,7 @@ static void * dummy_sniffer_thread(void *context)
 
 static void * sniffer_thread(void *context)
 {
+    const size_t fa_block_size = buffer_block_size(fa_block_buffer);
     bool in_gap = false;    // Only report gap once
     int fa_sniffer;
     while (TEST_IO_(
@@ -84,7 +87,7 @@ static void * sniffer_thread(void *context)
     {
         while (true)
         {
-            void *buffer = get_write_block();
+            void *buffer = get_write_block(fa_block_buffer);
             if (buffer == NULL)
             {
                 /* Whoops: the archiver thread has fallen behind. */
@@ -94,7 +97,7 @@ static void * sniffer_thread(void *context)
             bool gap =
                 read(fa_sniffer, buffer, fa_block_size) <
                     (ssize_t) fa_block_size;
-            release_write_block(gap);
+            release_write_block(fa_block_buffer, gap);
             if (gap)
             {
                 if (!in_gap)
@@ -120,8 +123,9 @@ static void * sniffer_thread(void *context)
 
 
 
-bool initialise_sniffer(const char * device_name)
+bool initialise_sniffer(struct buffer *buffer, const char * device_name)
 {
+    fa_block_buffer = buffer;
     fa_sniffer_device = device_name;
     return TEST_0(pthread_create(&sniffer_id, NULL,
         device_name == NULL ? dummy_sniffer_thread : sniffer_thread, NULL));

@@ -168,9 +168,9 @@ static pthread_t transform_id;
 static pthread_t writer_id;
 
 
-bool start_disk_writer(void)
+bool start_disk_writer(struct buffer *buffer)
 {
-    reader = open_reader(true);
+    reader = open_reader(buffer, true);
     writer_running = true;
     return
         initialise_transform(header, data_index, dd_data)  &&

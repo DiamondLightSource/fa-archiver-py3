@@ -5,7 +5,7 @@
 bool initialise_disk_writer(const char *file_name, uint32_t *input_block_size);
 /* Starts writing files to disk.  Must be called after initialising the buffer
  * layer. */
-bool start_disk_writer(void);
+bool start_disk_writer(struct buffer *buffer);
 /* Orderly shutdown of the disk writer. */
 void terminate_disk_writer(void);
 

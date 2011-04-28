@@ -1,6 +1,6 @@
 /* Interface to archive server. */
 
-bool initialise_server(int port);
+bool initialise_server(struct buffer *buffer, int port);
 void terminate_server(void);
 
 /* Reports error status on the connected socket and calls pop_error_handling().
