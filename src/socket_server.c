@@ -25,6 +25,7 @@
 #include "parse.h"
 #include "transform.h"
 #include "disk.h"
+#include "decimate.h"
 
 #include "socket_server.h"
 
@@ -35,6 +36,8 @@
 
 /* Block buffer for full resolution FA data. */
 static struct buffer *fa_block_buffer;
+/* Block buffer for decimated FA data. */
+static struct buffer *decimated_buffer;
 
 
 static bool __attribute__((format(printf, 2, 3)))
@@ -73,6 +76,7 @@ static double get_mean_frame_rate(void)
  *  T   Returns earliest available timestamp
  *  V   Returns protocol identification string
  *  M   Returns configured capture mask
+ *  C   Returns live decimation factor if available
  */
 static bool process_command(int scon, const char *buf)
 {
@@ -131,6 +135,10 @@ static bool process_command(int scon, const char *buf)
                 }
                 break;
 
+            case 'C':
+                ok = write_string(scon, "%d\n", get_decimation_factor());
+                break;
+
             default:
                 ok = write_string(scon, "Unknown command '%c'\n", *buf);
                 break;
@@ -143,18 +151,29 @@ static bool process_command(int scon, const char *buf)
 /* A subscribe request is a filter mask followed by options:
  *
  *  subscription = "S" filter-mask options
- *  options = [ "T" ] [ "Z" ]
+ *  options = [ "T" ] [ "Z" ] [ "D" ]
+ *
+ * The options have the following meanings:
+ *
+ *  T   Start subscription stream with timestamp
+ *  Z   Start subscription stream with t0
+ *  D   Want decimated data stream
+ *
+ * If both T and Z are specified then the timestamp is sent first before T0.
  */
 static bool parse_subscription(
     const char **string, filter_mask_t mask,
-    bool *want_timestamp, bool *want_t0)
+    struct buffer **buffer, bool *want_timestamp, bool *want_t0)
 {
     return
         parse_char(string, 'S')  &&
         parse_mask(string, mask)  &&
         DO_(
             *want_timestamp = read_char(string, 'T');
-            *want_t0 = read_char(string, 'Z'));
+            *want_t0 = read_char(string, 'Z'))  &&
+        IF_(read_char(string, 'D'),
+            TEST_NULL_(decimated_buffer, "Decimated data not available")  &&
+            DO_(*buffer = decimated_buffer));
 }
 
 
@@ -222,14 +241,15 @@ static bool process_subscribe(int scon, const char *buf)
     /* Parse the incoming request. */
     filter_mask_t mask;
     bool want_timestamp = false, want_t0 = false;
+    struct buffer *buffer = fa_block_buffer;
     if (!DO_PARSE(
             "subscription", parse_subscription, buf, mask,
-            &want_timestamp, &want_t0))
+            &buffer, &want_timestamp, &want_t0))
         return report_socket_error(scon, false);
 
     /* See if we can start the subscription, report the final status to the
      * caller. */
-    struct reader_state *reader = open_reader(fa_block_buffer, false);
+    struct reader_state *reader = open_reader(buffer, false);
     struct timespec ts;
     const void *block = get_read_block(reader, NULL, &ts);
     bool start_ok = TEST_NULL_(block, "No data currently available");
@@ -384,9 +404,12 @@ static void * run_server(void *context)
 
 static pthread_t server_thread;
 
-bool initialise_server(struct buffer *buffer, int port)
+bool initialise_server(
+    struct buffer *fa_buffer, struct buffer *decimated, int port)
 {
-    fa_block_buffer = buffer;
+    fa_block_buffer = fa_buffer;
+    decimated_buffer = decimated;
+
     struct sockaddr_in sin = {
         .sin_family = AF_INET,
         .sin_addr.s_addr = INADDR_ANY,

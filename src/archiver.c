@@ -26,6 +26,7 @@
 #include "archiver.h"
 #include "parse.h"
 #include "reader.h"
+#include "decimate.h"
 
 
 #define K               1024
@@ -55,6 +56,8 @@ static char *pid_filename = NULL;
 static unsigned int buffer_blocks = BUFFER_BLOCKS;
 /* Socket used for serving remote connections. */
 static int server_socket = 8888;
+/* Decimation configuration file. */
+static const char *decimation_config = NULL;
 
 
 
@@ -65,6 +68,8 @@ static void usage(void)
 "Captures continuous FA streaming data to the specified <archive-file>.\n"
 "\n"
 "Options:\n"
+"    -c:  Specify decimation configuration file.  If this is specified then\n"
+"         streaming decimated data will be available for subscription.\n"
 "    -d:  Specify device to use for FA sniffer (default /dev/fa_sniffer0)\n"
 "    -b:  Specify number of buffered input blocks (default %u)\n"
 "    -v   Specify verbose output\n"
@@ -83,9 +88,10 @@ static bool process_options(int *argc, char ***argv)
     bool ok = true;
     while (ok)
     {
-        switch (getopt(*argc, *argv, "+hd:b:vtDp:s:F"))
+        switch (getopt(*argc, *argv, "+hc:d:b:vtDp:s:F"))
         {
             case 'h':   usage();                                    exit(0);
+            case 'c':   decimation_config = optarg;                 break;
             case 'd':   fa_sniffer_device = optarg;                 break;
             case 'v':   verbose_logging(true);                      break;
             case 't':   timestamp_logging(true);                    break;
@@ -196,6 +202,8 @@ static void run_archiver(void)
     log_message("Shutting down");
     terminate_server();
     terminate_sniffer();
+    if (decimation_config)
+        terminate_decimation();
     terminate_disk_writer();
     if (pid_filename)
         TEST_IO(unlink(pid_filename));
@@ -207,6 +215,7 @@ int main(int argc, char **argv)
 {
     uint32_t input_block_size;
     struct buffer *fa_block_buffer;
+    struct buffer *decimated_buffer = NULL;
     bool ok =
         process_args(argc, argv)  &&
         initialise_signals()  &&
@@ -219,7 +228,10 @@ int main(int argc, char **argv)
          * means that many startup errors go into syslog rather than stderr. */
         start_disk_writer(fa_block_buffer)  &&
         initialise_sniffer(fa_block_buffer, fa_sniffer_device)  &&
-        initialise_server(fa_block_buffer, server_socket)  &&
+        IF_(decimation_config,
+            initialise_decimation(
+                decimation_config, fa_block_buffer, &decimated_buffer))  &&
+        initialise_server(fa_block_buffer, decimated_buffer, server_socket)  &&
         initialise_reader(output_filename)  &&
         DO_(run_archiver());
 
