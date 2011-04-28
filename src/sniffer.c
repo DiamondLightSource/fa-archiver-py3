@@ -76,6 +76,7 @@ static void * dummy_sniffer_thread(void *context)
 
 static void * sniffer_thread(void *context)
 {
+    bool in_gap = false;    // Only report gap once
     int fa_sniffer;
     while (TEST_IO_(
         fa_sniffer = open(fa_sniffer_device, O_RDONLY),
@@ -86,7 +87,8 @@ static void * sniffer_thread(void *context)
             void *buffer = get_write_block();
             if (buffer == NULL)
             {
-                log_message("sniffer unable to write block");
+                /* Whoops: the archiver thread has fallen behind. */
+                log_message("Sniffer unable to write block");
                 break;
             }
             bool gap =
@@ -95,8 +97,15 @@ static void * sniffer_thread(void *context)
             release_write_block(gap);
             if (gap)
             {
-                log_message("unable to read block");
+                if (!in_gap)
+                    log_message("Unable to read block");
+                in_gap = true;
                 break;
+            }
+            else if (in_gap)
+            {
+                log_message("Block read successfully");
+                in_gap = false;
             }
         }
 
