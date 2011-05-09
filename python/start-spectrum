@@ -1,0 +1,11 @@
+#!/bin/sh
+
+PYIOC_VERSION=2-1
+PYIOC=/dls_sw/prod/R3.14.11/support/pythonSoftIoc/$PYIOC_VERSION/pythonIoc
+# PYIOC=/home/mga83/epics/pythonSoftIoc/pythonIoc
+
+export EPICS_BASE=/dls_sw/epics/R3.14.11/base
+export EPICS_CA_MAX_ARRAY_BYTES=1000000
+
+cd "$(dirname "$0")"
+exec $PYIOC spectrum.py "$@"
