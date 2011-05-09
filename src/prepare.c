@@ -42,6 +42,7 @@ static uint32_t output_block_size = 512 * K;
 static uint32_t first_decimation = 64;
 static uint32_t second_decimation = 256;
 static double sample_frequency = 10072.4;
+static bool dry_run = false;
 
 static bool read_only = false;
 
@@ -67,6 +68,7 @@ static void usage(void)
 "   -d:  Specify first decimation factor.  The default value is %"PRIu32".\n"
 "   -D:  Specify second decimation factor.  The default value is %"PRIu32".\n"
 "   -f:  Specify nominal sample frequency.  The default is %.1gHz\n"
+"   -n   Print file header but don't actually write anything.\n"
 "\n"
 "File size can be followed by one of K, M, G or T to specify sizes in\n"
 "kilo, mega, giga or terabytes, and similarly block sizes can be followed\n"
@@ -86,7 +88,7 @@ static bool process_opts(int *argc, char ***argv)
     bool ok = true;
     while (ok)
     {
-        switch (getopt(*argc, *argv, "+hs:I:O:d:D:f:"))
+        switch (getopt(*argc, *argv, "+hs:I:O:d:D:f:n"))
         {
             case 'h':
                 usage();
@@ -114,6 +116,9 @@ static bool process_opts(int *argc, char ***argv)
             case 'f':
                 ok = DO_PARSE("sample frequency",
                     parse_double, optarg, &sample_frequency);
+                break;
+            case 'n':
+                dry_run = true;
                 break;
             case '?':
             default:
@@ -167,19 +172,25 @@ static bool reset_index(int file_fd, int index_data_size)
     return ok;
 }
 
+static bool prepare_new_header(struct disk_header *header)
+{
+    return
+        initialise_header(header,
+            &archive_mask, file_size,
+            input_block_size, output_block_size,
+            first_decimation, second_decimation, sample_frequency)  &&
+        DO_(print_header(stdout, header));
+}
+
 static bool write_new_header(int file_fd, int *written)
 {
     struct disk_header *header;
     bool ok =
         TEST_NULL(header = valloc(DISK_HEADER_SIZE))  &&
-        initialise_header(header,
-            &archive_mask, file_size,
-            input_block_size, output_block_size,
-            first_decimation, second_decimation, sample_frequency)  &&
+        prepare_new_header(header)  &&
         TEST_IO(lseek(file_fd, 0, SEEK_SET))  &&
         TEST_write(file_fd, header, DISK_HEADER_SIZE)  &&
         reset_index(file_fd, header->index_data_size)  &&
-        DO_(print_header(stdout, header))  &&
         DO_(*written = DISK_HEADER_SIZE + header->index_data_size);
     free(header);
     return ok;
@@ -244,6 +255,18 @@ int main(int argc, char **argv)
                 "Unable to read file \"%s\"", file_name)  &&
             TEST_read(file_fd, header, DISK_HEADER_SIZE)  &&
             DO_(print_header(stdout, (struct disk_header *) header));
+    }
+    else if (dry_run)
+    {
+        struct disk_header header;
+        ok =
+            IF_(!file_size_given,
+                TEST_IO_(file_fd = open(file_name, O_RDONLY),
+                    "Unable to open archive \"%s\"", file_name)  &&
+                FINALLY(
+                    get_filesize(file_fd, &file_size),
+                    TEST_IO(close(file_fd))))  &&
+            prepare_new_header(&header);
     }
     else
     {
