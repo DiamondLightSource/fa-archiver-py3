@@ -84,7 +84,7 @@ static inline struct decimated_data * d_block(unsigned int id)
 static bool advance_block(void)
 {
     fa_offset += input_frame_count;
-    d_offset += input_frame_count / header->first_decimation;
+    d_offset += input_frame_count >> header->first_decimation_log2;
     return fa_offset >= header->major_sample_count;
 }
 
@@ -170,13 +170,14 @@ static void transpose_block(const void *read_block)
 /* Converts a column of N FA entries into a single entry by computing the mean,
  * min, max and standard deviation of the column. */
 static void decimate_column_one(
-    const struct fa_entry *input, struct decimated_data *output, unsigned int N)
+    const struct fa_entry *input, struct decimated_data *output,
+    unsigned int N_log2)
 {
     int64_t sumx = 0, sumy = 0;
     int32_t minx = INT32_MAX, maxx = INT32_MIN;
     int32_t miny = INT32_MAX, maxy = INT32_MIN;
     const struct fa_entry *in = input;
-    for (unsigned int i = 0; i < N; i ++)
+    for (unsigned int i = 0; i < 1U << N_log2; i ++)
     {
         int32_t x = in->x;
         int32_t y = in->y;
@@ -190,8 +191,10 @@ static void decimate_column_one(
     }
     output->min.x = minx;    output->max.x = maxx;
     output->min.y = miny;    output->max.y = maxy;
-    output->mean.x = (int32_t) (sumx / N);
-    output->mean.y = (int32_t) (sumy / N);
+    output->mean.x = (int32_t) (sumx >> N_log2);
+    output->mean.y = (int32_t) (sumy >> N_log2);
+    output->std.x = 0;
+    output->std.y = 0;
 }
 
 static void decimate_column(
@@ -199,8 +202,8 @@ static void decimate_column(
 {
     for (unsigned int i = 0; i < input_decimation_count; i ++)
     {
-        decimate_column_one(input, output, header->first_decimation);
-        input += header->first_decimation * FA_ENTRY_COUNT;
+        decimate_column_one(input, output, header->first_decimation_log2);
+        input += FA_ENTRY_COUNT << header->first_decimation_log2;
         output += 1;
     }
 }
@@ -232,12 +235,12 @@ unsigned int dd_offset;
  * further decimation.  In this case the algorithms are somewhat different. */
 static void decimate_decimation(
     const struct decimated_data *input, struct decimated_data *output,
-    unsigned int N)
+    unsigned int N_log2)
 {
     int64_t sumx = 0, sumy = 0;
     int32_t minx = INT32_MAX, maxx = INT32_MIN;
     int32_t miny = INT32_MAX, maxy = INT32_MIN;
-    for (unsigned int i = 0; i < N; i ++, input ++)
+    for (unsigned int i = 0; i < 1U << N_log2; i ++, input ++)
     {
         sumx += input->mean.x;
         sumy += input->mean.y;
@@ -246,12 +249,14 @@ static void decimate_decimation(
         if (input->min.y < miny)     miny = input->min.y;
         if (maxy < input->max.y)     maxy = input->max.y;
     }
-    output->mean.x = (int32_t) (sumx / N);
-    output->mean.y = (int32_t) (sumy / N);
+    output->mean.x = (int32_t) (sumx >> N_log2);
+    output->mean.y = (int32_t) (sumy >> N_log2);
     output->min.x = minx;
     output->max.x = maxx;
     output->min.y = miny;
     output->max.y = maxy;
+    output->std.x = 0;
+    output->std.y = 0;
 }
 
 
@@ -262,7 +267,8 @@ static void double_decimate_block(void)
 {
     /* Note that we look backwards in time one second_decimation block to pick
      * up the data to be decimated here. */
-    const struct decimated_data *input = d_block(0) - header->second_decimation;
+    const struct decimated_data *input =
+        d_block(0) - (1 << header->second_decimation_log2);
     struct decimated_data *output = dd_area + dd_offset;
 
     unsigned int written = 0;
@@ -270,7 +276,7 @@ static void double_decimate_block(void)
     {
         if (test_mask_bit(&header->archive_mask, id))
         {
-            decimate_decimation(input, output, header->second_decimation);
+            decimate_decimation(input, output, header->second_decimation_log2);
             input += header->d_sample_count;
             output += header->dd_total_count;
             written += 1;
@@ -512,8 +518,9 @@ void process_block(const void *block, uint64_t timestamp)
         transpose_block(block);
         decimate_block(block);
         bool must_write = advance_block();
-        if (fa_offset % (
-                header->first_decimation * header->second_decimation) == 0)
+        int decimation = 1 << (
+            header->first_decimation_log2 + header->second_decimation_log2);
+        if ((fa_offset & (decimation - 1)) == 0)
             double_decimate_block();
         if (must_write)
         {
@@ -542,7 +549,7 @@ bool initialise_transform(
     data_index = data_index_;
     dd_area = dd_area_;
     input_frame_count = header->input_block_size / FA_FRAME_SIZE;
-    input_decimation_count = input_frame_count / header->first_decimation;
+    input_decimation_count = input_frame_count >> header->first_decimation_log2;
     dd_offset = header->current_major_block * header->dd_sample_count;
 
     initialise_io_buffer();

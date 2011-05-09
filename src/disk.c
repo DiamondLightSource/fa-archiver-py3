@@ -36,6 +36,19 @@ static bool page_aligned(uint64_t offset, const char *description)
         "Bad page alignment for %s at %"PRIu64, description, offset);
 }
 
+static bool test_power_of_2(uint32_t value, const char *name)
+{
+    return TEST_OK_((value & -value) == value, "%s must be a power of 2", name);
+}
+
+static uint32_t uint_log2(uint32_t value)
+{
+    uint32_t result = 0;
+    while (value >>= 1)
+        result += 1;
+    return result;
+}
+
 
 bool initialise_header(
     struct disk_header *header,
@@ -57,8 +70,8 @@ bool initialise_header(
     /* Capture parameters. */
     copy_mask(&header->archive_mask, archive_mask);
     header->archive_mask_count = archive_mask_count;
-    header->first_decimation = first_decimation;
-    header->second_decimation = second_decimation;
+    header->first_decimation_log2 = uint_log2(first_decimation);
+    header->second_decimation_log2 = uint_log2(second_decimation);
     header->input_block_size = input_block_size;
 
     /* Compute the fixed size parameters describing the data layout. */
@@ -117,6 +130,8 @@ bool initialise_header(
 
     errno = 0;      // Suppresses invalid errno report from TEST_OK_ failures
     return
+        test_power_of_2(first_decimation, "First decimation")  &&
+        test_power_of_2(second_decimation, "Second decimation")  &&
         TEST_OK_(output_block_size % sysconf(_SC_PAGESIZE) == 0,
             "Output block size must be a multiple of page size")  &&
         TEST_OK_(
@@ -131,6 +146,8 @@ bool validate_header(struct disk_header *header, uint64_t file_size)
     COMPILE_ASSERT(sizeof(struct disk_header) <= DISK_HEADER_SIZE);
 
     uint32_t input_sample_count = header->input_block_size / FA_FRAME_SIZE;
+    uint32_t first_decimation  = 1 << header->first_decimation_log2;
+    uint32_t second_decimation = 1 << header->second_decimation_log2;
     errno = 0;      // Suppresses invalid error report from TEST_OK_ failures
     return
         /* Basic header validation. */
@@ -155,16 +172,16 @@ bool validate_header(struct disk_header *header, uint64_t file_size)
 
         /* Data parameter validation. */
         TEST_OK_(
-            header->d_sample_count * header->first_decimation ==
-            header->major_sample_count,
+            header->d_sample_count << header->first_decimation_log2 ==
+                header->major_sample_count,
             "Invalid first decimation: %"PRIu32" * %"PRIu32" != %"PRIu32,
-                header->d_sample_count, header->first_decimation,
+                header->d_sample_count, first_decimation,
                 header->major_sample_count)  &&
         TEST_OK_(
-            header->dd_sample_count * header->second_decimation ==
+            header->dd_sample_count << header->second_decimation_log2 ==
             header->d_sample_count,
             "Invalid second decimation: %"PRIu32" * %"PRIu32" != %"PRIu32,
-                header->dd_sample_count, header->second_decimation,
+                header->dd_sample_count, second_decimation,
                 header->d_sample_count)  &&
         TEST_OK_(
             header->archive_mask_count * (
@@ -238,9 +255,10 @@ bool validate_header(struct disk_header *header, uint64_t file_size)
 
         /* Major data layout validation. */
         TEST_OK_(
-            header->first_decimation > 1  &&  header->second_decimation > 1,
+            header->first_decimation_log2 > 0  &&
+            header->second_decimation_log2 > 0,
             "Decimation too small: %"PRIu32", %"PRIu32,
-                header->first_decimation, header->second_decimation)  &&
+                first_decimation, second_decimation)  &&
         TEST_OK_(
             header->major_sample_count > 1, "Output block size too small")  &&
         TEST_OK_(header->major_block_count > 1, "Data file too small")  &&
@@ -271,6 +289,8 @@ void print_header(FILE *out, struct disk_header *header)
         header->major_sample_count * 1e6 / header->last_duration;
     uint64_t total_sample_count =
         (uint64_t) header->major_block_count * header->major_sample_count;
+    uint32_t first_decimation  = 1 << header->first_decimation_log2;
+    uint32_t second_decimation = 1 << header->second_decimation_log2;
     double seconds = total_sample_count / sample_frequency;
     fprintf(out,
         "FA sniffer archive: %.7s, v%d.\n"
@@ -288,9 +308,8 @@ void print_header(FILE *out, struct disk_header *header)
         "Last duration: %"PRIu32" us, or %lg Hz.  Current index: %"PRIu32"\n",
         header->signature, header->version,
         mask_string, format_string,
-        header->first_decimation, header->second_decimation,
-            header->first_decimation * header->second_decimation,
-            header->archive_mask_count,
+        first_decimation, second_decimation,
+            first_decimation * second_decimation, header->archive_mask_count,
         header->input_block_size, header->input_block_size / FA_FRAME_SIZE,
         header->major_block_size, header->major_sample_count,
         header->major_block_count, total_sample_count, header->total_data_size,

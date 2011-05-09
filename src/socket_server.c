@@ -106,11 +106,11 @@ static bool process_command(int scon, const char *buf)
                 break;
             case 'd':
                 ok = write_string(scon,
-                     "%"PRIu32"\n", header->first_decimation);
+                     "%"PRIu32"\n", 1 << header->first_decimation_log2);
                 break;
             case 'D':
                 ok = write_string(scon,
-                     "%"PRIu32"\n", header->second_decimation);
+                     "%"PRIu32"\n", 1 << header->second_decimation_log2);
                 break;
             case 'T':
                 {

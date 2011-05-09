@@ -148,7 +148,7 @@ struct reader {
     size_t (*output_size)(unsigned int data_mask);
 
     unsigned int block_total_count;     // Range of block index
-    unsigned int decimation;            // FA samples per read sample
+    unsigned int decimation_log2;       // FA samples per read sample
     unsigned int fa_blocks_per_block;   // Index blocks per read block
     unsigned int samples_per_fa_block;  // Samples in a single FA block
 };
@@ -168,9 +168,9 @@ static void fixup_offset(
     const struct reader *reader, unsigned int ix_block,
     unsigned int *block, unsigned int *offset, uint64_t *available)
 {
-    *available /= reader->decimation;
+    *available >>= reader->decimation_log2;
     *offset =
-        *offset / reader->decimation +
+        (*offset >> reader->decimation_log2) +
         (ix_block % reader->fa_blocks_per_block) * reader->samples_per_fa_block;
     *block = ix_block / reader->fa_blocks_per_block;
 }
@@ -178,7 +178,7 @@ static void fixup_offset(
 
 /* Converts data block and offset into an index block and data offset.  Note
  * that the computed data offset is still in reader sized samples, to convert to
- * FA samples a further multiplication by reader->decimation is needed. */
+ * FA samples a further multiplication by reader->decimation_log2 is needed. */
 static void convert_data_to_index(
     const struct reader *reader,
     unsigned int data_block, unsigned int data_offset,
@@ -236,7 +236,7 @@ static bool compute_end_samples(
             end_offset - start_offset;
 
         /* Finally convert FA samples to requested samples. */
-        *samples = fa_samples / reader->decimation;
+        *samples = fa_samples >> reader->decimation_log2;
         ok = TEST_OK_(*samples > 0, "No samples in selected range");
     }
     return ok;
@@ -326,7 +326,7 @@ static bool send_gaplist(
             /* The first data point needs to be adjusted so that it's the first
              * delivered data point, not the first point in the index block. */
             gap_data.data_index = 0;
-            gap_data.id_zero += data_offset * reader->decimation;
+            gap_data.id_zero += data_offset << reader->decimation_log2;
             gap_data.timestamp +=
                 (uint64_t) data_offset * data_index->duration /
                     reader->samples_per_fa_block;
@@ -558,6 +558,7 @@ static void d_write_lines(
             if (data_mask & 1)  *output++ = input[0];
             if (data_mask & 2)  *output++ = input[1];
             if (data_mask & 4)  *output++ = input[2];
+            if (data_mask & 8)  *output++ = input[3];
         }
         offset += 1;
     }
@@ -575,7 +576,7 @@ static size_t d_output_size(unsigned int data_mask)
 {
     unsigned int count =
         ((data_mask >> 0) & 1) + ((data_mask >> 1) & 1) +
-        ((data_mask >> 2) & 1);
+        ((data_mask >> 2) & 1) + ((data_mask >> 3) & 1);
     return count * FA_ENTRY_SIZE;
 }
 
@@ -584,7 +585,7 @@ static struct reader fa_reader = {
     .read_block = read_fa_block,
     .write_lines = fa_write_lines,
     .output_size = fa_output_size,
-    .decimation = 1,
+    .decimation_log2 = 0,
     .fa_blocks_per_block = 1,
 };
 
@@ -645,7 +646,7 @@ static bool parse_source(const char **string, struct read_parse *parse)
     }
     else if (read_char(string, 'D'))
     {
-        parse->data_mask = 7;       // Default to all fields if no mask
+        parse->data_mask = 15;      // Default to all fields if no mask
         if (read_char(string, 'D'))
             parse->reader = &dd_reader;
         else
@@ -653,7 +654,7 @@ static bool parse_source(const char **string, struct read_parse *parse)
         if (read_char(string, 'F'))
             return
                 parse_uint(string, &parse->data_mask)  &&
-                TEST_OK_(0 < parse->data_mask  &&  parse->data_mask <= 7,
+                TEST_OK_(0 < parse->data_mask  &&  parse->data_mask <= 15,
                     "Invalid decimated data fields: %x", parse->data_mask);
         else
             return true;
@@ -752,12 +753,12 @@ bool initialise_reader(const char *archive)
     fa_reader.block_total_count     = header->major_block_count;
     fa_reader.samples_per_fa_block  = header->major_sample_count;
 
-    d_reader.decimation             = header->first_decimation;
+    d_reader.decimation_log2        = header->first_decimation_log2;
     d_reader.block_total_count      = header->major_block_count;
     d_reader.samples_per_fa_block   = header->d_sample_count;
 
-    dd_reader.decimation =
-        header->first_decimation * header->second_decimation;
+    dd_reader.decimation_log2 =
+        header->first_decimation_log2 + header->second_decimation_log2;
     dd_reader.fa_blocks_per_block =
         buffer_size / sizeof(struct decimated_data) / header->dd_sample_count;
     dd_reader.block_total_count =

@@ -5,7 +5,7 @@ struct data_index;
 
 
 struct decimated_data {
-    struct fa_entry mean, min, max;
+    struct fa_entry mean, min, max, std;
 };
 
 

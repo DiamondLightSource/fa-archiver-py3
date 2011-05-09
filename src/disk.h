@@ -67,10 +67,10 @@ struct disk_header {
 
     /* Description of data capture parameters. */
     struct filter_mask archive_mask; // List of BPM ids archived in this file
-    uint32_t archive_mask_count; // Number of BPMs captured in this file
-    uint32_t first_decimation;  // Decimation factors
-    uint32_t second_decimation;
-    uint32_t input_block_size;  // Controls read size from sniffer device
+    uint32_t archive_mask_count;     // Number of BPMs captured in this file
+    uint32_t first_decimation_log2;  // Decimation factors, stored as shifts
+    uint32_t second_decimation_log2;
+    uint32_t input_block_size;       // Controls read size from sniffer device
 
     /* Description of high level data structure.  The data offsets are a
      * multiple of page size and the data sizes are rounded up to a multiple
@@ -113,7 +113,7 @@ struct data_index {
 
 
 #define DISK_SIGNATURE      "FASNIFF"
-#define DISK_VERSION        2
+#define DISK_VERSION        3
 
 
 /* Two helper routines for converting sample number (within a major block) and
