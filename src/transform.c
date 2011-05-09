@@ -169,8 +169,8 @@ static void transpose_block(const void *read_block)
  * need to use a long accumulator.  Unfortunately on 32 bit systems we have no
  * intrinsic support for 128 bit integers, so we need some conditional
  * compilation here.
- * The only operations we need are accumulation (of 64 bit intermediates) and
- * shifting out the result. */
+ *    The only operations we need are accumulation (of 64 and 128 bit
+ * intermediates) and shifting out the result. */
 
 #ifdef __i386__
 /* Only have 64 bit integers, need to emulate the 128 bit accumulator. */
@@ -178,21 +178,52 @@ static void transpose_block(const void *read_block)
 struct uint128 { uint64_t low; uint64_t high; };
 typedef struct uint128 uint128_t;
 
-static void accum128(uint128_t *acc, uint64_t val)
+/* It's really rather annoying, there doesn't seem to be any good way other than
+ * resorting to the assembler below to efficiently compute with 128 bit numbers.
+ * The principal problem is that the carry is inaccessible.  The alternative
+ * trick of writing:
+ *      acc->low += val; if (acc->low < val) acc->high += 1;
+ * generates horrible code.
+ *
+ * Some notes on the assembler constraints, because the documentation can be a
+ * bit opaque and some of the interactions are quite subtle:
+ *
+ *  1.  The form of the asm statement is
+ *          __asm__(<code> : <outputs> : <inputs> : <effects>)
+ *  2.  We must at least specify "m"(*acc) otherwise the code can end up being
+ *      discarded (as having no significant side effects).
+ *  3.  The "=&r"(t) output assigns a temporary register.  The & ensures that
+ *      this register doesn't overlap with any of the input registers.
+ *  4.  The register modifier = is used for an output which is written without
+ *      being read, + is used for an output which is also read. */
+
+static void accum128_64(uint128_t *acc, uint64_t val)
 {
-    /* It's really rather annoying, there doesn't seem to be any good way other
-     * than resorting to this assembler to efficiently compute the accumulation.
-     * The main problem is that the carry is inaccessible.  The alternative
-     * trick of writing:
-     *      acc->low += val; if (acc->low < val) acc->high += 1;
-     * generates horrible code. */
     __asm__(
-        "addl   %%eax, 0(%[acc])" "\n\t"
-        "adcl   %%edx, 4(%[acc])" "\n\t"
+        "addl   %[vall], 0(%[acc])" "\n\t"
+        "adcl   %[valh], 4(%[acc])" "\n\t"
         "adcl   $0, 8(%[acc])" "\n\t"
         "adcl   $0, 12(%[acc])"
         :
-        : [acc] "r" (acc), "Ar" (val), "m" (*acc)
+        : [acc] "r" (acc), "m" (*acc),
+          [vall] "r" ((uint32_t) val), [valh] "r" ((uint32_t) (val >> 32))
+        : "cc" );
+}
+
+static void accum128_128(uint128_t *acc, const uint128_t *val)
+{
+    int t;
+    __asm__(
+        "movl   0(%[val]), %[t]" "\n\t"
+        "addl   %[t], 0(%[acc])" "\n\t"
+        "movl   4(%[val]), %[t]" "\n\t"
+        "adcl   %[t], 4(%[acc])" "\n\t"
+        "movl   8(%[val]), %[t]" "\n\t"
+        "adcl   %[t], 8(%[acc])" "\n\t"
+        "movl   12(%[val]), %[t]" "\n\t"
+        "adcl   %[t], 12(%[acc])"
+        : [t] "=&r" (t), "+m" (*acc)
+        : [acc] "r" (acc), [val] "r" (val), "m" (*val)
         : "cc" );
 }
 
@@ -206,9 +237,14 @@ static uint64_t sr128(uint128_t *acc, unsigned int shift)
 
 typedef __uint128_t uint128_t;
 
-static void accum128(uint128_t *acc, uint64_t val)
+static void accum128_64(uint128_t *acc, uint64_t val)
 {
     *acc += val;
+}
+
+static void accum128_128(uint128_t *acc, const uint128_t *val)
+{
+    *acc += *val;
 }
 
 static uint64_t sr128(uint128_t *acc, unsigned int shift)
@@ -219,15 +255,84 @@ static uint64_t sr128(uint128_t *acc, unsigned int shift)
 #endif
 
 
-static void accum_square(uint128_t *acc, int64_t val)
-{
-    accum128(acc, val * val);
-}
+/* The calculation of variance is really rather delicate, as it is enormously
+ * susceptible to numerical problems.  The "proper" way to compute variance is
+ * using the formula
+ *      var = SUM((x[i] - m)^2) / N   where  m = mean(x) = SUM(x[i]) / N  .
+ * This approach isn't so great when dealing with a stream of data, which we
+ * have in the case of double decimation, as we need to pass over the dataset
+ * twice.  The alternative calulcation is:
+ *      var = SUM(x[i]^2) / N - m^2  ,
+ * but this is *very* demanding on the intermediate values, particularly if the
+ * result is to be accurate when m is large.  In this application x[i] is 32
+ * bits, N maybe up to 16 bits, and so we need around 80 bits for the sum, hence
+ * the use of 128 bits for the accumulator. */
 
 static int32_t compute_std(uint128_t *acc, int64_t sum, int shift)
 {
+    /* It's sufficiently accurate and actually faster to change over to floating
+     * point arithmetic at this point. */
     double mean = sum / (double) (1 << shift);
-    return (int32_t) sqrt(sr128(acc, shift) - mean * mean);
+    double var = sr128(acc, shift) - mean * mean;
+    /* Note that rounding errors still allow var in the range -1..0, so need to
+     * truncate these to zero. */
+    return var > 0 ? (int32_t) sqrt(var) : 0;
+}
+
+
+/* Accumulator for generating decimated data. */
+struct fa_accum {
+    int32_t minx, maxx, miny, maxy;
+    int64_t sumx, sumy;
+    uint128_t sum_sq_x, sum_sq_y;
+};
+
+static void initialise_accum(struct fa_accum *acc)
+{
+    memset(acc, 0, sizeof(struct fa_accum));
+    acc->minx = INT32_MAX;
+    acc->maxx = INT32_MIN;
+    acc->miny = INT32_MAX;
+    acc->maxy = INT32_MIN;
+}
+
+static void accum_xy(struct fa_accum *acc, const struct fa_entry *input)
+{
+    int32_t x = input->x;
+    int32_t y = input->y;
+    if (x < acc->minx)   acc->minx = x;
+    if (acc->maxx < x)   acc->maxx = x;
+    if (y < acc->miny)   acc->miny = y;
+    if (acc->maxy < y)   acc->maxy = y;
+    acc->sumx += x;
+    acc->sumy += y;
+    accum128_64(&acc->sum_sq_x, (int64_t) x * x);
+    accum128_64(&acc->sum_sq_y, (int64_t) y * y);
+}
+
+static void accum_accum(struct fa_accum *result, const struct fa_accum *input)
+{
+    if (input->minx < result->minx)   result->minx = input->minx;
+    if (result->maxx < input->maxx)   result->maxx = input->maxx;
+    if (input->miny < result->miny)   result->miny = input->miny;
+    if (result->maxy < input->maxy)   result->maxy = input->maxy;
+    result->sumx += input->sumx;
+    result->sumy += input->sumy;
+    accum128_128(&result->sum_sq_x, &input->sum_sq_x);
+    accum128_128(&result->sum_sq_y, &input->sum_sq_y);
+}
+
+static void compute_result(
+    struct fa_accum *acc, unsigned int shift, struct decimated_data *result)
+{
+    result->min.x = acc->minx;
+    result->max.x = acc->maxx;
+    result->min.y = acc->miny;
+    result->max.y = acc->maxy;
+    result->mean.x = (int32_t) (acc->sumx >> shift);
+    result->mean.y = (int32_t) (acc->sumy >> shift);
+    result->std.x = compute_std(&acc->sum_sq_x, acc->sumx, shift);
+    result->std.y = compute_std(&acc->sum_sq_y, acc->sumy, shift);
 }
 
 
@@ -235,54 +340,41 @@ static int32_t compute_std(uint128_t *acc, int64_t sum, int shift)
 /* Single data decimation. */
 
 
+/* Array of result accumulators for double decimation. */
+struct fa_accum *double_accumulators;
+
 
 /* Converts a column of N FA entries into a single entry by computing the mean,
  * min, max and standard deviation of the column. */
 static void decimate_column_one(
     const struct fa_entry *input, struct decimated_data *output,
-    unsigned int N_log2)
+    struct fa_accum *double_accum, unsigned int N_log2)
 {
-    int64_t sumx = 0, sumy = 0;
-    int32_t minx = INT32_MAX, maxx = INT32_MIN;
-    int32_t miny = INT32_MAX, maxy = INT32_MIN;
-    const struct fa_entry *in = input;
-    uint128_t sum_sq_x, sum_sq_y;
-    memset(&sum_sq_x, 0, sizeof(uint128_t));
-    memset(&sum_sq_y, 0, sizeof(uint128_t));
+    struct fa_accum accum;
+    initialise_accum(&accum);
 
     for (unsigned int i = 0; i < 1U << N_log2; i ++)
     {
-        int32_t x = in->x;
-        int32_t y = in->y;
-        sumx += x;
-        sumy += y;
-        accum_square(&sum_sq_x, x);
-        accum_square(&sum_sq_y, y);
-        if (x < minx)   minx = x;
-        if (maxx < x)   maxx = x;
-        if (y < miny)   miny = y;
-        if (maxy < y)   maxy = y;
-        in += FA_ENTRY_COUNT;
+        accum_xy(&accum, input);
+        input += FA_ENTRY_COUNT;
     }
-    output->min.x = minx;    output->max.x = maxx;
-    output->min.y = miny;    output->max.y = maxy;
-    output->mean.x = (int32_t) (sumx >> N_log2);
-    output->mean.y = (int32_t) (sumy >> N_log2);
-    output->std.x = compute_std(&sum_sq_x, sumx, N_log2);
-    output->std.y = compute_std(&sum_sq_y, sumy, N_log2);
+    compute_result(&accum, N_log2, output);
+
+    accum_accum(double_accum, &accum);
 }
 
 static void decimate_column(
-    const struct fa_entry *input, struct decimated_data *output)
+    const struct fa_entry *input, struct decimated_data *output,
+    struct fa_accum *double_accums)
 {
     for (unsigned int i = 0; i < input_decimation_count; i ++)
     {
-        decimate_column_one(input, output, header->first_decimation_log2);
+        decimate_column_one(
+            input, output, double_accums, header->first_decimation_log2);
         input += FA_ENTRY_COUNT << header->first_decimation_log2;
         output += 1;
     }
 }
-
 
 static void decimate_block(const void *read_block)
 {
@@ -291,7 +383,9 @@ static void decimate_block(const void *read_block)
     {
         if (test_mask_bit(&header->archive_mask, id))
         {
-            decimate_column(read_block + FA_ENTRY_SIZE * id, d_block(written));
+            decimate_column(
+                read_block + FA_ENTRY_SIZE * id, d_block(written),
+                &double_accumulators[written]);
             written += 1;
         }
     }
@@ -304,35 +398,7 @@ static void decimate_block(const void *read_block)
 
 /* Current offset into DD data area. */
 unsigned int dd_offset;
-
-
-/* Similar to decimate_column above, but condenses already decimated data by
- * further decimation.  In this case the algorithms are somewhat different. */
-static void decimate_decimation(
-    const struct decimated_data *input, struct decimated_data *output,
-    unsigned int N_log2)
-{
-    int64_t sumx = 0, sumy = 0;
-    int32_t minx = INT32_MAX, maxx = INT32_MIN;
-    int32_t miny = INT32_MAX, maxy = INT32_MIN;
-    for (unsigned int i = 0; i < 1U << N_log2; i ++, input ++)
-    {
-        sumx += input->mean.x;
-        sumy += input->mean.y;
-        if (input->min.x < minx)     minx = input->min.x;
-        if (maxx < input->max.x)     maxx = input->max.x;
-        if (input->min.y < miny)     miny = input->min.y;
-        if (maxy < input->max.y)     maxy = input->max.y;
-    }
-    output->mean.x = (int32_t) (sumx >> N_log2);
-    output->mean.y = (int32_t) (sumy >> N_log2);
-    output->min.x = minx;
-    output->max.x = maxx;
-    output->min.y = miny;
-    output->max.y = maxy;
-    output->std.x = 0;
-    output->std.y = 0;
-}
+unsigned int output_id_count;
 
 
 
@@ -340,25 +406,33 @@ static void decimate_decimation(
  * the in memory DD block. */
 static void double_decimate_block(void)
 {
-    /* Note that we look backwards in time one second_decimation block to pick
-     * up the data to be decimated here. */
-    const struct decimated_data *input =
-        d_block(0) - (1 << header->second_decimation_log2);
     struct decimated_data *output = dd_area + dd_offset;
+    unsigned int decimation_log2 =
+        header->first_decimation_log2 + header->second_decimation_log2;
 
-    unsigned int written = 0;
-    for (unsigned int id = 0; id < FA_ENTRY_COUNT; id ++)
+    for (unsigned int i = 0; i < output_id_count; i ++)
     {
-        if (test_mask_bit(&header->archive_mask, id))
-        {
-            decimate_decimation(input, output, header->second_decimation_log2);
-            input += header->d_sample_count;
-            output += header->dd_total_count;
-            written += 1;
-        }
+        compute_result(&double_accumulators[i], decimation_log2, output);
+        initialise_accum(&double_accumulators[i]);
+        output += header->dd_total_count;
     }
 
     dd_offset = (dd_offset + 1) % header->dd_total_count;
+}
+
+
+static void reset_double_decimation(void)
+{
+    dd_offset = header->current_major_block * header->dd_sample_count;
+    for (unsigned int i = 0; i < output_id_count; i ++)
+        initialise_accum(&double_accumulators[i]);
+}
+
+static void initialise_double_decimation(void)
+{
+    output_id_count = count_mask_bits(&header->archive_mask);
+    double_accumulators = calloc(output_id_count, sizeof(struct fa_accum));
+    reset_double_decimation();
 }
 
 
@@ -611,7 +685,7 @@ void process_block(const void *block, uint64_t timestamp)
          * far. */
         reset_block();
         reset_index();
-        dd_offset = header->current_major_block * header->dd_sample_count;
+        reset_double_decimation();
     }
 }
 
@@ -625,8 +699,8 @@ bool initialise_transform(
     dd_area = dd_area_;
     input_frame_count = header->input_block_size / FA_FRAME_SIZE;
     input_decimation_count = input_frame_count >> header->first_decimation_log2;
-    dd_offset = header->current_major_block * header->dd_sample_count;
 
+    initialise_double_decimation();
     initialise_io_buffer();
     initialise_index();
     return true;
