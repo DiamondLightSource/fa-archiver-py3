@@ -157,8 +157,12 @@ static bool read_one_line(
     errno = 0;
     *eof = fgets(line_buffer, line_length, input) == NULL;
     if (*eof)
+    {
+        *length_read = 0;
+        line_buffer[0] = '\0';
         return TEST_OK_(errno == 0,
             "Error reading file on line %d", line_number);
+    }
     else
     {
         *length_read = strlen(line_buffer);
@@ -227,10 +231,9 @@ bool config_parse_file(
         ok =
             read_line(
                 input, line_buffer, sizeof(line_buffer), &line_number, &eof)  &&
-            IF_(!eof,
-                do_parse_line(
-                    file_name, line_number, line_buffer,
-                    config_table, config_size, seen));
+            do_parse_line(
+                file_name, line_number, line_buffer,
+                config_table, config_size, seen);
     }
     fclose(input);
 
