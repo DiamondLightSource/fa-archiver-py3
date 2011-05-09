@@ -29,18 +29,19 @@ execfile(
     globals())
 
 
+decimation = falib.get_decimation()
+
 builder.SetDeviceName('%s-DI-FAAN-01' % location)
 
 
 
-SAMPLE_SIZE = 10000
+SAMPLE_SIZE = 1000
 # Nominal sample frequency used to compute exitation waveform.
-F_S = 10072
+F_S = 10072 / decimation
 
 
 
 # ------------------------------------------------------------------------------
-# Computation of BPM id, largely lifted from CS-DI-IOC-01/monitor.py
 
 def load_bpm_list():
     '''Loads list of ids and bpms from given file.'''
@@ -166,7 +167,6 @@ class mean:
         self.sum[:] = 0
 
     def set_target(self, target):
-        print 'set_target', target
         self.target = target
 
     def update(self, value):
@@ -192,7 +192,7 @@ class updater:
         cothread.Spawn(self.run)
 
     def subscription(self):
-        sub = falib.subscription(FA_IDS, server=FA_SERVER)
+        sub = falib.subscription(FA_IDS, server=FA_SERVER, decimated=True)
         mean.reset()
         while True:
             r, t0 = sub.read_t0(SAMPLE_SIZE)
