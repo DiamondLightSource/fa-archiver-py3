@@ -1,13 +1,5 @@
 /* Header for data transposition and reduction functionality. */
 
-struct disk_header;
-struct data_index;
-
-
-struct decimated_data {
-    struct fa_entry mean, min, max, std;
-};
-
 
 /* Processes a single input block by transposing and decimation.  If a major
  * block is filled then it is also written to disk. */

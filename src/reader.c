@@ -18,9 +18,9 @@
 #include "mask.h"
 #include "parse.h"
 #include "buffer.h"
-#include "transform.h"
 #include "locking.h"
 #include "disk.h"
+#include "transform.h"
 #include "disk_writer.h"
 #include "socket_server.h"
 

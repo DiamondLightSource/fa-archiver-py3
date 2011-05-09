@@ -23,8 +23,8 @@
 #include "buffer.h"
 #include "reader.h"
 #include "parse.h"
-#include "transform.h"
 #include "disk.h"
+#include "transform.h"
 #include "decimate.h"
 
 #include "socket_server.h"

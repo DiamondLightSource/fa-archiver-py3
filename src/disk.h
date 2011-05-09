@@ -1,5 +1,10 @@
 /* Description of on-disk storage. */
 
+struct decimated_data {
+    struct fa_entry mean, min, max, std;
+};
+
+
 /* A single page is allocated to the disk header. */
 #define DISK_HEADER_SIZE    4096
 
