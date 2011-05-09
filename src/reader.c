@@ -699,11 +699,11 @@ static bool parse_end(const char **string, uint64_t *end, uint64_t *samples)
 static bool parse_options(const char **string, struct read_parse *parse)
 {
     parse->send_sample_count = read_char(string, 'N');
-    parse->send_all_data = read_char(string, 'A');
-    parse->timestamp = read_char(string, 'T');
-    parse->gaplist = read_char(string, 'G');
-    parse->only_contiguous = read_char(string, 'C');
-    parse->check_id0 = read_char(string, 'Z');
+    parse->send_all_data     = read_char(string, 'A');
+    parse->timestamp         = read_char(string, 'T');
+    parse->gaplist           = read_char(string, 'G');
+    parse->only_contiguous   = read_char(string, 'C');
+    parse->check_id0         = read_char(string, 'Z');
     return true;
 }
 
