@@ -9,7 +9,7 @@ fprintf(file, '# Transition: %g%% to %g%% of decimation, %d point FIR\n', ...
     100 * filter.pass, 100 * filter.stop, len);
 fprintf(file, 'decimation_factor = %d\n', filter.cic_decimation);
 fprintf(file, 'filter_decimation = %d\n', filter.fir_decimation);
-fprintf(file, 'history_length =');
+fprintf(file, 'comb_orders =');
 fprintf(file, ' %d', filter.comb);
 fprintf(file, '\n');
 fprintf(file, 'compensation_filter = \\\n');

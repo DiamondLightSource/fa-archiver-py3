@@ -22,16 +22,16 @@ bool config_parse_file(
     const char *file_name, const struct config_entry *config_table,
     size_t config_size);
 
-#define DECLARE_ARRAY_TYPE(type) \
-    struct type##_array \
+#define DECLARE_ARRAY_TYPE(type, type_name) \
+    struct type_name##_array \
     { \
-        int count; \
+        unsigned int count; \
         type *data; \
     }
 
-DECLARE_ARRAY_TYPE(int);
-DECLARE_ARRAY_TYPE(double);
-DECLARE_ARRAY_TYPE(void);
+DECLARE_ARRAY_TYPE(unsigned int, uint);
+DECLARE_ARRAY_TYPE(double, double);
+DECLARE_ARRAY_TYPE(void, void);
 
-bool parse_int_array(const char **string, struct int_array *result);
+bool parse_uint_array(const char **string, struct uint_array *result);
 bool parse_double_array(const char **string, struct double_array *result);

@@ -56,11 +56,11 @@ static bool parse_array(
 }
 
 
-bool parse_int_array(const char **string, struct int_array *result)
+bool parse_uint_array(const char **string, struct uint_array *result)
 {
     return parse_array(
-        string, (parser_t) parse_int,
-        (struct void_array *) result, sizeof(int));
+        string, (parser_t) parse_uint,
+        (struct void_array *) result, sizeof(unsigned int));
 }
 
 bool parse_double_array(const char **string, struct double_array *result)
