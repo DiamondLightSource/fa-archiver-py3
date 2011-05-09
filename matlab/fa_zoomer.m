@@ -38,8 +38,11 @@ function fa_zoomer(server)
         'Error message or [bpm count] samples/decimation');
     h.maxpts = control('edit', num2str(1e6), 80, ...
         'Maximum number of sample points');
-    h.ylim = control('checkbox', 'Zoomed', 80, ...
-        'Limit vertical scale to +-100um', 'Value', 1);
+    h.ylim = control('checkbox', 'Zoomed', 70, ...
+        'Limit vertical scale to +-100um', 'Value', 1, ...
+        'Callback', protect(@reload_plot));
+    h.show_std = control('checkbox', 'Show std', 75, ...
+        'Show standard deviation', 'Callback', protect(@reload_plot));
     clear global h_pos;
     h.history = cell(0, 2);
 
@@ -119,6 +122,13 @@ function zoom_in_callback(fig, event)
 end
 
 
+function reload_plot(fig, event)
+    h = guidata(fig);
+    global data;
+    plotfa(h, data);
+end
+
+
 % Loads the requested range of data.
 function load_data(fig, range, type, save)
     h = guidata(fig);
@@ -132,7 +142,7 @@ function load_data(fig, range, type, save)
 
     busy;
     data = fa_load(range, pvs, type, h.server);
-    plotfa(data);
+    plotfa(h, data);
     describe;
 end
 
@@ -161,19 +171,33 @@ function spectrogram_callback(fig, event)
 end
 
 
-function plotfa(d)
-    h = guidata(gcf);
+function plotfa(h, d)
+    show_std = get(h.show_std, 'Value');
+    if get(h.ylim, 'Value')
+        if length(size(d.data)) == 4  &&  show_std
+            set_ylim = [0 10];
+        else
+            set_ylim = [-100 100];
+        end
+    else
+        set_ylim = [];
+    end
+
     for n = 1:2
         subplot(2, 1, n)
         if length(size(d.data)) == 4
-            plot(d.t, 1e-3 * squeeze(d.data(n, 2, :, :))); hold on
-            plot(d.t, 1e-3 * squeeze(d.data(n, 3, :, :))); hold off
+            if show_std
+                plot(d.t, 1e-3 * squeeze(d.data(n, 4, :, :)))
+            else
+                plot(d.t, 1e-3 * squeeze(d.data(n, 2, :, :))); hold on
+                plot(d.t, 1e-3 * squeeze(d.data(n, 3, :, :))); hold off
+            end
         else
             plot(d.t, 1e-3 * squeeze(d.data(n, :, :)))
         end
 
         xlim([d.t(1) d.t(end)]);
-        if get(h.ylim, 'Value'); ylim([-100 100]); end
+        if length(set_ylim) > 0; ylim(set_ylim); end
         label_axis(n)
     end
 end
