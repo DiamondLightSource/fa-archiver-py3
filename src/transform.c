@@ -163,6 +163,75 @@ static void transpose_block(const void *read_block)
 
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+/* Support for variance calculation. */
+
+/* To avoid overflow and to support the incremental calculation of variance we
+ * need to use a long accumulator.  Unfortunately on 32 bit systems we have no
+ * intrinsic support for 128 bit integers, so we need some conditional
+ * compilation here.
+ * The only operations we need are accumulation (of 64 bit intermediates) and
+ * shifting out the result. */
+
+#ifdef __i386__
+/* Only have 64 bit integers, need to emulate the 128 bit accumulator. */
+
+struct uint128 { uint64_t low; uint64_t high; };
+typedef struct uint128 uint128_t;
+
+static void accum128(uint128_t *acc, uint64_t val)
+{
+    /* It's really rather annoying, there doesn't seem to be any good way other
+     * than resorting to this assembler to efficiently compute the accumulation.
+     * The main problem is that the carry is inaccessible.  The alternative
+     * trick of writing:
+     *      acc->low += val; if (acc->low < val) acc->high += 1;
+     * generates horrible code. */
+    __asm__(
+        "addl   %%eax, 0(%[acc])" "\n\t"
+        "adcl   %%edx, 4(%[acc])" "\n\t"
+        "adcl   $0, 8(%[acc])" "\n\t"
+        "adcl   $0, 12(%[acc])"
+        :
+        : [acc] "r" (acc), "Ar" (val), "m" (*acc)
+        : "cc" );
+}
+
+static uint64_t sr128(uint128_t *acc, unsigned int shift)
+{
+    return (acc->low >> shift) | (acc->high << (64 - shift));
+}
+
+#else
+/* Assume built-in 128 bit integers. */
+
+typedef __uint128_t uint128_t;
+
+static void accum128(uint128_t *acc, uint64_t val)
+{
+    *acc += val;
+}
+
+static uint64_t sr128(uint128_t *acc, unsigned int shift)
+{
+    return *acc >> shift;
+}
+
+#endif
+
+
+static void accum_square(uint128_t *acc, int64_t val)
+{
+    accum128(acc, val * val);
+}
+
+static int32_t compute_std(uint128_t *acc, int64_t sum, int shift)
+{
+    double mean = sum / (double) (1 << shift);
+    return (int32_t) sqrt(sr128(acc, shift) - mean * mean);
+}
+
+
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /* Single data decimation. */
 
 
@@ -177,12 +246,18 @@ static void decimate_column_one(
     int32_t minx = INT32_MAX, maxx = INT32_MIN;
     int32_t miny = INT32_MAX, maxy = INT32_MIN;
     const struct fa_entry *in = input;
+    uint128_t sum_sq_x, sum_sq_y;
+    memset(&sum_sq_x, 0, sizeof(uint128_t));
+    memset(&sum_sq_y, 0, sizeof(uint128_t));
+
     for (unsigned int i = 0; i < 1U << N_log2; i ++)
     {
         int32_t x = in->x;
         int32_t y = in->y;
         sumx += x;
         sumy += y;
+        accum_square(&sum_sq_x, x);
+        accum_square(&sum_sq_y, y);
         if (x < minx)   minx = x;
         if (maxx < x)   maxx = x;
         if (y < miny)   miny = y;
@@ -193,8 +268,8 @@ static void decimate_column_one(
     output->min.y = miny;    output->max.y = maxy;
     output->mean.x = (int32_t) (sumx >> N_log2);
     output->mean.y = (int32_t) (sumy >> N_log2);
-    output->std.x = 0;
-    output->std.y = 0;
+    output->std.x = compute_std(&sum_sq_x, sumx, N_log2);
+    output->std.y = compute_std(&sum_sq_y, sumy, N_log2);
 }
 
 static void decimate_column(
