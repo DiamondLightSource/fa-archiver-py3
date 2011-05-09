@@ -25,15 +25,15 @@ function fa_zoomer(server)
     h_pos = 10;
     h.bpm_list = control('edit', '4', 60, 'List of BPM FA ids');
     control('pushbutton', 'Back', 40, 'Return to previous zoom', ...
-        'Callback', @back_callback);
+        'Callback', protect(@back_callback));
     control('pushbutton', 'Full', 40, 'View entire archive history', ...
-        'Callback', @full_archive_callback);
+        'Callback', protect(@full_archive_callback));
     control('pushbutton', '24h', 40, 'View last 24 hours', ...
-        'Callback', @last_day_callback);
+        'Callback', protect(@last_day_callback));
     control('pushbutton', 'Zoom', 60, 'Update zoomed area from archive', ...
-        'Callback', @zoom_in_callback);
+        'Callback', protect(@zoom_in_callback));
     control('pushbutton', 'Spectrogram', 100, 'Show as spectrogram', ...
-        'Callback', @spectrogram_callback);
+        'Callback', protect(@spectrogram_callback));
     h.message = control('text', '', 150, ...
         'Error message or [bpm count] samples/decimation');
     h.maxpts = control('edit', num2str(1e6), 80, ...
@@ -58,6 +58,19 @@ function result = control(style, value, width, tooltip, varargin)
     result = uicontrol( ...
         'Style', style, 'String', value, 'Position', position, ...
         'TooltipString', tooltip, varargin{:});
+end
+
+
+function prot = protect(func)
+    function protected(fig, event)
+        try
+            func(fig, event)
+        catch
+            message('Error: see console')
+            rethrow(lasterror)
+        end
+    end
+    prot = @protected;
 end
 
 
