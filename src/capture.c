@@ -194,10 +194,10 @@ static void usage(char *argv0)
 "   -o:  Save output to specified file, otherwise stream to stdout\n"
 "   -f:  Specify data format, can be -fF for FA (the default), -fd[mask] for\n"
 "        single decimated data, or -fD[mask] for double decimated data, where\n"
-"        [mask] is an optional data mask, default value 7 (all fields).\n"
+"        [mask] is an optional data mask, default value 15 (all fields).\n"
 "        Decimated data is only available for archived data.\n"
 "           The bits in the data mask correspond to decimated fields:\n"
-"            1 => mean, 2 => min, 4 => max\n"
+"            1 => mean, 2 => min, 4 => max, 8 => standard deviation\n"
 "   -a   Capture all available data even if too much requested.  Otherwise\n"
 "        capture fails if more data requested than present in archive.\n"
 "   -R   Save in raw format, otherwise the data is saved in matlab format\n"
@@ -289,13 +289,13 @@ static bool parse_data_format(const char **string, enum data_format *format)
 
         if (**string == '\0')
         {
-            data_mask = 7;          // Read all fields by default
+            data_mask = 15;         // Read all fields by default
             return true;
         }
         else
             return
                 parse_uint(string, &data_mask)  &&
-                TEST_OK_(0 < data_mask  &&  data_mask <= 7,
+                TEST_OK_(0 < data_mask  &&  data_mask <= 15,
                     "Invalid data mask");
     }
 }
