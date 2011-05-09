@@ -25,6 +25,8 @@ data = {};
 global h_pos;
 h_pos = 10;
 h.bpm_list = control('edit', '4', 60, 'List of BPM FA ids');
+control('pushbutton', 'Back', 40, 'Return to previous zoom', ...
+    'Callback', @back_callback);
 control('pushbutton', 'Full', 40, 'View entire archive history', ...
     'Callback', @full_archive_callback);
 control('pushbutton', '24h', 40, 'View last 24 hours', ...
@@ -40,6 +42,7 @@ h.maxpts = control('edit', num2str(1e6), 80, ...
 h.ylim = control('checkbox', 'Zoomed', 80, ...
     'Limit vertical scale to +-100um', 'Value', 1);
 clear global h_pos;
+h.history = cell(0, 2);
 
 % Hang onto the controls we need to reference later
 guidata(fig, h);
@@ -57,13 +60,24 @@ result = uicontrol( ...
     'TooltipString', tooltip, varargin{:});
 
 
+function back_callback(fig, event)
+h = guidata(fig);
+if size(h.history, 1) > 1
+    h.history = h.history(1:end-1, :);
+    range = h.history{end, 1};
+    type  = h.history{end, 2};
+    guidata(fig, h)
+    load_data(fig, range, type, false);
+end
+
+
 function full_archive_callback(fig, event)
-load_data(fig, [now-2000 now], 'D');    % Go back as far as possible!
+load_data(fig, [now-2000 now], 'D', true);    % Go back as far as possible!
 
 
 % Loads data for the last 24 hours
 function last_day_callback(fig, event)
-load_data(fig, [now-1 now], 'D');
+load_data(fig, [now-1 now], 'D', true);
 
 
 % Loads data enclosed by the current zoom selection, returned by xlim.
@@ -84,12 +98,16 @@ if points > maxdata
     end
 end
 
-load_data(fig, xlim + data.day, type);
+load_data(fig, xlim + data.day, type, true);
 
 
 % Loads the requested range of data.
-function load_data(fig, range, type)
+function load_data(fig, range, type, save)
 h = guidata(fig);
+if save
+    h.history(end+1, :) = {range, type};
+    guidata(fig, h)
+end
 global data;
 
 pvs = str2num(get(h.bpm_list, 'String'));
