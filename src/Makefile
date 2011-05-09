@@ -12,7 +12,7 @@ INSTALL = install
 all:    # Default target comes first!
 
 CFLAGS += -std=gnu99
-CFLAGS += -O2
+CFLAGS += -O3
 # CFLAGS += -g
 
 CFLAGS += -Werror
