@@ -24,6 +24,10 @@
 #define MATLAB_EPOCH    719529
 #define SECS_PER_DAY    (24 * 60 * 60)
 
+/* Four byte header mark placed at offset 124 into header, consisting of the
+ * version number 0x0100 in bytes 124:125 and the byte order mark MI in bytes
+ * 126:127. */
+#define MATLAB_HEADER_MARK   0x4d490100          // 0x0100, 'IM'
 
 
 
@@ -126,7 +130,7 @@ int place_matrix_header(
 /* Advances pointer by length together with the precomputed padding. */
 static void pad(int32_t **hh, int length, int padding)
 {
-    *hh = (int32_t *)((char *)*hh + length + padding);
+    *hh = (int32_t *)((void *)*hh + length + padding);
 }
 
 
@@ -162,9 +166,8 @@ void prepare_matlab_header(int32_t **hh, size_t buf_size)
     memset(mat_header, ' ', 124);
     sprintf(mat_header, "MATLAB 5.0 MAT-file generated from FA sniffer data");
     mat_header[strlen(mat_header)] = ' ';
-    *(uint16_t *)&mat_header[124] = 0x0100;   // Version flag
-    *(uint16_t *)&mat_header[126] = 0x4d49;   // 'IM' endian mark
-    *hh = (int32_t *)&mat_header[128];
+    *((uint32_t *)(*hh + 124)) = MATLAB_HEADER_MARK;
+    *hh = (int32_t *) (*hh + 128);
 }
 
 
@@ -195,14 +198,14 @@ bool nonempty_region(const struct region *region)
 bool map_matlab_file(int file, struct region *region)
 {
     struct stat st;
-    char *base;
+    void *base;
     return
         TEST_IO(fstat(file, &st))  &&
         TEST_OK_(st.st_size > 128, "Matlab file too small")  &&
         TEST_IO(
             base = mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, file, 0))  &&
         TEST_OK_(
-            *((uint32_t *)(base + 124)) == 0x4d490100,
+            *((uint32_t *)(base + 124)) == MATLAB_HEADER_MARK,
             "Invalid matlab header")  &&
         DO_(
             region->start = base;
@@ -274,16 +277,16 @@ bool read_matlab_matrix(
     struct region input = *region;
     struct region field;
     int type;
-    matrix->imag = (struct region) { 0, 0, 0 };
+    matrix->imag = (struct region) { NULL, 0, {NULL} };
     return
         /* First we expect an miUINT32 of 8 bytes. */
         read_data_element(&input, &field, &type)  &&
         TEST_OK_(type == miUINT32  &&  field.size == 8,
             "Expected array flags")  &&
         DO_(
-            matrix->complex_data = !!(field.ptr[1] & 0x08);
-            matrix->logical_data = !!(field.ptr[1] & 0x02);
-            matrix->data_class = field.ptr[0])  &&
+            matrix->complex_data = !!(field.ptr_char[1] & 0x08);
+            matrix->logical_data = !!(field.ptr_char[1] & 0x02);
+            matrix->data_class = field.ptr_char[0])  &&
 
         /* Next the dimensions array. */
         read_data_element(&input, &field, &type)  &&

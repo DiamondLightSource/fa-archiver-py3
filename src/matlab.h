@@ -34,9 +34,12 @@ void place_matlab_vector(
  * used for matlab array fields which have a similar element sub-structure. */
 struct region
 {
-    char *start;            // Start of memory region
+    void *start;            // Start of memory region
     size_t size;            // Size of memory region
-    char *ptr;              // Current pointer into memory region
+    union {
+        void *ptr;              // Current pointer into memory region
+        char *ptr_char;
+    };
 };
 
 /* Maps matlab file into memory, returning the mapped memory region. */

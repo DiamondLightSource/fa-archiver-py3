@@ -395,8 +395,8 @@ static void * run_server(void *context)
     int scon;
     pthread_t thread;
     while (TEST_IO(scon = accept(sock, NULL, NULL)))
-        TEST_0(pthread_create(&thread, &attr,
-            process_connection, (void *)(intptr_t) scon));
+        IGNORE(TEST_0(pthread_create(&thread, &attr,
+            process_connection, (void *)(intptr_t) scon)));
     return NULL;
 }
 
@@ -427,6 +427,6 @@ bool initialise_server(
 
 void terminate_server(void)
 {
-    TEST_0(pthread_cancel(server_thread));
+    IGNORE(TEST_0(pthread_cancel(server_thread)));
     /* We probably need to kill all the client threads. */
 }

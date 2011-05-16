@@ -667,7 +667,7 @@ void process_block(const void *block, uint64_t timestamp)
         transpose_block(block);
         decimate_block(block);
         bool must_write = advance_block();
-        int decimation = 1 << (
+        unsigned int decimation = 1 << (
             header->first_decimation_log2 + header->second_decimation_log2);
         if ((fa_offset & (decimation - 1)) == 0)
             double_decimate_block();

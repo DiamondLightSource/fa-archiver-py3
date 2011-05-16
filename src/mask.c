@@ -60,17 +60,18 @@ static bool parse_id(const char **string, int *id)
 static bool parse_raw_mask(const char **string, struct filter_mask *mask)
 {
     int count = FA_ENTRY_COUNT / 4;                 // 4 bits per nibble
-    for (int i = count - 1; i >= 0; i --)
+    for (unsigned int i = count; i > 0; )
     {
-        char ch = *(*string)++;
-        int nibble;
+        i -= 1;
+        unsigned char ch = *(*string)++;
+        unsigned int nibble;
         if ('0' <= ch  &&  ch <= '9')
             nibble = ch - '0';
         else if ('A' <= ch  &&  ch <= 'F')
             nibble = ch - 'A' + 10;
         else
             return FAIL_("Unexpected character in mask");
-        mask->mask[i / 8] |= nibble << (4 * (i % 8));     // 8 nibbles per word
+        mask->mask[i / 8] |= nibble << (4 * (i % 8));   // 8 nibbles per word
     }
     return true;
 }
@@ -178,7 +179,7 @@ int copy_frame(void *to, const void *from, const struct filter_mask *mask)
     for (size_t i = 0; i < sizeof(mask->mask) / 4; i ++)
     {
         uint32_t m = mask->mask[i];
-        for (int j = 0; j < 32; j ++)
+        for (unsigned int j = 0; j < 32; j ++)
         {
             if ((m >> j) & 1)
             {

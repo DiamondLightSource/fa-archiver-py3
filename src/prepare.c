@@ -173,6 +173,7 @@ static bool reset_index(int file_fd, int index_data_size)
 
 static bool prepare_new_header(struct disk_header *header)
 {
+    memset(header, 0, DISK_HEADER_SIZE);
     return
         initialise_header(header,
             &archive_mask, file_size,
@@ -248,12 +249,12 @@ int main(int argc, char **argv)
     int file_fd;
     if (read_only)
     {
-        char header[DISK_HEADER_SIZE];
+        struct disk_header header;
         ok =
             TEST_IO_(file_fd = open(file_name, O_RDONLY),
                 "Unable to read file \"%s\"", file_name)  &&
-            TEST_read(file_fd, header, DISK_HEADER_SIZE)  &&
-            DO_(print_header(stdout, (struct disk_header *) header));
+            TEST_read(file_fd, &header, sizeof(header))  &&
+            DO_(print_header(stdout, &header));
     }
     else if (dry_run)
     {

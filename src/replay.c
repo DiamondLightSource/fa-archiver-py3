@@ -25,7 +25,7 @@ static int column_index[FA_ENTRY_COUNT];    // Converts FA id to data column
 static int replay_row_count;        // Total number of rows available for replay
 static char *replay_first_row;      // Pointer to first row of data
 static int replay_index;            // Count of row currently being read
-static char *replay_row;            // Pointer to row being read
+static void *replay_row;            // Pointer to row being read
 static int replay_row_size;         // Length of an individual row
 static int32_t replay_id0_start;    // Reset id0 to this at start of cycle
 static int32_t replay_id0;          // Current value of id0
@@ -44,8 +44,8 @@ static void sleep_until(int duration)
         next_sleep.tv_nsec -= 1000000000;
         next_sleep.tv_sec += 1;
     }
-    TEST_0(clock_nanosleep(
-        CLOCK_MONOTONIC, TIMER_ABSTIME, &next_sleep, NULL));
+    IGNORE(TEST_0(clock_nanosleep(
+        CLOCK_MONOTONIC, TIMER_ABSTIME, &next_sleep, NULL)));
 }
 
 bool read_replay_block(struct fa_row *rows, size_t size)

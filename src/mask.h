@@ -12,12 +12,13 @@ static inline void copy_mask(
     memcpy(dest, src, sizeof(struct filter_mask));
 }
 
-static inline void set_mask_bit(struct filter_mask *mask, int bit)
+static inline void set_mask_bit(struct filter_mask *mask, unsigned int bit)
 {
     mask->mask[bit >> 5] |= 1 << (bit & 0x1f);
 }
 
-static inline bool test_mask_bit(const struct filter_mask *mask, int bit)
+static inline bool test_mask_bit(
+    const struct filter_mask *mask, unsigned int bit)
 {
     return !!(mask->mask[bit >> 5] & (1 << (bit & 0x1f)));
 }

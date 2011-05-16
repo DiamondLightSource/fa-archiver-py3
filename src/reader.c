@@ -75,8 +75,8 @@ static void unlock_buffers(read_buffers_t buffers, unsigned int count)
     LOCK(buffer_lock);
     for (unsigned int i = 0; i < count; i ++)
     {
-        struct pool_entry *entry = (struct pool_entry *) (
-            (char *) buffers[i] - offsetof(struct pool_entry, buffer));
+        struct pool_entry *entry = (struct pool_entry *)
+            (buffers[i] - offsetof(struct pool_entry, buffer));
         entry->next = buffer_pool;
         buffer_pool = entry;
     }

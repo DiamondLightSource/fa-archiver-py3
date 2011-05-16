@@ -212,7 +212,7 @@ static void run_archiver(void)
         terminate_decimation();
     terminate_disk_writer();
     if (pid_filename)
-        TEST_IO(unlink(pid_filename));
+        IGNORE(TEST_IO(unlink(pid_filename)));
     log_message("Shut Down");
 }
 

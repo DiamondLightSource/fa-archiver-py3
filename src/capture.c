@@ -572,7 +572,9 @@ static bool capture_data(int sock, unsigned int *frames_written)
         int rx = read(sock, buffer + residue, BUFFER_SIZE - residue);
         if (rx == -1)
         {
-            TEST_OK_(errno == EINTR, "Error reading from server");
+            /* We don't fail on read errors because we can still write the data
+             * we already have.  Maybe it should be an error... */
+            IGNORE(TEST_OK_(errno == EINTR, "Error reading from server"));
             break;              // Truncated input needed be a failure
         }
         else if (rx == 0)
