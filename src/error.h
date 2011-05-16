@@ -122,6 +122,9 @@ void panic_error(const char * filename, int line)
 #define TEST_OK(expr)                   TEST_OK_(expr, ERROR_MESSAGE)
 #define ASSERT_OK(expr)                 ASSERT_(_COND_OK, expr)
 
+/* For marking unreachable code.  Same as ASSERT_OK(false). */
+#define ASSERT_FAIL()                   panic_error(__FILE__, __LINE__)
+
 /* Tests the return from a pthread_ call: a non zero return is the error
  * code!  We just assign this to errno. */
 #define _COND_0(expr) \

@@ -19,76 +19,25 @@
 #include "buffer.h"
 
 #include "sniffer.h"
+#include "replay.h"
 
 
-static pthread_t sniffer_id;
-
+/* This is where the sniffer data will be written. */
 static struct buffer *fa_block_buffer;
-static const char *fa_sniffer_device;
 
-
-static void fill_dummy_block(struct fa_row *block, size_t block_size)
+struct sniffer_context
 {
-    unsigned int frame_count = block_size / FA_FRAME_SIZE;
-    for (unsigned int i = 0; i < frame_count; i ++)
-    {
-        for (int j = 0; j < FA_ENTRY_COUNT; j ++)
-        {
-            struct fa_entry *output = &block[i].row[j];
-            if (j == 0)
-            {
-                output->x = i;
-                output->y = i;
-            }
-            else
-            {
-                uint32_t int_phase = i * j * 7000;
-                double phase = 2 * M_PI * int_phase / (double) ULONG_MAX;
-                output->x = (int32_t) 50000 * sin(phase);
-                output->y = (int32_t) 50000 * cos(phase);
-            }
-        }
-    }
-}
-
-
-static void * dummy_sniffer_thread(void *context)
-{
-    const size_t fa_block_size = buffer_block_size(fa_block_buffer);
-    struct fa_row *dummy_block = malloc(fa_block_size);
-    fill_dummy_block(dummy_block, fa_block_size);
-
-    while (true)
-    {
-        void *buffer = get_write_block(fa_block_buffer);
-        if (buffer == NULL)
-        {
-            log_message("dummy sniffer unable to write block");
-            sleep(1);
-        }
-        else
-        {
-            memcpy(buffer, dummy_block, fa_block_size);
-            usleep(100 * fa_block_size / FA_FRAME_SIZE);
-
-            struct timespec ts;
-            ASSERT_IO(clock_gettime(CLOCK_REALTIME, &ts));
-            release_write_block(
-                fa_block_buffer, false, ts_to_microseconds(&ts));
-        }
-    }
-    return NULL;
-}
+    bool (*start)(void);
+    bool (*read_block)(struct fa_row *block, size_t block_size);
+};
 
 
 static void * sniffer_thread(void *context)
 {
+    struct sniffer_context *sniffer = context;
     const size_t fa_block_size = buffer_block_size(fa_block_buffer);
     bool in_gap = false;    // Only report gap once
-    int fa_sniffer;
-    while (TEST_IO_(
-        fa_sniffer = open(fa_sniffer_device, O_RDONLY),
-        "Can't open sniffer device %s", fa_sniffer_device))
+    while (sniffer->start())
     {
         while (true)
         {
@@ -99,9 +48,7 @@ static void * sniffer_thread(void *context)
                 log_message("Sniffer unable to write block");
                 break;
             }
-            bool gap =
-                read(fa_sniffer, buffer, fa_block_size) <
-                    (ssize_t) fa_block_size;
+            bool gap = !sniffer->read_block(buffer, fa_block_size);
 
             /* Get the time this block was written.  This is close enough to the
              * completion of the FA sniffer read to be a good timestamp for the
@@ -123,8 +70,6 @@ static void * sniffer_thread(void *context)
             }
         }
 
-        close(fa_sniffer);
-
         /* Pause before retrying.  Ideally should poll sniffer card for
          * active network here. */
         sleep(1);
@@ -134,12 +79,51 @@ static void * sniffer_thread(void *context)
 
 
 
+/* Standard sniffer using true sniffer device. */
+
+static const char *fa_sniffer_device;
+static int fa_sniffer;
+
+static bool start_sniffer(void)
+{
+    return TEST_IO_(
+        fa_sniffer = open(fa_sniffer_device, O_RDONLY),
+        "Can't open sniffer device %s", fa_sniffer_device);
+}
+
+static bool read_sniffer_block(struct fa_row *buffer, size_t block_size)
+{
+    bool ok = read(fa_sniffer, buffer, block_size) == (ssize_t) block_size;
+    if (!ok)
+        close(fa_sniffer);
+    return ok;
+}
+
+struct sniffer_context sniffer_device = {
+    .start = start_sniffer,
+    .read_block = read_sniffer_block,
+};
+
+
+/* Dummy sniffer using replay data. */
+static bool start_replay(void) { return true; }
+
+struct sniffer_context sniffer_replay = {
+    .start = start_replay,
+    .read_block = read_replay_block,
+};
+
+
+
+static pthread_t sniffer_id;
+
 bool initialise_sniffer(struct buffer *buffer, const char * device_name)
 {
     fa_block_buffer = buffer;
     fa_sniffer_device = device_name;
-    return TEST_0(pthread_create(&sniffer_id, NULL,
-        device_name == NULL ? dummy_sniffer_thread : sniffer_thread, NULL));
+    return TEST_0(pthread_create(
+        &sniffer_id, NULL, sniffer_thread,
+        device_name == NULL ? &sniffer_replay : &sniffer_device));
 }
 
 void terminate_sniffer(void)

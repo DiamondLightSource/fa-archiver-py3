@@ -58,6 +58,8 @@ archiver_SRCS += transform.c        # Data transformation and access
 archiver_SRCS += reader.c           # Sniffer data readout
 archiver_SRCS += decimate.c         # Continuous data reduction
 archiver_SRCS += config_file.c      # Config file parsing
+archiver_SRCS += replay.c           # Replay canned data for debug
+archiver_SRCS += matlab.c           # For reading canned matlab data
 
 # FA archive preparation
 prepare_SRCS += prepare.c           # Command line interface

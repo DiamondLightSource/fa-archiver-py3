@@ -26,6 +26,7 @@
 #include "parse.h"
 #include "reader.h"
 #include "decimate.h"
+#include "replay.h"
 
 
 #define K               1024
@@ -60,6 +61,8 @@ static const char *decimation_config = NULL;
 /* Enable floating point exceptions.  Useful for debugging, but can cause
  * archiver to halt unexpectedly. */
 static bool floating_point_exception = false;
+/* Replay filename for replaying dummy canned data. */
+static const char *replay_filename = NULL;
 
 
 static void usage(void)
@@ -78,7 +81,7 @@ static void usage(void)
 "    -D   Run as a daemon\n"
 "    -p:  Write PID to specified file\n"
 "    -s:  Specify server socket (default 8888)\n"
-"    -F   Run dummy sniffer with dummy data.\n"
+"    -F:  Run dummy sniffer with canned data.\n"
 "    -E   Enable floating point exceptions (debug only)\n"
         , argv0, buffer_blocks);
 }
@@ -90,7 +93,7 @@ static bool process_options(int *argc, char ***argv)
     bool ok = true;
     while (ok)
     {
-        switch (getopt(*argc, *argv, "+hc:d:b:vtDp:s:FE"))
+        switch (getopt(*argc, *argv, "+hc:d:b:vtDp:s:F:E"))
         {
             case 'h':   usage();                                    exit(0);
             case 'c':   decimation_config = optarg;                 break;
@@ -99,7 +102,8 @@ static bool process_options(int *argc, char ***argv)
             case 't':   timestamp_logging(true);                    break;
             case 'D':   daemon_mode = true;                         break;
             case 'p':   pid_filename = optarg;                      break;
-            case 'F':   fa_sniffer_device = NULL;                   break;
+            case 'F':   fa_sniffer_device = NULL;
+                        replay_filename = optarg;                   break;
             case 'E':   floating_point_exception = true;            break;
             case 'b':
                 ok = DO_PARSE("buffer blocks",
@@ -227,6 +231,7 @@ int main(int argc, char **argv)
         initialise_disk_writer(output_filename, &input_block_size)  &&
         create_buffer(&fa_block_buffer, input_block_size, buffer_blocks)  &&
         IF_(decimation_config, initialise_decimation(decimation_config))  &&
+        IF_(replay_filename, initialise_replay(replay_filename))  &&
 
         maybe_daemonise()  &&
         /* All the thread initialisation must be done after daemonising, as of
