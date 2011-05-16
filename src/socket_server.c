@@ -304,7 +304,7 @@ static void get_client_name(int scon, char *client_name)
 
 /* Sets socket receive timeout.  Used so we don't have threads hanging waiting
  * for users to complete sending their commands.  (Also so I can remember how to
- * do this!) */
+ * do this!)  See socket(7) for documentatino of SO_RCVTIMEO option. */
 static bool set_socket_timeout(int sock, int secs, int usecs)
 {
     struct timeval timeout = { .tv_sec = secs, .tv_usec = usecs };
@@ -365,7 +365,7 @@ static void * process_connection(void *context)
     char buf[4096];
     push_error_handling();
     bool ok = FINALLY(
-        set_socket_timeout(scon, 0, 100000)  &&      // 100ms rx timeout
+        set_socket_timeout(scon, 1, 0)  &&      // 1 second rx timeout
         read_line(scon, buf, sizeof(buf))  &&
         dispatch_command(scon, client_name, buf),
 
