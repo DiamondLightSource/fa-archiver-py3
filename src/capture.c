@@ -450,11 +450,10 @@ static bool initialise_signal(void)
 {
     struct sigaction interrupt = {
         .sa_handler = interrupt_capture, .sa_flags = 0 };
-    struct sigaction do_ignore = { .sa_handler = SIG_IGN, .sa_flags = 0 };
     return
         TEST_IO(sigfillset(&interrupt.sa_mask))  &&
         TEST_IO(sigaction(SIGINT,  &interrupt, NULL))  &&
-        TEST_IO(sigaction(SIGPIPE, &do_ignore, NULL));
+        TEST_IO(signal(SIGPIPE, SIG_IGN));
 }
 
 
@@ -509,9 +508,12 @@ static bool request_data(int sock)
 static bool check_response(int sock)
 {
     char response[1024];
-    if (TEST_read(sock, response, 1))
+    int rx;
+    if (TEST_IO(rx = read(sock, response, 1)))
     {
-        if (*response == '\0')
+        if (rx != 1)
+            return FAIL_("Unexpected server disconnect");
+        else if (*response == '\0')
             return true;
         else
         {
