@@ -70,7 +70,7 @@ static int *comb_history_index;
 
 static struct fa_row_int64 *filter_buffer;
 static double filter_scaling;
-static int group_delay;
+static unsigned int group_delay;
 
 
 /* Called after successful parsing of the configuration file. */
@@ -105,7 +105,8 @@ static bool initialise_configuration(void)
     /* Compute scaling factor for overall unit DC response and group delay for
      * the entire filter chain. */
     filter_scaling = 0;
-    int filter_length = compensation_filter.count * decimation_factor - 1;
+    unsigned int filter_length = 1 +
+        (compensation_filter.count - 1) * decimation_factor;
     for (unsigned int i = 0; i < compensation_filter.count; i ++)
         filter_scaling += compensation_filter.data[i];
     for (unsigned int i = 0; i < comb_orders.count; i ++)
