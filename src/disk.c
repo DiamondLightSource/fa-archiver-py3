@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/file.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <linux/fs.h>
@@ -326,11 +327,7 @@ void print_header(FILE *out, struct disk_header *header)
 
 bool lock_archive(int disk_fd)
 {
-    struct flock flock = {
-        .l_type = F_WRLCK, .l_whence = SEEK_SET,
-        .l_start = 0, .l_len = 0
-    };
-    return TEST_IO_(fcntl(disk_fd, F_SETLK, &flock),
+    return TEST_IO_(flock(disk_fd, LOCK_EX | LOCK_NB),
         "Unable to lock archive for writing: already running?");
 }
 
