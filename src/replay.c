@@ -27,6 +27,8 @@ static char *replay_first_row;      // Pointer to first row of data
 static int replay_index;            // Count of row currently being read
 static char *replay_row;            // Pointer to row being read
 static int replay_row_size;         // Length of an individual row
+static int32_t replay_id0_start;    // Reset id0 to this at start of cycle
+static int32_t replay_id0;          // Current value of id0
 static void (*convert_row)(struct fa_row *row); // Converts data to fa_entry
 
 static struct timespec next_sleep;  // Used for uniform sleep intervals
@@ -51,15 +53,21 @@ bool read_replay_block(struct fa_row *rows, size_t size)
     int row_count = size / sizeof(struct fa_row);
     for (int i = 0; i < row_count; i ++)
     {
+        rows[i].row[0].x = replay_id0;
+        rows[i].row[0].y = replay_id0;
         convert_row(&rows[i]);
 
         replay_index += 1;
         if (replay_index < replay_row_count)
+        {
             replay_row += replay_row_size;
+            replay_id0 += 1;
+        }
         else
         {
             replay_row = replay_first_row;
             replay_index = 0;
+            replay_id0 = replay_id0_start;
         }
     }
 
@@ -75,8 +83,8 @@ bool read_replay_block(struct fa_row *rows, size_t size)
 #define DEFINE_CONVERT(type) \
     static void convert_xy_##type(struct fa_row *row) \
     { \
-        struct fa_entry *entry = row->row; \
-        for (int j = 0; j < FA_ENTRY_COUNT; j ++) \
+        struct fa_entry *entry = &row->row[1]; \
+        for (int j = 1; j < FA_ENTRY_COUNT; j ++) \
         { \
             type *field = &((type *) replay_row)[2 * column_index[j]]; \
             entry->x = (int32_t) field[0]; \
@@ -125,56 +133,80 @@ static void prepare_data_array(
     replay_index = 0;
     replay_row = replay_first_row;
     replay_row_size = *columns * 2 * data_size;
+
+    /* Create a default column index by just cycling through the available
+     * columns. */
+    for (int i = 1; i < FA_ENTRY_COUNT; i ++)
+        column_index[i] = i % *columns;
+
+    /* By default replay id0 will start at zero. */
+    replay_id0_start = 0;
+    replay_id0 = replay_id0_start;
 }
 
-/* Prepares the index array used for replay.  By default the given data just
- * cycles through the available columns, but if an ids array was present it is
- * used to ensure that those ids are correctly replayed. */
-static void prepare_index_array(
-    bool found_ids, const struct matlab_matrix *ids, int columns)
+/* If an ids array has been given use this to ensure the correct FA ids are
+ * replayed in the correct columns. */
+static void prepare_index_array(const struct matlab_matrix *ids, int columns)
 {
-    /* First just cycle through the available columns. */
-    for (int i = 0; i < FA_ENTRY_COUNT; i ++)
-        column_index[i] = i % columns;
-
-    /* Use any ids to replace column entries. */
-    if (found_ids)
-    {
-        uint8_t *id_array = (uint8_t *) ids->real.start;
-        for (int i = 0; i < columns; i ++)
-            column_index[id_array[i]] = i;
-    }
+    /* Use ids to replace column entries. */
+    uint8_t *id_array = (uint8_t *) ids->real.start;
+    for (int i = 0; i < columns; i ++)
+        column_index[id_array[i]] = i;
 }
 
+static void prepare_id0(const struct matlab_matrix *id0)
+{
+    replay_id0_start = ((int32_t *) id0->real.start)[0];
+    replay_id0 = replay_id0_start;
+}
+
+
+/* Validation of matrix.  Must be non empty, real and the right shape. */
+static bool check_dimensions(
+    const char *name, const struct matlab_matrix *matrix,
+    int max_dims, int cols)
+{
+    return
+        TEST_OK_(
+            matrix->real.size > 0, "Empty array for %s", name)  &&
+        TEST_OK_(
+            2 <= matrix->dim_count  &&  matrix->dim_count <= max_dims,
+            "Wrong number of dimensions for %s", name)  &&
+        TEST_OK_(
+            matrix->dims[0] == cols, "Wrong shape array for %s", name)  &&
+        TEST_OK_(
+            !matrix->complex_data, "Unexpected complex data for %s", name);
+}
 
 /* Searches matlab file for the arrays we need. */
 static bool prepare_replay_data(struct region *region)
 {
-    bool found_data, found_ids;
-    struct matlab_matrix data, ids;
+    bool found_data, found_ids, found_id0;
+    struct matlab_matrix data, ids, id0;
     size_t data_size;
     int columns;
     bool ok =
         /* Prepare and validate the data area. */
         find_matrix_by_name(region, "data", &found_data, &data)  &&
         TEST_OK_(found_data, "No data element in replay file")  &&
-        TEST_OK_(data.real.size > 0, "Empty data matrix")  &&
+        check_dimensions("data", &data, 3, 2)  &&
         convert_datatype(data.data_type, &data_size)  &&
-        TEST_OK_(
-            2 <= data.dim_count  &&  data.dim_count <= 3  &&
-            data.dims[0] == 2, "Wrong dimensions for data array")  &&
-        TEST_OK_(!data.complex_data, "Unexpected complex data")  &&
         DO_(prepare_data_array(&data, data_size, &columns))  &&
 
         /* Prepare and validate the array of ids. */
-        find_matrix_by_name(region, "ids",  &found_ids,  &ids)  &&
+        find_matrix_by_name(region, "ids",  &found_ids, &ids)  &&
         IF_(found_ids,
-            TEST_OK_(
-                ids.dim_count == 2  &&  ids.dims[0] == 1,
-                "Invalid shape for ids array")  &&
+            check_dimensions("ids", &ids, 2, 1)  &&
             TEST_OK_(ids.dims[1] == columns, "Ids don't match data")  &&
-            TEST_OK_(ids.data_type == miUINT8, "Bad datatype for ids"))  &&
-        DO_(prepare_index_array(found_ids, &ids, columns));
+            TEST_OK_(ids.data_type == miUINT8, "Bad datatype for ids")  &&
+            DO_(prepare_index_array(&ids, columns)))  &&
+
+        /* Prepare id0 if present. */
+        find_matrix_by_name(region, "id0", &found_id0, &id0)  &&
+        IF_(found_id0,
+            check_dimensions("id0", &id0, 2, 1)  &&
+            TEST_OK_(id0.data_type == miINT32, "Bad datatype for id0")  &&
+            DO_(prepare_id0(&id0)));
 
     return ok;
 }
