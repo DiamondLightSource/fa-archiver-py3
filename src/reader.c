@@ -688,7 +688,7 @@ static bool parse_end(const char **string, uint64_t *end, uint64_t *samples)
     if (read_char(string, 'N'))
         return
             parse_uint64(string, samples)  &&
-            TEST_OK_(*samples > 0, "No samples requested\n");
+            TEST_OK_(*samples > 0, "No samples requested");
     else if (read_char(string, 'E'))
         return parse_time_or_seconds(string, end);
     else

@@ -117,7 +117,7 @@ static bool convert_datatype(int data_type, size_t *data_size)
             *data_size  = convert_type[i].data_size;
             return true;
         }
-    return FAIL_("Can't handle data of type %d\n", data_type);
+    return FAIL_("Can't handle data of type %d", data_type);
 }
 
 
@@ -218,7 +218,7 @@ bool initialise_replay(const char *replay_filename)
     struct region region;
     return
         TEST_IO_(file = open(replay_filename, O_RDONLY),
-            "Unable to open replay file \"%s\"\n", replay_filename)  &&
+            "Unable to open replay file \"%s\"", replay_filename)  &&
         /* For simplicity, just map the entire file into memory! */
         map_matlab_file(file, &region)  &&
         prepare_replay_data(&region)  &&
