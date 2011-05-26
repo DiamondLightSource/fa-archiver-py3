@@ -8,14 +8,18 @@ void process_block(const void *read_block, uint64_t timestamp);
 
 /* Interlocked access. */
 
-/* Converts timestamp into corresponding index, or fails if timestamp is outside
- * the archive.  Returns number of available samples, the major block containing
- * the first data point, and the offset of the selected timestamp into that
- * block. */
-bool timestamp_to_index(
-    uint64_t timestamp, uint64_t *samples_available,
-    unsigned int *major_block, unsigned int *offset,
-    uint64_t *start_timestamp, uint64_t *end_timestamp);
+/* Returns earliest timestamp in archive. */
+uint64_t get_earliest_timestamp(void);
+/* Converts timestamp to block and offset into block together with number of
+ * available samples.  Fails if timestamp is too early unless all_data set. */
+bool timestamp_to_start(
+    uint64_t timestamp, bool all_data, uint64_t *samples_available,
+    unsigned int *block, unsigned int *offset);
+/* Similar to timestamp_to_start, but used for end time, in particular won't
+ * skip over gaps to find a timestamp. */
+bool timestamp_to_end(
+    uint64_t timestamp, bool all_data,
+    unsigned int *block, unsigned int *offset);
 
 /* Searches a range of index blocks for a gap in the timestamp, returning true
  * iff a gap is found.  *start is updated to the index of the block directly

@@ -133,7 +133,7 @@ static bool do_parse_line(
         parse_eos(&string);
 
     /* Report parse error. */
-    char *error = pop_error_handling(true);
+    char *error = pop_error_handling(!ok);
     if (!ok)
         print_error("Error parsing %s, line %d, offset %zd: %s",
             file_name, line_number, string - line_buffer, error);

@@ -528,22 +528,16 @@ static void initialise_index(void)
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /* Interlocked access. */
 
-
-bool timestamp_to_index(
-    uint64_t timestamp, uint64_t *samples_available,
-    unsigned int *major_block, unsigned int *offset,
-    uint64_t *start_timestamp, uint64_t *end_timestamp)
+/* Binary search to find major block corresponding to timestamp.  Note that the
+ * high block is never inspected, which is just as well, as the current block is
+ * invariably invalid.
+ *     Returns the index of the latest valid block with a starting timestamp no
+ * later than the target timestamp.  If the archive is empty may return an
+ * invalid index, this is recognised by comparing the result with current. */
+static unsigned int binary_search(uint64_t timestamp)
 {
-    bool ok;
-    LOCK(transform_lock);
-
     unsigned int N = header->major_block_count;
     unsigned int current = header->current_major_block;
-    unsigned int block_size = header->major_sample_count;
-
-    /* Binary search to find major block corresponding to timestamp.  Note that
-     * the high block is never inspected, which is just as well, as the current
-     * block is invariably invalid. */
     unsigned int low  = (current + 1 + INDEX_SKIP) % N;
     unsigned int high = current;
     while ((low + 1) % N != high)
@@ -559,55 +553,108 @@ bool timestamp_to_index(
             low = mid;
     }
 
-    /* Compute the offset of the selected timestamp into the current block and
-     * compensate for any block that's too early. */
-    unsigned int duration = data_index[low].duration;
-    if (duration == 0)
+    /* Blocks with zero duration represent the start of the archive, so don't
+     * return one of these.  Unless the archive is completely empty the result
+     * will still be a valid block.  We don't worry about coping with an empty
+     * archive, so long as we don't crash! */
+    return data_index[low].duration == 0 ? high : low;
+}
+
+
+uint64_t get_earliest_timestamp(void)
+{
+    uint64_t result;
+    LOCK(transform_lock);
+    result = data_index[binary_search(1)].timestamp;
+    UNLOCK(transform_lock);
+    return result;
+}
+
+
+/* Looks up timestamp and returns the block and offset into that block of the
+ * "nearest" block. */
+static void timestamp_to_block(
+    uint64_t timestamp, bool skip_gap,
+    unsigned int *block_out, unsigned int *offset)
+{
+    unsigned int block = binary_search(timestamp);
+    uint64_t block_start = data_index[block].timestamp;
+    unsigned int duration = data_index[block].duration;
+    unsigned int block_size = header->major_sample_count;
+    if (timestamp < block_start)
+        /* Timestamp precedes block, must mean that this is the earliest block
+         * in the archive, so just start at the beginning of this block. */
+        *offset = 0;
+    else if (timestamp - block_start < duration)
+        /* The normal case, return the offset of the selected timestamp into the
+         * current block. */
+        *offset = (timestamp - block_start) * block_size / duration;
+    else if (skip_gap)
     {
-        /* Fresh blocks that have never been overwritten have both duration and
-         * timestamp zero, so the next block along will be the right block. */
-        low = high;
+        /* Timestamp falls off this block but precedes the next.  This will be
+         * due to a data gap which we skip. */
+        block = (block + 1) % header->major_block_count;
         *offset = 0;
     }
-    /* The start timestamp most precede the target timestamp if possible.  */
-    if (start_timestamp != NULL)
-        *start_timestamp = data_index[low].timestamp;
+    else
+        /* Data gap after this block but skipping disabled.  Point to the last
+         * data point in the block instead. */
+        *offset = block_size - 1;
+    *block_out = block;
+}
 
-    if (duration != 0)
-    {
-        /* Compute the offset of the timestamp into the selected block. */
-        uint64_t block_start = data_index[low].timestamp;
-        uint64_t raw_offset = (timestamp - block_start) * block_size / duration;
-        if (raw_offset >= block_size  &&  low != current)
-        {
-            /* If we fall off the end of the selected block (perhaps there's a
-             * capture gap) simply skip to the following block -- unless we're
-             * already on the last block. */
-            if (high != current)
-                low = high;
-            *offset = 0;
-        }
-        else
-            *offset = (unsigned int) raw_offset;
-    }
 
-    *major_block = low;
-    if (samples_available != NULL)
-    {
-        unsigned int block_count =
-            current >= low ? current - low : N - low + current;
-        *samples_available = (uint64_t) block_count * block_size - *offset;
-    }
-    /* If required return bounding timestamps. */
-    if (end_timestamp != NULL)
-        *end_timestamp = data_index[low].timestamp + data_index[low].duration;
+/* Computes the number of samples available from the given block:offset to the
+ * current end of the archive. */
+static uint64_t compute_samples(unsigned int block, unsigned int offset)
+{
+    unsigned int current = header->current_major_block;
+    unsigned int N = header->major_block_count;
+    unsigned int block_count =
+        current >= block ? current - block : N - block + current;
+    unsigned int block_size = header->major_sample_count;
+    return (uint64_t) block_count * block_size - offset;
+}
 
-    /* Check that the identified block is in fact valid. */
-    ok = TEST_OK_(low != current, "Timestamp too late");
+
+bool timestamp_to_start(
+    uint64_t timestamp, bool all_data, uint64_t *samples_available,
+    unsigned int *block, unsigned int *offset)
+{
+    bool ok;
+    LOCK(transform_lock);
+
+    timestamp_to_block(timestamp, true, block, offset);
+    ok =
+        TEST_OK_(
+            *block != header->current_major_block, "Start time too late")  &&
+        TEST_OK_(all_data  ||  data_index[*block].timestamp <= timestamp,
+            "Start time in data gap");
+    if (ok)
+        *samples_available = compute_samples(*block, *offset);
+
     UNLOCK(transform_lock);
-
     return ok;
 }
+
+
+bool timestamp_to_end(
+    uint64_t timestamp, bool all_data,
+    unsigned int *block, unsigned int *offset)
+{
+    uint64_t end_timestamp;
+    LOCK(transform_lock);
+
+    timestamp_to_block(timestamp, false, block, offset);
+    struct data_index *ix = &data_index[*block];
+    end_timestamp = ix->timestamp + ix->duration;
+
+    UNLOCK(transform_lock);
+
+    return TEST_OK_(all_data  ||  timestamp <= end_timestamp,
+        "End timestamp too late");
+}
+
 
 
 bool find_gap(bool check_id0, unsigned int *start, unsigned int *blocks)

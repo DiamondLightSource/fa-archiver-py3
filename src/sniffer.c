@@ -25,6 +25,9 @@
 /* This is where the sniffer data will be written. */
 static struct buffer *fa_block_buffer;
 
+
+/* Abstraction of sniffer device interface so we can implement debug versions of
+ * the sniffer. */
 struct sniffer_context
 {
     bool (*start)(void);
@@ -106,6 +109,7 @@ struct sniffer_context sniffer_device = {
 
 
 /* Dummy sniffer using replay data. */
+
 static bool start_replay(void) { return true; }
 
 struct sniffer_context sniffer_replay = {

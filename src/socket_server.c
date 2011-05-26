@@ -114,14 +114,9 @@ static bool process_command(int scon, const char *buf)
                 break;
             case 'T':
                 {
-                    unsigned int block, offset;
-                    uint64_t start;
-                    if (timestamp_to_index(
-                            1, NULL, &block, &offset, &start, NULL))
-                        ok = write_string(scon, "%"PRIu64".%09"PRIu64"\n",
-                            start / 1000000, start % 1000000);
-                    else
-                        ok = write_string(scon, "?\n");
+                    uint64_t start = get_earliest_timestamp();
+                    ok = write_string(scon, "%"PRIu64".%06"PRIu64"\n",
+                        start / 1000000, start % 1000000);
                 }
                 break;
             case 'V':
@@ -373,7 +368,7 @@ static void * process_connection(void *context)
         TEST_IO(close(scon)));
 
     /* Report any errors. */
-    char *error_message = pop_error_handling(true);
+    char *error_message = pop_error_handling(!ok);
     if (!ok)
         log_message("Client %s: %s", client_name, error_message);
     free(error_message);

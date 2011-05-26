@@ -219,13 +219,8 @@ static bool compute_end_samples(
 {
     const struct disk_header *header = get_header();
     unsigned int end_block, end_offset;
-    uint64_t end_timestamp;
 
-    bool ok =
-        timestamp_to_index(
-            end, NULL, &end_block, &end_offset, NULL, &end_timestamp)  &&
-        IF_(!all_data,
-            TEST_OK_(end < end_timestamp, "End timestamp too late"));
+    bool ok = timestamp_to_end(end, all_data, &end_block, &end_offset);
     if (ok)
     {
         /* Convert the two block and offset counts into a total FA count. */
@@ -250,15 +245,10 @@ static bool compute_start(
     unsigned int *block, unsigned int *offset)
 {
     uint64_t available;
-    uint64_t start_timestamp;
     return
         /* Convert requested timestamp into a starting index block and FA offset
          * into that block. */
-        timestamp_to_index(
-            start, &available, ix_block, offset, &start_timestamp, NULL)  &&
-        /* Check that the start date is actually available. */
-        TEST_OK_(all_data  ||  start_timestamp <= start,
-            "Timestamp too early")  &&
+        timestamp_to_start(start, all_data, &available, ix_block, offset)  &&
         IF_(end != 0,
             TEST_OK_(end > start, "Time range runs backwards")  &&
             compute_end_samples(
