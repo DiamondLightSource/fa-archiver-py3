@@ -556,6 +556,38 @@ static void reset_progress(void)
 }
 
 
+/* Performs read until interrupted or end of file, treats both the same.  Any
+ * errors are ignored.  It's arguable whether this is the right action... */
+static size_t do_read(int file, void *buffer, size_t length)
+{
+    ssize_t rx = read(file, buffer, length);
+    if (rx == -1)
+    {
+        IGNORE(TEST_OK_(errno == EINTR, "Error reading from archiver"));
+        rx = 0;
+    }
+    return rx;
+}
+
+/* Performs write even if interrupted, retrying as necessary: we've not enabled
+ * signal retries as we want read() to be interruptible. */
+static bool do_write(int file, void *buffer, size_t length)
+{
+    while (length > 0)
+    {
+        ssize_t tx = write(file, buffer, length);
+        if (tx >= 0)    // A zero length write would be troubling here
+        {
+            length -= tx;
+            buffer += tx;
+        }
+        else if (!TEST_OK_(errno == EINTR, "Error writing to file"))
+            return false;
+        // If we get repeated EINTR returns that'll be a bit of a problem...
+    }
+    return true;
+}
+
 /* This routine reads data from sock and writes out complete frames until either
  * the sample count is reached or the read is interrupted. */
 static bool capture_data(int sock, unsigned int *frames_written)
@@ -569,15 +601,8 @@ static bool capture_data(int sock, unsigned int *frames_written)
     *frames_written = 0;
     while (running  &&  (sample_count == 0  ||  *frames_written < sample_count))
     {
-        int rx = read(sock, buffer + residue, BUFFER_SIZE - residue);
-        if (rx == -1)
-        {
-            /* We don't fail on read errors because we can still write the data
-             * we already have.  Maybe it should be an error... */
-            IGNORE(TEST_OK_(errno == EINTR, "Error reading from server"));
-            break;              // Truncated input needed be a failure
-        }
-        else if (rx == 0)
+        int rx = do_read(sock, buffer + residue, BUFFER_SIZE - residue);
+        if (rx == 0)
             break;              // Normal end of input
 
         rx = rx + residue;
@@ -587,7 +612,7 @@ static bool capture_data(int sock, unsigned int *frames_written)
         unsigned int to_write = frames_read * frame_size;
         if (frames_read > 0)
         {
-            ok = TEST_write(output_file, buffer, to_write);
+            ok = do_write(output_file, buffer, to_write);
             if (!ok)
                 break;
             *frames_written += frames_read;
