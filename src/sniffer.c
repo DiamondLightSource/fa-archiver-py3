@@ -117,13 +117,28 @@ struct sniffer_context sniffer_replay = {
 
 static pthread_t sniffer_id;
 
-bool initialise_sniffer(struct buffer *buffer, const char * device_name)
+bool initialise_sniffer(
+    struct buffer *buffer, const char * device_name, bool boost_priority)
 {
     fa_block_buffer = buffer;
     fa_sniffer_device = device_name;
-    return TEST_0(pthread_create(
-        &sniffer_id, NULL, sniffer_thread,
-        device_name == NULL ? &sniffer_replay : &sniffer_device));
+    pthread_attr_t attr;
+    return
+        TEST_0(pthread_attr_init(&attr))  &&
+        IF_(boost_priority,
+            /* If requested boost the thread priority and configure FIFO
+             * scheduling to ensure that this thread gets absolute maximum
+             * priority. */
+            TEST_0(pthread_attr_setinheritsched(
+                &attr, PTHREAD_EXPLICIT_SCHED))  &&
+            TEST_0(pthread_attr_setschedpolicy(&attr, SCHED_FIFO))  &&
+            TEST_0(pthread_attr_setschedparam(
+                &attr, &(struct sched_param) { .sched_priority = 1 })))  &&
+        TEST_0_(pthread_create(
+            &sniffer_id, &attr, sniffer_thread,
+            device_name == NULL ? &sniffer_replay : &sniffer_device),
+            "Priority boosting requires real time thread support")  &&
+        TEST_0(pthread_attr_destroy(&attr));
 }
 
 void terminate_sniffer(void)

@@ -52,6 +52,8 @@ static char *output_filename;
  * interrupted with the command
  *      kill $(cat $pid_filename)   */
 static char *pid_filename = NULL;
+/* If set the sniffer thread will run at boosted priority. */
+static bool boost_priority = false;
 /* In memory buffer. */
 static unsigned int buffer_blocks = BUFFER_BLOCKS;
 /* Socket used for serving remote connections. */
@@ -75,6 +77,7 @@ static void usage(void)
 "    -c:  Specify decimation configuration file.  If this is specified then\n"
 "         streaming decimated data will be available for subscription.\n"
 "    -d:  Specify device to use for FA sniffer (default /dev/fa_sniffer0)\n"
+"    -r   Run sniffer thread at boosted priority.  Needs real time support\n"
 "    -b:  Specify number of buffered input blocks (default %u)\n"
 "    -v   Specify verbose output\n"
 "    -t   Output timestamps with logs.  No effect when logging to syslog\n"
@@ -93,11 +96,12 @@ static bool process_options(int *argc, char ***argv)
     bool ok = true;
     while (ok)
     {
-        switch (getopt(*argc, *argv, "+hc:d:b:vtDp:s:F:E"))
+        switch (getopt(*argc, *argv, "+hc:d:rb:vtDp:s:F:E"))
         {
             case 'h':   usage();                                    exit(0);
             case 'c':   decimation_config = optarg;                 break;
             case 'd':   fa_sniffer_device = optarg;                 break;
+            case 'r':   boost_priority = true;                      break;
             case 'v':   verbose_logging(true);                      break;
             case 't':   timestamp_logging(true);                    break;
             case 'D':   daemon_mode = true;                         break;
@@ -238,7 +242,8 @@ int main(int argc, char **argv)
          * course threads don't survive across the daemon() call!  Alas, this
          * means that many startup errors go into syslog rather than stderr. */
         start_disk_writer(fa_block_buffer)  &&
-        initialise_sniffer(fa_block_buffer, fa_sniffer_device)  &&
+        initialise_sniffer(
+            fa_block_buffer, fa_sniffer_device, boost_priority)  &&
         IF_(decimation_config,
             start_decimation(fa_block_buffer, &decimated_buffer))  &&
         initialise_server(fa_block_buffer, decimated_buffer, server_socket)  &&
