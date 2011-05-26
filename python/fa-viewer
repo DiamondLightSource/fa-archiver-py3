@@ -3,4 +3,7 @@
 # These definitions are designed to be overridden by the installer.
 PYTHON=dls-python2.6
 HERE="$(dirname "$0")"
-exec "$PYTHON" "$HERE"/fa-viewer.py "$@"
+
+# Ensure that falib is on the python path
+export PYTHONPATH="$HERE${PYTHONPATH:+:}$PYTHONPATH"
+exec "$PYTHON" "$HERE"/viewer/fa-viewer.py "$@"

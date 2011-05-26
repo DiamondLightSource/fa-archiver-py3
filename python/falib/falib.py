@@ -3,14 +3,13 @@
 DEFAULT_SERVER = 'fa-archiver.cs.diamond.ac.uk'
 DEFAULT_PORT = 8888
 
-if __name__ == '__main__':
-    from pkg_resources import require
-    require('cothread')
-
 import socket
 import struct
 import numpy
 import cothread
+
+
+__all__ = ['subscription', 'get_sample_frequency', 'get_decimation']
 
 
 MASK_SIZE = 256         # Number of possible bits in a mask
@@ -134,11 +133,3 @@ def get_sample_frequency(**kargs):
 
 def get_decimation(**kargs):
     return int(server_command('CC\n', **kargs))
-
-
-if __name__ == '__main__':
-    f = sample_frequency()
-    import sys
-    s = subscription(map(int, sys.argv[1:]))
-    while True:
-        print numpy.mean(s.read(10000), 0)

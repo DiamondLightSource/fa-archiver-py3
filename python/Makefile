@@ -12,7 +12,7 @@ FA_SUBST = \
 all:
 
 clean:
-	rm -f *.pyc
+	find -name \*.pyc -exec rm {} \;
 
 install:
 ifndef SCRIPT_DIR
