@@ -35,12 +35,15 @@ struct sniffer_context
     bool (*initialise)(const char *source_name);
     void (*reset)(void);
     bool (*read)(struct fa_row *block, size_t block_size);
+    bool (*status)(struct fa_status *status);
 };
+
+/* This will be initialised with the appropriate context to use. */
+static struct sniffer_context *sniffer_context;
 
 
 static void * sniffer_thread(void *context)
 {
-    struct sniffer_context *sniffer = context;
     const size_t fa_block_size = buffer_block_size(fa_block_buffer);
     bool in_gap = false;    // Only report gap once
     while (true)
@@ -54,7 +57,7 @@ static void * sniffer_thread(void *context)
                 log_message("Sniffer unable to write block");
                 break;
             }
-            bool gap = !sniffer->read(buffer, fa_block_size);
+            bool gap = !sniffer_context->read(buffer, fa_block_size);
 
             /* Get the time this block was written.  This is close enough to the
              * completion of the FA sniffer read to be a good timestamp for the
@@ -79,8 +82,14 @@ static void * sniffer_thread(void *context)
         /* Pause before retrying.  Ideally should poll sniffer card for
          * active network here. */
         sleep(1);
-        sniffer->reset();
+        sniffer_context->reset();
     }
+}
+
+
+bool get_sniffer_status(struct fa_status *status)
+{
+    return sniffer_context->status(status);
 }
 
 
@@ -133,10 +142,17 @@ static bool read_sniffer_device(struct fa_row *rows, size_t length)
     return true;
 }
 
+static bool read_sniffer_status(struct fa_status *status)
+{
+    return TEST_IO_(ioctl(fa_sniffer, FASNIF_IOCTL_GET_STATUS, status),
+        "Unable to read sniffer status");
+}
+
 struct sniffer_context sniffer_device = {
     .initialise = initialise_sniffer_device,
     .reset = reset_sniffer_device,
     .read = read_sniffer_device,
+    .status = read_sniffer_status,
 };
 
 
@@ -146,10 +162,16 @@ struct sniffer_context sniffer_device = {
 
 static void reset_replay(void) { ASSERT_FAIL(); }
 
+static bool read_replay_status(struct fa_status *status)
+{
+    return FAIL_("Sniffer status unavailable in replay mode");
+}
+
 struct sniffer_context sniffer_replay = {
     .initialise = initialise_replay,
     .reset = reset_replay,
     .read = read_replay_block,
+    .status = read_replay_status,
 };
 
 
@@ -157,7 +179,6 @@ struct sniffer_context sniffer_replay = {
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 
-static struct sniffer_context *sniffer_context;
 static pthread_t sniffer_id;
 
 bool initialise_sniffer(
@@ -182,8 +203,7 @@ bool start_sniffer(bool boost_priority)
             TEST_0(pthread_attr_setschedpolicy(&attr, SCHED_FIFO))  &&
             TEST_0(pthread_attr_setschedparam(
                 &attr, &(struct sched_param) { .sched_priority = 1 })))  &&
-        TEST_0_(pthread_create(
-            &sniffer_id, &attr, sniffer_thread, sniffer_context),
+        TEST_0_(pthread_create(&sniffer_id, &attr, sniffer_thread, NULL),
             "Priority boosting requires real time thread support")  &&
         TEST_0(pthread_attr_destroy(&attr));
 }

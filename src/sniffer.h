@@ -5,4 +5,6 @@ bool initialise_sniffer(
     struct buffer *buffer, const char *device_name, bool replay);
 bool start_sniffer(bool boost_priority);
 
+bool get_sniffer_status(struct fa_status *status);
+
 void terminate_sniffer(void);

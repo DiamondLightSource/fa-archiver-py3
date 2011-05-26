@@ -26,6 +26,7 @@
 #include "disk.h"
 #include "transform.h"
 #include "decimate.h"
+#include "sniffer.h"
 
 #include "socket_server.h"
 
@@ -62,6 +63,37 @@ static double get_mean_frame_rate(void)
 }
 
 
+/* Returns the complete sniffer status in a single line.  The numbers returned
+ * are:
+ *      hardware link status        1 => ok, 2, 3 => link fault
+ *      link partner                or 1023 if no connection
+ *      last interrupt code         1 => running normally
+ *      frame error count
+ *      soft error count
+ *      hard error count
+ *      run state                   1 => Currently fetching data
+ *      overrun                     1 => Halted due to buffer overrun */
+static bool send_sniffer_status(int scon)
+{
+    push_error_handling();
+    struct fa_status status;
+    char *message = pop_error_handling(!get_sniffer_status(&status));
+
+    bool ok;
+    if (message == NULL)
+        ok = write_string(scon, "%u %u %u %u %u %u %u %u\n",
+            status.status, status.partner, status.last_interrupt,
+            status.frame_errors, status.soft_errors, status.hard_errors,
+            status.running, status.overrun);
+    else
+    {
+        ok = write_string(scon, "%s\n", message);
+        free(message);
+    }
+    return ok;
+}
+
+
 /* The C command prefix is followed by a sequence of one letter commands, and
  * each letter receives a one line response.  The following commands are
  * supported:
@@ -77,6 +109,7 @@ static double get_mean_frame_rate(void)
  *  V   Returns protocol identification string
  *  M   Returns configured capture mask
  *  C   Returns live decimation factor if available
+ *  S   Returns detailed sniffer status
  */
 static bool process_command(int scon, const char *buf)
 {
@@ -132,6 +165,10 @@ static bool process_command(int scon, const char *buf)
 
             case 'C':
                 ok = write_string(scon, "%d\n", get_decimation_factor());
+                break;
+
+            case 'S':
+                ok = send_sniffer_status(scon);
                 break;
 
             default:
