@@ -39,7 +39,7 @@ class connection:
     class Error(Exception):
         pass
 
-    def __init__(self, server=DEFAULT_SERVER, port=DEFAULT_PORT):
+    def __init__(self, server = DEFAULT_SERVER, port = DEFAULT_PORT):
         self.sock = socket.create_connection((server, port))
         self.sock.setblocking(0)
         self.buf = []
@@ -47,7 +47,7 @@ class connection:
     def close(self):
         self.sock.close()
 
-    def recv(self, block_size=65536, timeout=0.2):
+    def recv(self, block_size = 65536, timeout = 1):
         if not cothread.poll_list(
                 [(self.sock.fileno(), cothread.POLLIN)], timeout):
             raise socket.timeout('Receive timeout')
