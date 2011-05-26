@@ -397,6 +397,7 @@ static void * run_server(void *context)
 
 
 static pthread_t server_thread;
+static int server_socket;
 
 bool initialise_server(
     struct buffer *fa_buffer, struct buffer *decimated, int port)
@@ -409,14 +410,19 @@ bool initialise_server(
         .sin_addr.s_addr = INADDR_ANY,
         .sin_port = htons(port)
     };
-    int sock;
     return
-        TEST_IO(sock = socket(AF_INET, SOCK_STREAM, 0))  &&
-        TEST_IO(bind(sock, (struct sockaddr *) &sin, sizeof(sin)))  &&
-        TEST_IO(listen(sock, 5))  &&
-        TEST_0(pthread_create(
-            &server_thread, NULL, run_server, (void *)(intptr_t) sock))  &&
+        TEST_IO(server_socket = socket(AF_INET, SOCK_STREAM, 0))  &&
+        TEST_IO(bind(server_socket, (struct sockaddr *) &sin, sizeof(sin)))  &&
+        TEST_IO(listen(server_socket, 5))  &&
         DO_(log_message("Server listening on port %d", port));
+}
+
+bool start_server(void)
+{
+    return
+        TEST_0(pthread_create(
+            &server_thread, NULL, run_server,
+            (void *) (intptr_t) server_socket));
 }
 
 

@@ -737,7 +737,7 @@ void process_block(const void *block, uint64_t timestamp)
 }
 
 
-bool initialise_transform(
+void initialise_transform(
     struct disk_header *header_, struct data_index *data_index_,
     struct decimated_data *dd_area_)
 {
@@ -750,5 +750,4 @@ bool initialise_transform(
     initialise_double_decimation();
     initialise_io_buffer();
     initialise_index();
-    return true;
 }

@@ -30,8 +30,9 @@ static struct buffer *fa_block_buffer;
  * the sniffer. */
 struct sniffer_context
 {
-    bool (*start)(void);
-    bool (*read_block)(struct fa_row *block, size_t block_size);
+    bool (*initialise)(const char *source_name);
+    void (*reset)(void);
+    bool (*read)(struct fa_row *block, size_t block_size);
 };
 
 
@@ -40,7 +41,7 @@ static void * sniffer_thread(void *context)
     struct sniffer_context *sniffer = context;
     const size_t fa_block_size = buffer_block_size(fa_block_buffer);
     bool in_gap = false;    // Only report gap once
-    while (sniffer->start())
+    while (true)
     {
         while (true)
         {
@@ -51,7 +52,7 @@ static void * sniffer_thread(void *context)
                 log_message("Sniffer unable to write block");
                 break;
             }
-            bool gap = !sniffer->read_block(buffer, fa_block_size);
+            bool gap = !sniffer->read(buffer, fa_block_size);
 
             /* Get the time this block was written.  This is close enough to the
              * completion of the FA sniffer read to be a good timestamp for the
@@ -76,6 +77,7 @@ static void * sniffer_thread(void *context)
         /* Pause before retrying.  Ideally should poll sniffer card for
          * active network here. */
         sleep(1);
+        sniffer->reset();
     }
     return NULL;
 }
@@ -87,14 +89,22 @@ static void * sniffer_thread(void *context)
 static const char *fa_sniffer_device;
 static int fa_sniffer;
 
-static bool start_sniffer(void)
+static bool initialise_sniffer_device(const char *device_name)
 {
+    fa_sniffer_device = device_name;
     return TEST_IO_(
         fa_sniffer = open(fa_sniffer_device, O_RDONLY),
         "Can't open sniffer device %s", fa_sniffer_device);
 }
 
-static bool read_sniffer_block(struct fa_row *buffer, size_t block_size)
+static void reset_sniffer_device(void)
+{
+    IGNORE(TEST_IO_(
+        fa_sniffer = open(fa_sniffer_device, O_RDONLY),
+        "Can't open sniffer device %s", fa_sniffer_device));
+}
+
+static bool read_sniffer_device(struct fa_row *buffer, size_t block_size)
 {
     bool ok = read(fa_sniffer, buffer, block_size) == (ssize_t) block_size;
     if (!ok)
@@ -103,29 +113,37 @@ static bool read_sniffer_block(struct fa_row *buffer, size_t block_size)
 }
 
 struct sniffer_context sniffer_device = {
-    .start = start_sniffer,
-    .read_block = read_sniffer_block,
+    .initialise = initialise_sniffer_device,
+    .reset = reset_sniffer_device,
+    .read = read_sniffer_device,
 };
 
 
 /* Dummy sniffer using replay data. */
 
-static bool start_replay(void) { return true; }
+static void reset_replay(void) { ASSERT_FAIL(); }
 
 struct sniffer_context sniffer_replay = {
-    .start = start_replay,
-    .read_block = read_replay_block,
+    .initialise = initialise_replay,
+    .reset = reset_replay,
+    .read = read_replay_block,
 };
 
 
 
+static struct sniffer_context *sniffer_context;
 static pthread_t sniffer_id;
 
 bool initialise_sniffer(
-    struct buffer *buffer, const char * device_name, bool boost_priority)
+    struct buffer *buffer, const char *device_name, bool replay)
 {
     fa_block_buffer = buffer;
-    fa_sniffer_device = device_name;
+    sniffer_context = replay ? &sniffer_replay : &sniffer_device;
+    return sniffer_context->initialise(device_name);
+}
+
+bool start_sniffer(bool boost_priority)
+{
     pthread_attr_t attr;
     return
         TEST_0(pthread_attr_init(&attr))  &&
@@ -139,8 +157,7 @@ bool initialise_sniffer(
             TEST_0(pthread_attr_setschedparam(
                 &attr, &(struct sched_param) { .sched_priority = 1 })))  &&
         TEST_0_(pthread_create(
-            &sniffer_id, &attr, sniffer_thread,
-            device_name == NULL ? &sniffer_replay : &sniffer_device),
+            &sniffer_id, &attr, sniffer_thread, sniffer_context),
             "Priority boosting requires real time thread support")  &&
         TEST_0(pthread_attr_destroy(&attr));
 }

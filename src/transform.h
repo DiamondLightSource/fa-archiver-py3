@@ -32,7 +32,7 @@ const struct data_index * read_index(unsigned int ix);
 const struct disk_header *get_header(void);
 
 
-bool initialise_transform(
+void initialise_transform(
     struct disk_header *header, struct data_index *data_index,
     struct decimated_data *dd_area);
 

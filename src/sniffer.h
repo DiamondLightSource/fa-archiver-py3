@@ -16,6 +16,7 @@ struct fa_row { struct fa_entry row[FA_ENTRY_COUNT]; };
 
 struct buffer;
 bool initialise_sniffer(
-    struct buffer *buffer, const char * device_name, bool boost_priority);
+    struct buffer *buffer, const char *device_name, bool replay);
+bool start_sniffer(bool boost_priority);
 
 void terminate_sniffer(void);

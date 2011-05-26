@@ -71,7 +71,8 @@ bool initialise_disk_writer(const char *file_name, uint32_t *input_block_size)
         TEST_IO(
             dd_data = mmap(NULL, header->dd_data_size,
                 PROT_READ | PROT_WRITE, MAP_SHARED, disk_fd,
-                header->dd_data_start));
+                header->dd_data_start))  &&
+        DO_(initialise_transform(header, data_index, dd_data));
 }
 
 static void close_disk(void)
@@ -173,7 +174,6 @@ bool start_disk_writer(struct buffer *buffer)
     reader = open_reader(buffer, true);
     writer_running = true;
     return
-        initialise_transform(header, data_index, dd_data)  &&
         TEST_0(pthread_create(&writer_id, NULL, writer_thread, NULL))  &&
         TEST_0(pthread_create(&transform_id, NULL, transform_thread, NULL));
 }

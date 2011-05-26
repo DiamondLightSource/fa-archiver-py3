@@ -63,8 +63,8 @@ static const char *decimation_config = NULL;
 /* Enable floating point exceptions.  Useful for debugging, but can cause
  * archiver to halt unexpectedly. */
 static bool floating_point_exception = false;
-/* Replay filename for replaying dummy canned data. */
-static const char *replay_filename = NULL;
+/* Set if replay configured. */
+static bool replay = false;
 
 
 static void usage(void)
@@ -106,8 +106,8 @@ static bool process_options(int *argc, char ***argv)
             case 't':   timestamp_logging(true);                    break;
             case 'D':   daemon_mode = true;                         break;
             case 'p':   pid_filename = optarg;                      break;
-            case 'F':   fa_sniffer_device = NULL;
-                        replay_filename = optarg;                   break;
+            case 'F':   fa_sniffer_device = optarg;
+                        replay = true;                              break;
             case 'E':   floating_point_exception = true;            break;
             case 'b':
                 ok = DO_PARSE("buffer blocks",
@@ -234,20 +234,22 @@ int main(int argc, char **argv)
                 FE_DIVBYZERO | FE_INVALID | FE_OVERFLOW)))  &&
         initialise_disk_writer(output_filename, &input_block_size)  &&
         create_buffer(&fa_block_buffer, input_block_size, buffer_blocks)  &&
-        IF_(decimation_config, initialise_decimation(decimation_config))  &&
-        IF_(replay_filename, initialise_replay(replay_filename))  &&
+        IF_(decimation_config,
+            initialise_decimation(
+                decimation_config, fa_block_buffer, &decimated_buffer))  &&
+        initialise_sniffer(fa_block_buffer, fa_sniffer_device, replay)  &&
+        initialise_server(fa_block_buffer, decimated_buffer, server_socket)  &&
+        initialise_reader(output_filename)  &&
 
         maybe_daemonise()  &&
         /* All the thread initialisation must be done after daemonising, as of
          * course threads don't survive across the daemon() call!  Alas, this
          * means that many startup errors go into syslog rather than stderr. */
         start_disk_writer(fa_block_buffer)  &&
-        initialise_sniffer(
-            fa_block_buffer, fa_sniffer_device, boost_priority)  &&
-        IF_(decimation_config,
-            start_decimation(fa_block_buffer, &decimated_buffer))  &&
-        initialise_server(fa_block_buffer, decimated_buffer, server_socket)  &&
-        initialise_reader(output_filename)  &&
+        start_sniffer(boost_priority)  &&
+        IF_(decimation_config, start_decimation())  &&
+        start_server()  &&
+
         DO_(run_archiver());
 
     return ok ? 0 : 1;

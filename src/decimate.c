@@ -319,26 +319,25 @@ int get_decimation_factor(void)
 }
 
 
-bool initialise_decimation(const char *config_file)
+bool initialise_decimation(
+    const char *config_file, struct buffer *fa_buffer, struct buffer **buffer)
 {
+    fa_block_size = buffer_block_size(fa_buffer);
     return
         config_parse_file(
             config_file, config_table, ARRAY_SIZE(config_table))  &&
-        initialise_configuration();
+        initialise_configuration()  &&
+        DO_(reader = open_reader(fa_buffer, false))  &&
+        create_buffer(&decimation_buffer,
+            output_sample_count * FA_FRAME_SIZE, output_block_count)  &&
+        DO_(*buffer = decimation_buffer);
 }
 
 
-bool start_decimation(struct buffer *fa_buffer, struct buffer **buffer)
+bool start_decimation(void)
 {
-    fa_block_size = buffer_block_size(fa_buffer);
-    reader = open_reader(fa_buffer, false);
     running = true;
-
-    return
-        create_buffer(&decimation_buffer,
-            output_sample_count * FA_FRAME_SIZE, output_block_count)  &&
-        DO_(*buffer = decimation_buffer)  &&
-        TEST_0(pthread_create(&decimate_id, NULL, decimation_thread, NULL));
+    return TEST_0(pthread_create(&decimate_id, NULL, decimation_thread, NULL));
 }
 
 
