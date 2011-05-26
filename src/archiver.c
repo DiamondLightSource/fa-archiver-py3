@@ -161,7 +161,8 @@ static void at_exit(int signum)
 
 static bool initialise_signals(void)
 {
-    struct sigaction do_shutdown = { .sa_handler = at_exit, .sa_flags = 0 };
+    struct sigaction do_shutdown = {
+        .sa_handler = at_exit, .sa_flags = SA_RESTART };
     return
         TEST_IO(sem_init(&shutdown_semaphore, 0, 0))  &&
 
