@@ -5,8 +5,6 @@ require('cothread')
 
 import os, sys
 import optparse
-import re
-import glob
 import numpy
 from PyQt4 import Qwt5, QtGui, QtCore, uic
 
@@ -335,40 +333,36 @@ class KeyFilter(QtCore.QObject):
         return False
 
 
-def parse_options():
-    locations = [
-        re.sub('.*/([^/]*)\.viewer\.conf', r'\1', conf)
-        for conf in glob.glob(
-            os.path.join(os.path.dirname(__file__), '*.viewer.conf'))]
-    parser = optparse.OptionParser(usage = '''\
-    fa-viewer [-f] [location]
+parser = optparse.OptionParser(usage = '''\
+fa-viewer [-f] [location]
 
-    Display live Fast Acquisition data from EBPM data stream.  The location can
-    be one of %s, or full path to location file if -f specified.
-    The default location is %s.''' % (', '.join(locations), DEFAULT_LOCATION))
-    parser.add_option(
-        '-f', dest = 'full_path', default = False, action = 'store_true',
-        help = 'Location is full path to location file')
-    parser.add_option(
-        '-S', dest = 'server', default = None,
-        help = 'Override server address in location file')
-    options, arglist = parser.parse_args()
-    if len(arglist) > 1:
-        parser.error('Unexpected arguments')
-    if arglist:
-        location = arglist[0]
-    else:
-        location = DEFAULT_LOCATION
-    server, port, BPM_list = falib.load_bpm_defs(location, options.full_path)
-    if options.server:
-        server = options.server
-    return server, port, BPM_list
+Display live Fast Acquisition data from EBPM data stream.  The location can
+be one of %s, or full path to location file if -f specified.
+The default location is %s.''' % (
+    ', '.join(falib.config.list_location_files()), DEFAULT_LOCATION))
+parser.add_option(
+    '-f', dest = 'full_path', default = False, action = 'store_true',
+    help = 'Location is full path to location file')
+parser.add_option(
+    '-S', dest = 'server', default = None,
+    help = 'Override server address in location file')
+options, arglist = parser.parse_args()
+if len(arglist) > 1:
+    parser.error('Unexpected arguments')
+if arglist:
+    location = arglist[0]
+else:
+    location = DEFAULT_LOCATION
+
+# Load the location file and compute the groups
+falib.load_location_file(
+    globals(), location, options.full_path, options.server)
+BPM_list = falib.compute_bpm_groups(BPM_LIST, GROUPS, PATTERNS)
 
 
-server, port, BPM_list = parse_options()
-F_S = falib.get_sample_frequency(server = server, port = port)
+F_S = falib.get_sample_frequency(server = FA_SERVER, port = FA_PORT)
 try:
-    decimation_factor = falib.get_decimation(server = server, port = port)
+    decimation_factor = falib.get_decimation(server = FA_SERVER, port = FA_PORT)
 except:
     # Assume unable to receive decimation because not supported by server
     decimation_factor = 0
@@ -381,6 +375,6 @@ qapp.installEventFilter(key_filter)
 # create and show form
 ui_viewer = uic.loadUi(os.path.join(os.path.dirname(__file__), 'viewer.ui'))
 # Bind code to form
-s = Viewer(ui_viewer, server, port)
+s = Viewer(ui_viewer, FA_SERVER, FA_PORT)
 
 cothread.WaitForQuit()

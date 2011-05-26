@@ -1,9 +1,9 @@
 # Common FA library
 
 import falib
-import bpms
+import config
 
 from falib import *
-from bpms import *
+from config import *
 
-__all__ = falib.__all__ + bpms.__all__
+__all__ = falib.__all__ + config.__all__

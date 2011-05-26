@@ -9,7 +9,8 @@ import numpy
 import cothread
 
 
-__all__ = ['subscription', 'get_sample_frequency', 'get_decimation']
+__all__ = [
+    'connection', 'subscription', 'get_sample_frequency', 'get_decimation']
 
 
 MASK_SIZE = 256         # Number of possible bits in a mask

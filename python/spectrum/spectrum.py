@@ -3,6 +3,7 @@ require('cothread==1.17')
 require('iocbuilder==3.3')
 
 import os
+import optparse
 
 from softioc import builder
 from softioc import softioc
@@ -10,25 +11,6 @@ import numpy
 import cothread
 
 import falib
-
-IOC_NAME = 'TS-DI-IOC-02'
-
-FA_IDS = [1, 2, 185]
-FA_NAMES = ['SR01C-DI-EBPM-01', 'SR01C-DI-EBPM-02', 'SR-RF-PM-01']
-
-FA_SERVER ='localhost'
-
-
-# Corresponds to 4 seconds per half sample.
-HALF_SAMPLE_SIZE = 4096
-
-FREQUENCIES = numpy.arange(1, 301)      # 1..300
-SPEC_LEN = len(FREQUENCIES)
-
-
-# Get the underlying sample frequency
-# Actually, this ought to be an attribute of the subscription...
-F_S = falib.get_sample_frequency() / falib.get_decimation()
 
 
 class Results:
@@ -73,7 +55,6 @@ class Compute:
         # When returning the integrated power in each frequency bin scale the
         # result to a truthful power per Hertz
         self.bin_scale = numpy.diff(fft_freqs[self.bins])[:, None, None]
-#         self.bin_scale = 1
 
         # We process the power spectrum in a sequence of windowed overlapping
         # ranges.  Each range consists of two half samples (so we have 50%
@@ -112,8 +93,9 @@ class Monitor:
         self.results = [Results(name) for name in FA_NAMES]
 
         # Control PVs
-        builder.SetDeviceName('SR-DI-SPEC-01')
-        self.target_pv = builder.longOut('TARGET', 1, 600, initial_value = 15)
+        builder.SetDeviceName(DEVICE_NAME)
+        self.target_pv = builder.longOut(
+            'TARGET', 1, 600, initial_value = TARGET_COUNT)
         self.count_pv = builder.longIn('COUNT')
         builder.Waveform('FREQ', FREQUENCIES)
         builder.mbbIn('PVS', *FA_NAMES)
@@ -168,6 +150,78 @@ class Monitor:
 
     def start(self):
         cothread.Spawn(self.run)
+
+
+# -----------------------------------------------------------------------------
+# Command line argument processing.
+
+def eval_expr(expr):
+    '''Evaluates expr in a context with numpy in the local dictionary.'''
+    numpy_dict = dict((n, getattr(numpy, n)) for n in dir(numpy))
+    return eval(expr, {}, numpy_dict)
+
+def call_eval(option, opt, value, parser):
+    parser.values.frequencies = eval_expr(value)
+
+
+parser = optparse.OptionParser(usage = '''\
+fa-spectrum [-f] location id-list
+
+Computes full spectrum analysis for the given PVs.''')
+parser.add_option(
+    '-f', dest = 'full_path', default = False, action = 'store_true',
+    help = 'location is full path to file')
+parser.add_option(
+    '-S', dest = 'server', default = None,
+    help = 'Override server address in location file')
+parser.add_option(
+    '-I', dest = 'ioc_name', default = 'TS-DI-IOC-02',
+    help = 'Name of this IOC')
+parser.add_option(
+    '-D', dest = 'device_name', default = 'SR-DI-SPEC-01',
+    help = 'Device name for control PVs')
+parser.add_option(
+    '-s', dest = 'sample_size', default = 4096,
+    help = 'Number of samples (at 1kHz) per update.  Should be power of 2, '
+        'default is 4096 or around 4s per update')
+parser.add_option(
+    '-t', dest = 'target_count', default = 15,
+    help = 'Number of updates per mean spectrum.  Can be changed via PV.')
+parser.add_option(
+    '-F', dest = 'frequencies', default = eval_expr('arange(1,301)'),
+    action = 'callback', callback = call_eval, type = 'string',
+    help = 'numpy expression evaluating to a range of frequencies.  '
+        'The default is \'arange(1,301)\', but any monotonically increasing '
+        'range from 1 to a sensible upper bound can be specified.')
+options, args = parser.parse_args()
+try:
+    location, id_list = args
+except:
+    parser.error('Arguments should be location and id list')
+
+# Load the configured location file.
+falib.load_location_file(
+    globals(), location, options.full_path, options.server)
+
+
+# BPMs are specified as a comma separated list of FA ids, and we map these to
+# the corresponding BPM names using the configured BPM list.
+FA_IDS = map(int, id_list.split(','))
+bpm_list = dict(falib.load_bpm_list(BPM_LIST))
+FA_NAMES = [bpm_list[bpm] for bpm in FA_IDS]
+
+# Extract remaining options for processing.
+IOC_NAME = options.ioc_name
+DEVICE_NAME = options.device_name
+HALF_SAMPLE_SIZE = options.sample_size
+TARGET_COUNT = options.target_count
+FREQUENCIES = options.frequencies
+
+SPEC_LEN = len(FREQUENCIES)
+
+# Get the underlying sample frequency
+# Actually, this ought to be an attribute of the subscription...
+F_S = falib.get_sample_frequency() / falib.get_decimation()
 
 
 # Spectrum monitor and associated PVs.
