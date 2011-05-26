@@ -22,53 +22,35 @@ import falib
 # ------------------------------------------------------------------------------
 
 class cis:
-    def __init__(self):
-        self.f_s = F_S
-        self.freq = 100.0
-        self.freq = 260.0
-        self.delay = INITIAL_DELAY
-        self.reset()
+    def __init__(self, sample_size, delta):
+        self.freq_pv = builder.aIn('FREQ', EGU = 'Hz', PREC = 2)
+        builder.longOut('DELTA',
+            VAL = delta, PINI = 'YES', on_update = self.set_delta)
+        builder.aOut('DELAY', EGU = 'samples', PREC = 2,
+            VAL = 0, PINI = 'YES', on_update = self.set_delay)
 
-        builder.aOut('FREQ', 0, 1000,
-            VAL  = self.freq,   EGU  = 'Hz',    PREC = 2,
-            on_update = self.set_freq)
-        builder.aOut('F_S',
-            VAL  = self.f_s,    EGU  = 'Hz',    PREC = 2,
-            on_update = self.set_f_s)
-        builder.aOut('DELAY', 0, 10000,
-            EGU = 'us', VAL = self.delay, on_update = self.set_delay)
-
-    def reset(self):
-        # To be called when frequency has changed
-        self.freq_n = 2j * numpy.pi * self.freq / self.f_s
-        self.cis = self.phase(numpy.arange(SAMPLE_SIZE) * decimation)
-        self.cis *= 1e-3 / SAMPLE_SIZE      # Take mean and convert to microns
-        mean.reset()
-
-    def set_freq(self, freq):
-        self.freq = freq
-        self.reset()
-
-    def set_f_s(self, f_s):
-        self.f_s = f_s
-        self.reset()
+        self.sample_size = sample_size
+        self.set_delta(delta)
 
     def set_delay(self, delay):
         self.delay = delay
 
-    def phase(self, n):
-        '''Returns exp(2 pi n f / f_s), in other words, the phase advance at the
-        selected frequency for sample n.  Note that sample n is in terms of the
-        underlying sample rate, not the decimated rate.'''
-        return numpy.exp(self.freq_n * n)
+    def set_delta(self, delta):
+        self.freq = F_S * 2**-32 * delta
+        self.freq_pv.set(self.freq)
 
-    def compensate(self, iq, t0):
-        # Compensates input waveform for given t0 and the programmed delay.
-        delta = self.delay * 1e-6 * self.f_s
-#         print 'delta', delta
-        # The extra 1j compensates for an extra phase offset introduced by the
-        # fact that the excitation is  cos(2 * pi * f * t0 / 10072)
-        iq *= self.phase(t0 + delta) * -1j
+        # First compute the phase modulo 2**32 using integer arithmetic
+        self.delta = numpy.uint32(delta)
+        timebase = numpy.uint32(decimation * numpy.arange(self.sample_size))
+        self.cis = self.__cis(timebase) * 1e-3 / self.sample_size
+
+    def compensate(self, t0):
+        return self.__cis(numpy.uint32(t0)) * self.__cis(self.delay)
+
+    def __cis(self, t):
+        phase = 2**-32 * (self.delta * t)
+        return numpy.exp(-2j * numpy.pi * phase)
+
 
 
 class waveform:
@@ -82,6 +64,7 @@ class waveform:
         self.wfq = self.__waveform(axis, 'Q')
         self.wfa = self.__waveform(axis, 'A')
         self.wfiq = self.__waveform(axis, 'IQ', 2)
+        self.angle = builder.aOut(axis + 'ANGLE', EGU = 'deg', PREC = 1)
 
     def update(self, value):
         I = numpy.real(value)
@@ -95,20 +78,14 @@ class waveform:
         self.wfa.set(A)
         self.wfiq.set(numpy.concatenate((I, Q)))
 
-
-class enabled:
-    '''Monitors the ENABLED waveform from the concentrator.'''
-    def __init__(self):
-        pv = 'SR-DI-EBPM-01:ENABLED'
-        self.__update(catools.caget(pv))
-        catools.camonitor(pv, self.__update)
-
-    def __update(self, enabled):
-        self.enabled = enabled == 0
+        coh = (value * value).sum() / (A * A).sum()
+        self.angle.set(180 / numpy.pi * numpy.angle(coh) / 2)
 
 
 class mean:
     def __init__(self):
+        self.wfx = waveform('X')
+        self.wfy = waveform('Y')
         self.meanx = waveform('MX')
         self.meany = waveform('MY')
         self.sum = numpy.empty((len(FA_IDS), 2), dtype = numpy.complex)
@@ -128,6 +105,9 @@ class mean:
         self.target = target
 
     def update(self, value):
+        self.wfx.update(value[:, 0])
+        self.wfy.update(value[:, 1])
+
         self.sum += value
         self.count += 1
         self.count_pv.set(self.count)
@@ -135,8 +115,6 @@ class mean:
         # Only generate an update when we reach our target
         if self.count >= self.target:
             mean = self.sum / self.count
-            if hide_disabled.get():
-                mean[~enabled.enabled] = 0
             self.meanx.update(mean[:, 0])
             self.meany.update(mean[:, 1])
 
@@ -145,8 +123,6 @@ class mean:
 
 class updater:
     def __init__(self):
-        self.wfx = waveform('X')
-        self.wfy = waveform('Y')
         cothread.Spawn(self.run)
 
     def subscription(self):
@@ -165,18 +141,10 @@ class updater:
             # in phase.  Finish by permuting result from archive order into BPM
             # display order.
             iq = numpy.tensordot(r, cis.cis, axes=(0, 0))
-            cis.compensate(iq, t0)
-            iq = iq[PERMUTE]
+            iq *= cis.compensate(t0)
 
             # This is the fully digested data ready for any other processing
             mean.update(iq)
-
-            # Finally display the data we have, zeroing disabled BPMs if
-            # required.
-            if hide_disabled.get():
-                iq[~enabled.enabled] = 0
-            self.wfx.update(iq[:, 0])
-            self.wfy.update(iq[:, 1])
 
 
     def run(self):
@@ -221,10 +189,6 @@ parser.add_option(
     '-r', dest = 'raw_data', default = False, action = 'store_true',
     help = 'Use full spectrum data stream rather than decimated data')
 parser.add_option(
-    '-F', dest = 'frequency', default = 10072, type = 'float',
-    help = 'Nominal underlying sample frequency.  Must match excitation, '
-        'default is 10072Hz')
-parser.add_option(
     '-s', dest = 'sample_size', default = 10000, type = 'int',
     help = 'Number of underlying FA rate samples per update')
 parser.add_option(
@@ -255,7 +219,6 @@ if DECIMATED:
     decimation = falib.get_decimation(server = FA_SERVER)
 else:
     decimation = 1
-F_S = options.frequency
 SAMPLE_SIZE = options.sample_size // decimation
 INITIAL_DELAY = options.delay
 
@@ -268,29 +231,25 @@ BPM_ids = [
     MAKE_ID_FN(*MAKE_ID_PATTERN.match(bpm).groups())
     for bpm in bpm_names]
 
-# Compute the reverse permutation array to translate the monitored FA ids, which
-# are returned in ascending numerical order, back into BPM index position.
-PERMUTE = numpy.empty(len(FA_IDS), dtype = int)
-PERMUTE[numpy.argsort(FA_IDS)] = numpy.arange(len(FA_IDS))
-# The PERMUTE array should be redundant now.
+assert (numpy.diff(numpy.array(FA_IDS)) > 0).all(), \
+    'BPM ids not in ascending order'
+
+# Working sample frequency for nominal frequency calculation
+F_S = falib.get_sample_frequency(server = FA_SERVER)
 
 
 # ------------------------------------------------------------------------------
 # Record creation and IOC initialisation
 
-builder.SetDeviceName('%s-DI-FAAN-01' % location)
+builder.SetDeviceName(DEVICE_NAME)
 
 builder.Waveform('BPMID', BPM_ids)
 
-hide_disabled = builder.boolOut('HIDEDIS',
-    'Show Disabled', 'Hide Disabled', RVAL = 0, PINI = 'YES')
 
-# Monitors ENABLED waveform
-enabled = enabled()
 # Manages longer accumulations of data for narrow band monitoring
 mean = mean()
 # Converts frequency selection into a mixing waveform
-cis = cis()
+cis = cis(SAMPLE_SIZE, 66096100)
 # Core processing
 updater = updater()
 

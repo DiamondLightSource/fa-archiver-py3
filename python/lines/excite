@@ -1,0 +1,113 @@
+#!/usr/bin/env dls-python2.6
+
+# Tool to enable excitation of beam
+
+from pkg_resources import require
+require('cothread')
+
+import sys
+import time
+import optparse
+import numpy
+
+from cothread.catools import *
+
+
+parser = optparse.OptionParser(usage = '''\
+excite [options] [cells]
+
+Enable beam excitation around the ring.  If no cells are specified then the
+excitation is applied to all cells.''')
+parser.add_option(
+    '-B', dest = 'booster', default = False, action = 'store_true',
+    help = 'Control booster rather than storage ring')
+parser.add_option(
+    '-D', dest = 'debug', default = False, action = 'store_true',
+    help = 'Enable debug mode, no caput writes actually occur')
+parser.add_option(
+    '-S', dest = 'stop', default = False, action = 'store_true',
+    help = 'Force immediate stop of excitation')
+parser.add_option(
+    '-f', dest = 'base_frequency', default = 150, type = 'float',
+    help = 'Starting frequency, default 150 Hz')
+parser.add_option(
+    '-s', dest = 'step_frequency', default = 5, type = 'float',
+    help = 'Step frequency, default 5 Hz')
+parser.add_option(
+    '-t', dest = 'duration', default = 120, type = 'float',
+    help = 'Duration of excitation in seconds, default 2 minutes')
+parser.add_option(
+    '-a', dest = 'amplitude', default = 1.0, type = 'float',
+    help = 'Excitation magnitude in mA, default 1 mA')
+parser.add_option(
+    '-c', dest = 'corrector', default = 0, type = 'int',
+    help = 'Target corrector to excite')
+options, args = parser.parse_args()
+
+
+if options.booster:
+    BASE = 'BR'
+    ALL_CELLS = range(1, 5)
+else:
+    BASE = 'SR'
+    ALL_CELLS = range(1, 25)
+
+if args:
+    try:
+        CELLS = map(int, args)
+    except:
+        parser.error('Expected list of cell numbers')
+    if not set(CELLS) <= set(ALL_CELLS):
+        parser.error('Cell numbers not all valid for %s' % BASE)
+else:
+    CELLS = ALL_CELLS
+
+
+
+# Convert frequencies to deltas
+F_S = 10072
+base_delta = numpy.uint32(options.base_frequency * 2**32 / F_S)
+step_delta = numpy.uint32(options.step_frequency * 2**32 / F_S)
+DELTAS = numpy.array(
+    [base_delta + step_delta * cell for cell in CELLS], dtype = numpy.uint32)
+
+COUNT = options.duration * F_S
+
+
+PVS = ['COUNT', 'COR', 'DELTA', 'AMP']
+
+if options.debug:
+    def caput(pvs, values, **args):
+        print 'caput', pvs, values, args
+
+def cell_pv(cell, pv):
+    return '%s%02dA-CS-FOFB-01:IQ:%s' % (BASE, cell, pv)
+
+all_resets = [cell_pv(cell, 'RESET') for cell in ALL_CELLS]
+resets     = [cell_pv(cell, 'RESET') for cell in CELLS]
+all_counts = [cell_pv(cell, 'COUNT') for cell in ALL_CELLS]
+
+# Stop the current excitation
+caput(all_counts, 0, wait = True)
+caput(all_resets, 1, wait = True)
+if options.stop:
+    sys.exit()
+
+
+# Program the requested settings
+for cell, delta in zip(CELLS, DELTAS):
+    values = [COUNT, options.corrector, delta, 1e-3 * options.amplitude]
+    pvs = [cell_pv(cell, pv) for pv in PVS]
+    caput(pvs, values, wait = True)
+
+# Print the configured settings
+print 'Current:', caget('SR-DI-DCCT-01:SIGNAL')
+for cell in CELLS:
+    print 'Cell % 2d:' % cell,
+    values = caget((cell_pv(cell, pv) for pv in PVS), throw = False)
+    print ', '.join('%s: %s' % (pv, val) for pv, val in zip(PVS, values))
+
+# Go!
+print time.ctime(time.time())
+caput(resets, 1)
+print

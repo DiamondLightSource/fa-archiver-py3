@@ -3,8 +3,8 @@ beginScreenProperties
 major 4
 minor 0
 release 1
-x 2031
-y 122
+x 2080
+y 149
 w 1089
 h 729
 font "helvetica-medium-r-14.0"
@@ -159,31 +159,6 @@ value {
 autoSize
 endObjectProperties
 
-# (Text Control)
-object activeXTextDspClass
-beginObjectProperties
-major 4
-minor 5
-release 0
-x 88
-y 696
-w 64
-h 24
-controlPv "$(device):FREQ"
-font "helvetica-medium-r-14.0"
-fgColor index 14
-bgColor index 0
-useDisplayBg
-editable
-autoHeight
-motifWidget
-limitsFromDb
-nullColor index 0
-useHexPrefix
-newPos
-objType "controls"
-endObjectProperties
-
 # (X-Y Graph)
 object xyGraphClass
 beginObjectProperties
@@ -284,25 +259,6 @@ plotSymbolType {
 plotColor {
   0 index 26
 }
-endObjectProperties
-
-# (Menu Button)
-object activeMenuButtonClass
-beginObjectProperties
-major 4
-minor 0
-release 0
-x 160
-y 696
-w 128
-h 24
-fgColor index 14
-bgColor index 4
-inconsistentColor index 0
-topShadowColor index 1
-botShadowColor index 11
-controlPv "$(device):HIDEDIS"
-font "helvetica-medium-r-14.0"
 endObjectProperties
 
 # (Menu Mux)
@@ -420,11 +376,11 @@ beginObjectProperties
 major 4
 minor 5
 release 0
-x 328
+x 88
 y 696
-w 72
+w 104
 h 24
-controlPv "$(device):F_S"
+controlPv "$(device):DELTA"
 font "helvetica-medium-r-14.0"
 fgColor index 14
 bgColor index 0
@@ -437,26 +393,6 @@ nullColor index 0
 useHexPrefix
 newPos
 objType "controls"
-endObjectProperties
-
-# (Static Text)
-object activeXTextClass
-beginObjectProperties
-major 4
-minor 1
-release 0
-x 296
-y 696
-w 22
-h 16
-font "helvetica-medium-r-14.0"
-fgColor index 14
-bgColor index 0
-useDisplayBg
-value {
-  "f_s:"
-}
-autoSize
 endObjectProperties
 
 # (Message Button)
@@ -476,6 +412,7 @@ topShadowColor index 1
 botShadowColor index 11
 controlPv "$(device):RESET"
 pressValue "0"
+onLabel "Reset"
 offLabel "Reset"
 3d
 useEnumNumeric
@@ -525,5 +462,84 @@ value {
   "delay:"
 }
 autoSize
+endObjectProperties
+
+# (Text Monitor)
+object activeXTextDspClass:noedit
+beginObjectProperties
+major 4
+minor 5
+release 0
+x 640
+y 696
+w 48
+h 16
+controlPv "$(device):XANGLE"
+font "helvetica-medium-r-14.0"
+fontAlign "right"
+fgColor index 14
+bgColor index 0
+useDisplayBg
+autoHeight
+limitsFromDb
+nullColor index 0
+smartRefresh
+fastUpdate
+useHexPrefix
+newPos
+objType "monitors"
+endObjectProperties
+
+# (Text Monitor)
+object activeXTextDspClass:noedit
+beginObjectProperties
+major 4
+minor 5
+release 0
+x 640
+y 712
+w 48
+h 16
+controlPv "$(device):YANGLE"
+font "helvetica-medium-r-14.0"
+fontAlign "right"
+fgColor index 14
+bgColor index 0
+useDisplayBg
+autoHeight
+limitsFromDb
+nullColor index 0
+smartRefresh
+fastUpdate
+useHexPrefix
+newPos
+objType "monitors"
+endObjectProperties
+
+# (Text Monitor)
+object activeXTextDspClass:noedit
+beginObjectProperties
+major 4
+minor 5
+release 0
+x 216
+y 696
+w 72
+h 16
+controlPv "$(device):FREQ"
+font "helvetica-medium-r-14.0"
+fontAlign "right"
+fgColor index 14
+bgColor index 0
+useDisplayBg
+autoHeight
+limitsFromDb
+nullColor index 0
+smartRefresh
+fastUpdate
+useHexPrefix
+showUnits
+newPos
+objType "monitors"
 endObjectProperties
 
