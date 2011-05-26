@@ -165,7 +165,7 @@ def call_eval(option, opt, value, parser):
 
 
 parser = optparse.OptionParser(usage = '''\
-fa-spectrum [-f] location id-list
+fa-spectrum [options] location id-list
 
 Computes full spectrum analysis for the given PVs.''')
 parser.add_option(
@@ -178,7 +178,7 @@ parser.add_option(
     '-I', dest = 'ioc_name', default = 'TS-DI-IOC-02',
     help = 'Name of this IOC')
 parser.add_option(
-    '-D', dest = 'device_name', default = 'SR-DI-SPEC-01',
+    '-D', dest = 'device_name', default = None,
     help = 'Device name for control PVs')
 parser.add_option(
     '-s', dest = 'sample_size', default = 4096,
@@ -199,6 +199,14 @@ try:
 except:
     parser.error('Arguments should be location and id list')
 
+# The device name is computed from the location if appropriate.
+if options.device_name:
+    DEVICE_NAME = options.device_name
+else:
+    if options.full_path:
+        parser.error('Must specify device name with location path')
+    DEVICE_NAME = '%s-DI-SPEC-01' % location
+
 # Load the configured location file.
 falib.load_location_file(
     globals(), location, options.full_path, options.server)
@@ -212,7 +220,6 @@ FA_NAMES = [bpm_list[bpm] for bpm in FA_IDS]
 
 # Extract remaining options for processing.
 IOC_NAME = options.ioc_name
-DEVICE_NAME = options.device_name
 HALF_SAMPLE_SIZE = options.sample_size
 TARGET_COUNT = options.target_count
 FREQUENCIES = options.frequencies

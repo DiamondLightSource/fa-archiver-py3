@@ -1,4 +1,4 @@
 #!/bin/sh
 
 cd "$(dirname "$0")"
-edm -x -eolc -m device=${1:-SR}-DI-FAAN-01 analyser.edl &
+edm -x -eolc -m device=${1:-SR}-DI-FAAN-01 lines.edl &

@@ -8,6 +8,7 @@ require('iocbuilder==3.3')
 import sys
 import os
 import re
+import optparse
 
 from softioc import builder
 from softioc import softioc
@@ -18,64 +19,6 @@ from cothread import catools
 import falib
 
 
-if len(sys.argv) > 1:
-    location = sys.argv[1]
-else:
-    location = 'SR'
-
-# Import configuration settings from specified configuration file
-execfile(
-    os.path.join(os.path.dirname(__file__), '%s.viewer.conf' % location),
-    globals())
-
-decimated = True
-
-
-if decimated:
-    decimation = falib.get_decimation(server = FA_SERVER)
-else:
-    decimation = 1
-
-builder.SetDeviceName('%s-DI-FAAN-01' % location)
-
-
-
-SAMPLE_SIZE = 10000 / decimation
-# Nominal sample frequency used to compute exitation waveform.
-F_S = 10072
-
-
-
-# ------------------------------------------------------------------------------
-
-def load_bpm_list():
-    '''Loads list of ids and bpms from given file.'''
-    for line in file(BPM_LIST).readlines():
-        if line and line[0] != '#':
-            id_bpm = line.split()
-            if len(id_bpm) == 2:
-                id, bpm = id_bpm
-                id = int(id)
-                if id in BPM_ID_RANGE:
-                    yield (id, bpm)
-
-id_bpm_list = list(load_bpm_list())
-FA_IDS = [id for id, bpm in id_bpm_list]
-MAKE_ID_PATTERN = re.compile(MAKE_ID_PATTERN)
-BPM_ids = [
-    MAKE_ID_FN(*MAKE_ID_PATTERN.match(bpm).groups())
-    for id, bpm in id_bpm_list]
-
-
-builder.Waveform('BPMID', BPM_ids)
-
-
-# Compute the reverse permutation array to translate the monitored FA ids, which
-# are returned in ascending numerical order, back into BPM index position.
-PERMUTE = numpy.empty(len(FA_IDS), dtype = int)
-PERMUTE[numpy.argsort(FA_IDS)] = numpy.arange(len(FA_IDS))
-
-
 # ------------------------------------------------------------------------------
 
 class cis:
@@ -83,7 +26,7 @@ class cis:
         self.f_s = F_S
         self.freq = 100.0
         self.freq = 260.0
-        self.delay = 780.0
+        self.delay = INITIAL_DELAY
         self.reset()
 
         builder.aOut('FREQ', 0, 1000,
@@ -208,7 +151,7 @@ class updater:
 
     def subscription(self):
         sub = falib.subscription(
-            [0] + FA_IDS, server=FA_SERVER, decimated=decimated)
+            (0,) + FA_IDS, server=FA_SERVER, decimated=DECIMATED)
         mean.reset()
         while True:
             r = sub.read(SAMPLE_SIZE)
@@ -255,6 +198,90 @@ class updater:
 
 
 
+# ------------------------------------------------------------------------------
+# Command line argument processing.
+
+parser = optparse.OptionParser(usage = '''\
+fa-lines [options] location
+
+Computes full waveform beam response for one or more frequencies.''')
+parser.add_option(
+    '-f', dest = 'full_path', default = False, action = 'store_true',
+    help = 'location is full path to file')
+parser.add_option(
+    '-S', dest = 'server', default = None,
+    help = 'Override server address in location file')
+parser.add_option(
+    '-I', dest = 'ioc_name', default = 'TS-DI-IOC-01',
+    help = 'Name of this IOC')
+parser.add_option(
+    '-D', dest = 'device_name', default = None,
+    help = 'Device name for control PVs')
+parser.add_option(
+    '-r', dest = 'raw_data', default = False, action = 'store_true',
+    help = 'Use full spectrum data stream rather than decimated data')
+parser.add_option(
+    '-F', dest = 'frequency', default = 10072, type = 'float',
+    help = 'Nominal underlying sample frequency.  Must match excitation, '
+        'default is 10072Hz')
+parser.add_option(
+    '-s', dest = 'sample_size', default = 10000, type = 'int',
+    help = 'Number of underlying FA rate samples per update')
+parser.add_option(
+    '-d', dest = 'delay', default = 200, type = 'float',
+    help = 'Initial value for delay pv')
+options, args = parser.parse_args()
+try:
+    location, = args
+except:
+    parser.error('Argument should be location')
+
+# The device name is computed from the location if appropriate.
+if options.device_name:
+    DEVICE_NAME = options.device_name
+else:
+    if options.full_path:
+        parser.error('Must specify device name with location path')
+    DEVICE_NAME = '%s-DI-FAAN-01' % location
+
+# Load the configured location file.
+falib.load_location_file(
+    globals(), location, options.full_path, options.server)
+
+# Extract remaining options for processing.
+IOC_NAME = options.ioc_name
+DECIMATED = not options.raw_data
+if DECIMATED:
+    decimation = falib.get_decimation(server = FA_SERVER)
+else:
+    decimation = 1
+F_S = options.frequency
+SAMPLE_SIZE = options.sample_size // decimation
+INITIAL_DELAY = options.delay
+
+# Compute list of FA ids and the corresponding BPM ids.
+FA_IDS, bpm_names = zip(*[(id, bpm)
+    for id, bpm in falib.load_bpm_list(BPM_LIST)
+    if id in BPM_ID_RANGE])
+MAKE_ID_PATTERN = re.compile(MAKE_ID_PATTERN)
+BPM_ids = [
+    MAKE_ID_FN(*MAKE_ID_PATTERN.match(bpm).groups())
+    for bpm in bpm_names]
+
+# Compute the reverse permutation array to translate the monitored FA ids, which
+# are returned in ascending numerical order, back into BPM index position.
+PERMUTE = numpy.empty(len(FA_IDS), dtype = int)
+PERMUTE[numpy.argsort(FA_IDS)] = numpy.arange(len(FA_IDS))
+# The PERMUTE array should be redundant now.
+
+
+# ------------------------------------------------------------------------------
+# Record creation and IOC initialisation
+
+builder.SetDeviceName('%s-DI-FAAN-01' % location)
+
+builder.Waveform('BPMID', BPM_ids)
+
 hide_disabled = builder.boolOut('HIDEDIS',
     'Show Disabled', 'Hide Disabled', RVAL = 0, PINI = 'YES')
 
@@ -268,6 +295,10 @@ cis = cis()
 updater = updater()
 
 
+# A couple of identification PVs
+builder.SetDeviceName(IOC_NAME)
+builder.stringIn('WHOAMI', VAL = 'Whole orbit frequency response analyser')
+builder.stringIn('HOSTNAME', VAL = os.uname()[1])
 
 # Finally fire up the IOC
 builder.LoadDatabase()
