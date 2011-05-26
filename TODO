@@ -1,6 +1,3 @@
- * Convert all occurrences of 'struct timespec' into internal microsecond
-   timestamps where possible.
  * Experiment with SSE intrinsics, see if makes any difference to CIC speed.
  * Compute decent filters for decimation, checking timing.
  * Guard against floating point exceptions.
- * Add decimation option in compensation filter.

@@ -3,8 +3,8 @@ beginScreenProperties
 major 4
 minor 0
 release 1
-x 2030
-y 121
+x 2031
+y 122
 w 1089
 h 729
 font "helvetica-medium-r-14.0"
@@ -480,5 +480,50 @@ offLabel "Reset"
 3d
 useEnumNumeric
 font "helvetica-medium-r-14.0"
+endObjectProperties
+
+# (Text Control)
+object activeXTextDspClass
+beginObjectProperties
+major 4
+minor 5
+release 0
+x 464
+y 696
+w 72
+h 20
+controlPv "$(device):DELAY"
+font "helvetica-medium-r-14.0"
+fgColor index 14
+bgColor index 0
+useDisplayBg
+editable
+autoHeight
+motifWidget
+limitsFromDb
+nullColor index 0
+useHexPrefix
+newPos
+objType "controls"
+endObjectProperties
+
+# (Static Text)
+object activeXTextClass
+beginObjectProperties
+major 4
+minor 1
+release 0
+x 416
+y 696
+w 37
+h 16
+font "helvetica-medium-r-14.0"
+fgColor index 14
+bgColor index 0
+useDisplayBg
+value {
+  "delay:"
+}
+autoSize
 endObjectProperties
 

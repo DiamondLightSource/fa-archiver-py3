@@ -96,12 +96,6 @@ transform.c transform.h
     archive file.
 
 
-To do
------
-
-* Implement separate archive for decimated data so that this can be read out at
-  a sensible pace.
-
 Notes on SSE
 ------------
 

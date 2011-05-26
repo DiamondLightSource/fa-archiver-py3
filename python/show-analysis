@@ -1,11 +1,4 @@
 #!/bin/sh
 
-case "$1" in
-    BR)     ;;
-    SR)     ;;
-    *)  echo >&2 Specify either BR or SR
-        exit 1 ;;
-esac
-
 cd "$(dirname "$0")"
-edm -x -eolc -m device=$1-DI-FAAN-01 analyser.edl &
+edm -x -eolc -m device=${1:-SR}-DI-FAAN-01 analyser.edl &

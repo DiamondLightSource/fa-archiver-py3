@@ -91,6 +91,10 @@ class subscription(connection):
         self.mask = normalise_mask(mask)
         self.count = count_mask(self.mask)
         self.decimated = decimated
+        if decimated:
+            self.decimation = get_decimation(**kargs)
+        else:
+            self.decimation = 1
 
         flags = 'Z'
         if decimated: flags = flags + 'D'
@@ -106,7 +110,7 @@ class subscription(connection):
             wf = s.read(N)
         wf[n, b, x] = sample n of BPM b on channel x, where x=0 for horizontal
         position and x=1 for vertical position.'''
-        self.t0 = (self.t0 + samples) & 0xffffffff
+        self.t0 = (self.t0 + self.decimation * samples) & 0xffffffff
         raw = self.read_block(8 * samples * self.count)
         array = numpy.frombuffer(raw, dtype = numpy.int32)
         return array.reshape((samples, self.count, 2))

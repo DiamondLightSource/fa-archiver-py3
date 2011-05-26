@@ -28,16 +28,21 @@ execfile(
     os.path.join(os.path.dirname(__file__), '%s.viewer.conf' % location),
     globals())
 
+decimated = True
 
-decimation = falib.get_decimation()
+
+if decimated:
+    decimation = falib.get_decimation(server = FA_SERVER)
+else:
+    decimation = 1
 
 builder.SetDeviceName('%s-DI-FAAN-01' % location)
 
 
 
-SAMPLE_SIZE = 1000
+SAMPLE_SIZE = 10000 / decimation
 # Nominal sample frequency used to compute exitation waveform.
-F_S = 10072 / decimation
+F_S = 10072
 
 
 
@@ -77,18 +82,23 @@ class cis:
     def __init__(self):
         self.f_s = F_S
         self.freq = 100.0
+        self.freq = 260.0
+        self.delay = 780.0
         self.reset()
 
         builder.aOut('FREQ', 0, 1000,
-            VAL  = self.freq,   PREC = 2,
+            VAL  = self.freq,   EGU  = 'Hz',    PREC = 2,
             on_update = self.set_freq)
         builder.aOut('F_S',
-            VAL  = self.f_s,    PREC = 2,
+            VAL  = self.f_s,    EGU  = 'Hz',    PREC = 2,
             on_update = self.set_f_s)
+        builder.aOut('DELAY', 0, 10000,
+            EGU = 'us', VAL = self.delay, on_update = self.set_delay)
 
     def reset(self):
         # To be called when frequency has changed
-        self.cis = self.phase(numpy.arange(SAMPLE_SIZE))
+        self.freq_n = 2j * numpy.pi * self.freq / self.f_s
+        self.cis = self.phase(numpy.arange(SAMPLE_SIZE) * decimation)
         self.cis *= 1e-3 / SAMPLE_SIZE      # Take mean and convert to microns
         mean.reset()
 
@@ -100,11 +110,22 @@ class cis:
         self.f_s = f_s
         self.reset()
 
+    def set_delay(self, delay):
+        self.delay = delay
+
     def phase(self, n):
         '''Returns exp(2 pi n f / f_s), in other words, the phase advance at the
-        selected frequency for sample n.'''
-        freq_n = 2 * numpy.pi * self.freq / self.f_s
-        return numpy.exp(1j * freq_n * n)
+        selected frequency for sample n.  Note that sample n is in terms of the
+        underlying sample rate, not the decimated rate.'''
+        return numpy.exp(self.freq_n * n)
+
+    def compensate(self, iq, t0):
+        # Compensates input waveform for given t0 and the programmed delay.
+        delta = self.delay * 1e-6 * self.f_s
+#         print 'delta', delta
+        # The extra 1j compensates for an extra phase offset introduced by the
+        # fact that the excitation is  cos(2 * pi * f * t0 / 10072)
+        iq *= self.phase(t0 + delta) * -1j
 
 
 class waveform:
@@ -120,12 +141,6 @@ class waveform:
         self.wfiq = self.__waveform(axis, 'IQ', 2)
 
     def update(self, value):
-        A = numpy.abs(value)
-
-        coh = numpy.sum(value * value) / numpy.sum(A * A)
-        phase = numpy.angle(coh) / 2
-        value *= numpy.exp(-1j * phase)
-
         I = numpy.real(value)
         Q = numpy.imag(value)
         A = numpy.abs(value)
@@ -192,10 +207,13 @@ class updater:
         cothread.Spawn(self.run)
 
     def subscription(self):
-        sub = falib.subscription(FA_IDS, server=FA_SERVER, decimated=True)
+        sub = falib.subscription(
+            [0] + FA_IDS, server=FA_SERVER, decimated=decimated)
         mean.reset()
         while True:
-            r, t0 = sub.read_t0(SAMPLE_SIZE)
+            r = sub.read(SAMPLE_SIZE)
+            t0, r = numpy.uint32(r[0, 0, 0]), r[:, 1:]
+
             # Remove mean before mixing to avoid avoid numerical problems
             if cis.freq > 10:
                 r -= numpy.mean(r, axis=0)
@@ -204,7 +222,7 @@ class updater:
             # in phase.  Finish by permuting result from archive order into BPM
             # display order.
             iq = numpy.tensordot(r, cis.cis, axes=(0, 0))
-            iq *= cis.phase(t0)
+            cis.compensate(iq, t0)
             iq = iq[PERMUTE]
 
             # This is the fully digested data ready for any other processing

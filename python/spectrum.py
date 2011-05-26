@@ -16,6 +16,8 @@ IOC_NAME = 'TS-DI-IOC-02'
 FA_IDS = [1, 2, 185]
 FA_NAMES = ['SR01C-DI-EBPM-01', 'SR01C-DI-EBPM-02', 'SR-RF-PM-01']
 
+FA_SERVER ='localhost'
+
 
 # Corresponds to 4 seconds per half sample.
 HALF_SAMPLE_SIZE = 4096
@@ -127,7 +129,7 @@ class Monitor:
             action(result, sum[:, n, :], power[:, n, :])
 
     def monitor(self):
-        sub = falib.subscription(FA_IDS, decimated = True)
+        sub = falib.subscription(FA_IDS, server = FA_SERVER, decimated = True)
         count = 0
         total_sum = numpy.zeros((SPEC_LEN, len(FA_IDS), 2))
         total_power = numpy.zeros((SPEC_LEN, len(FA_IDS), 2))
