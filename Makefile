@@ -21,9 +21,11 @@ export SCRIPT_DIR
 
 BUILD_DIR = $(CURDIR)/build-$(shell uname -m)
 SRCDIR = $(CURDIR)/src
+DEVICE_DIR = $(TOP)/device
 
 MAKE_BUILD = \
-    VPATH=$(SRCDIR) $(MAKE) TOP=$(TOP) -C $(BUILD_DIR) -f $(SRCDIR)/Makefile
+    VPATH=$(SRCDIR) $(MAKE) TOP=$(TOP) DEVICE_DIR=$(DEVICE_DIR) \
+        -C $(BUILD_DIR) -f $(SRCDIR)/Makefile
 
 all $(filter-out all clean install $(BUILD_DIR),$(MAKECMDGOALS)): $(BUILD_DIR)
 	$(MAKE_BUILD) $@

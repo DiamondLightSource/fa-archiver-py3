@@ -9,6 +9,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/ioctl.h>
 #include <fcntl.h>
 #include <errno.h>
 #include <pthread.h>
@@ -18,6 +19,7 @@
 #include "error.h"
 #include "buffer.h"
 
+#include "fa_sniffer.h"
 #include "sniffer.h"
 #include "replay.h"
 
@@ -79,37 +81,56 @@ static void * sniffer_thread(void *context)
         sleep(1);
         sniffer->reset();
     }
-    return NULL;
 }
 
 
-
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /* Standard sniffer using true sniffer device. */
 
 static const char *fa_sniffer_device;
 static int fa_sniffer;
+static bool ioctl_ok;
 
 static bool initialise_sniffer_device(const char *device_name)
 {
     fa_sniffer_device = device_name;
-    return TEST_IO_(
+    bool ok = TEST_IO_(
         fa_sniffer = open(fa_sniffer_device, O_RDONLY),
         "Can't open sniffer device %s", fa_sniffer_device);
+    int version;
+    ioctl_ok =
+        TEST_IO_(version = ioctl(fa_sniffer, FASNIF_IOCTL_GET_VERSION),
+            "Sniffer device doesn't support ioctl interface")  &&
+        TEST_OK_(version == FASNIF_IOCTL_VERSION,
+            "Sniffer device ioctl version mismatch");
+    return ok;
 }
 
 static void reset_sniffer_device(void)
 {
-    IGNORE(TEST_IO_(
-        fa_sniffer = open(fa_sniffer_device, O_RDONLY),
-        "Can't open sniffer device %s", fa_sniffer_device));
+    if (ioctl_ok)
+        /* If possible use the restart command to restart the sniffer. */
+        TEST_IO(ioctl(fa_sniffer, FASNIF_IOCTL_RESTART));
+    else
+    {
+        /* Backwards compatible code: close and reopen the device. */
+        TEST_IO(close(fa_sniffer));
+        TEST_IO(fa_sniffer = open(fa_sniffer_device, O_RDONLY));
+    }
 }
 
-static bool read_sniffer_device(struct fa_row *buffer, size_t block_size)
+static bool read_sniffer_device(struct fa_row *rows, size_t length)
 {
-    bool ok = read(fa_sniffer, buffer, block_size) == (ssize_t) block_size;
-    if (!ok)
-        close(fa_sniffer);
-    return ok;
+    void *buffer = rows;
+    while (length > 0)
+    {
+        ssize_t rx = read(fa_sniffer, buffer, length);
+        if (rx <= 0)
+            return false;
+        length -= rx;
+        buffer += rx;
+    }
+    return true;
 }
 
 struct sniffer_context sniffer_device = {
@@ -119,6 +140,8 @@ struct sniffer_context sniffer_device = {
 };
 
 
+
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /* Dummy sniffer using replay data. */
 
 static void reset_replay(void) { ASSERT_FAIL(); }
@@ -129,6 +152,9 @@ struct sniffer_context sniffer_replay = {
     .read = read_replay_block,
 };
 
+
+
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 
 static struct sniffer_context *sniffer_context;

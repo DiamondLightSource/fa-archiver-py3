@@ -14,7 +14,7 @@
 #include <errno.h>
 
 #include "error.h"
-#include "sniffer.h"
+#include "fa_sniffer.h"
 #include "mask.h"
 #include "disk.h"
 #include "parse.h"

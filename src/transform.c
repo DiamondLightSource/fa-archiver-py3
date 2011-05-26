@@ -12,7 +12,7 @@
 #include <errno.h>
 
 #include "error.h"
-#include "sniffer.h"
+#include "fa_sniffer.h"
 #include "mask.h"
 #include "buffer.h"
 #include "disk_writer.h"

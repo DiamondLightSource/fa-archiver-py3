@@ -9,7 +9,7 @@
 
 #include "error.h"
 #include "buffer.h"
-#include "sniffer.h"
+#include "fa_sniffer.h"
 #include "parse.h"
 #include "config_file.h"
 

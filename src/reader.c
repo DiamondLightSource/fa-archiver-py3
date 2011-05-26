@@ -14,7 +14,7 @@
 #include <fcntl.h>
 
 #include "error.h"
-#include "sniffer.h"
+#include "fa_sniffer.h"
 #include "mask.h"
 #include "parse.h"
 #include "buffer.h"

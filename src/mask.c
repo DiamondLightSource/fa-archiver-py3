@@ -18,7 +18,7 @@
 #include <string.h>
 
 #include "error.h"
-#include "sniffer.h"
+#include "fa_sniffer.h"
 #include "parse.h"
 
 #include "mask.h"

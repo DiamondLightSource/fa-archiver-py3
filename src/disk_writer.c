@@ -17,7 +17,7 @@
 
 #include "error.h"
 #include "buffer.h"
-#include "sniffer.h"
+#include "fa_sniffer.h"
 #include "mask.h"
 #include "disk.h"
 #include "transform.h"
