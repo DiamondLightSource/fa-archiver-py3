@@ -53,6 +53,18 @@ Options
     is `arange(1,301)`, but any monotonically increasing range from 1 to a
     sensible upper bound can be specified.
 
+-Q threshold_spec
+    A beam current PV together with a threshold current can be specified, in
+    which case the integrated amplitude will not be integrated or updated while
+    the beam current is below this threshold.
+
+    The *threshold_spec* must be of the form
+
+        *threshold*,\ *pv*
+
+    where *threshold* is the initial threshold current and *pv* is an EPICS PV
+    to monitor.
+
 Generated PVs
 =============
 A number of PVs are published by this IOC.
@@ -83,6 +95,15 @@ $(control):FREQ
 $(control):PVS
     The enum strings in this PV contain the device names of the FA ids being
     processed.  This is used by the show-spectrum EDM screen.
+
+$(control):THRESHOLD
+    If `-Q` was used to enable threshold detection this PV can be used to adjust
+    the current threshold.
+
+$(control):STATUS
+    If `-Q` was used to enable threshold detection this indicates whether
+    spectrum integration is running or paused.
+
 
 For each FA id listed on the command line in the given *id-list* the following
 PVs are generated with `$(device)` set to the corresponding device name as

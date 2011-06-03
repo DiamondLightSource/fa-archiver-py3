@@ -88,9 +88,10 @@ class Compute:
 
 
 class Monitor:
-    def __init__(self):
+    def __init__(self, threshold = 0, qualifier_pv = None):
         self.spectrum = Compute(HALF_SAMPLE_SIZE, len(FA_IDS), FREQUENCIES)
         self.results = [Results(name) for name in FA_NAMES]
+        self.running = True
 
         # Control PVs
         builder.SetDeviceName(DEVICE_NAME)
@@ -99,7 +100,16 @@ class Monitor:
         self.count_pv = builder.longIn('COUNT')
         builder.Waveform('FREQ', FREQUENCIES)
         builder.mbbIn('PVS', *FA_NAMES)
+        self.threshold_pv = builder.aOut(
+            'THRESHOLD', EGU = 'mA', PREC = 2,
+            initial_value = float(threshold))
+        self.status_pv = builder.boolOut(
+            'STATUS', 'Paused', 'Running', initial_value = True)
         builder.UnsetDevice()
+
+        if qualifier_pv:
+            from cothread import catools
+            catools.camonitor(qualifier_pv, self.__on_update)
 
     # Passes the updated spectrum for each FA ID through to the given action
     # routine for each entry in results (one per FA ID and spectrum entry).
@@ -119,17 +129,22 @@ class Monitor:
             sum, power = self.spectrum.compute(sub.read(HALF_SAMPLE_SIZE))
             self.map_result(Results.update_value, sum, power)
 
-            total_sum += sum
-            total_power += power
+            if self.running:
+                count += 1
+                total_sum += sum
+                total_power += power
 
-            count += 1
-            self.count_pv.set(count)
-            if count >= self.target_pv.get():
-                self.map_result(Results.update_mean,
-                    total_sum / count, total_power / count)
+                if count >= self.target_pv.get():
+                    self.map_result(Results.update_mean,
+                        total_sum / count, total_power / count)
+                    count = 0
+                    total_sum[:] = 0
+                    total_power[:] = 0
+            else:
                 count = 0
                 total_sum[:] = 0
                 total_power[:] = 0
+            self.count_pv.set(count)
 
     def run(self):
         import socket
@@ -150,6 +165,12 @@ class Monitor:
 
     def start(self):
         cothread.Spawn(self.run)
+
+    def __on_update(self, value):
+        running = value > self.threshold_pv.get()
+        if running != self.running:
+            self.running = running
+            self.status_pv.set(running)
 
 
 # -----------------------------------------------------------------------------
@@ -193,6 +214,9 @@ parser.add_option(
     help = 'numpy expression evaluating to a range of frequencies.  '
         'The default is \'arange(1,301)\', but any monotonically increasing '
         'range from 1 to a sensible upper bound can be specified.')
+parser.add_option(
+    '-Q', dest = 'qualifier', default = None,
+    help = 'Threshold current and qualifier PV for generating updates')
 options, args = parser.parse_args()
 try:
     location, id_list = args
@@ -206,6 +230,7 @@ else:
     if options.full_path:
         parser.error('Must specify device name with location path')
     DEVICE_NAME = '%s-DI-SPEC-01' % location
+
 
 # Load the configured location file.
 falib.load_location_file(
@@ -232,7 +257,10 @@ F_S = falib.get_sample_frequency() / falib.get_decimation()
 
 
 # Spectrum monitor and associated PVs.
-monitor = Monitor()
+if options.qualifier:
+    monitor = Monitor(*options.qualifier.split(',', 1))
+else:
+    monitor = Monitor()
 
 # A couple of identification PVs
 builder.SetDeviceName(IOC_NAME)
