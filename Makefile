@@ -26,10 +26,14 @@ export SCRIPT_DIR
 
 
 BIN_BUILD_DIR = $(BUILD_DIR)/$(shell uname -m)
+DOCS_BUILD_DIR = $(BUILD_DIR)/docs
 
 BIN_BUILD = \
     VPATH=$(CURDIR)/src $(MAKE) TOP=$(TOP) DEVICE_DIR=$(DEVICE_DIR) \
         -C $(BIN_BUILD_DIR) -f $(CURDIR)/src/Makefile
+DOCS_BUILD = \
+    VPATH=$(CURDIR)/docs $(MAKE) TOP=$(TOP) \
+        -C $(DOCS_BUILD_DIR) -f $(CURDIR)/docs/Makefile
 
 # Targets other than these are redirected to building the binary tools
 NON_BIN_TARGETS = default clean install docs
@@ -39,6 +43,8 @@ BIN_TARGETS = $(filter-out $(NON_BIN_TARGETS) $(BIN_BUILD_DIR),$(MAKECMDGOALS))
 default $(BIN_TARGETS): $(BIN_BUILD_DIR)
 	$(BIN_BUILD) $@
 
+docs: $(DOCS_BUILD_DIR)
+	$(DOCS_BUILD)
 
 $(BUILD_DIR)/%: $(BUILD_DIR)
 	mkdir -p $@
@@ -54,7 +60,8 @@ ifndef PREFIX
 	@echo >&2 Must define PREFIX; false
 endif
 	$(BIN_BUILD) install
+	$(DOCS_BUILD) install
 	make -C $(TOP)/python install
 	make -C $(TOP)/matlab install
 
-.PHONY: default clean install
+.PHONY: default docs clean install

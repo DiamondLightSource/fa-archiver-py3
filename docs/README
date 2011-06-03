@@ -1,23 +1,25 @@
 README
-    This file provides a quick overview of the files in this directory, and is
-    bound to be out of date.  The following applications are built:
+======
 
-    fa-archiver
-        Saves FA sniffer data to an archive and provides a socket interface for
-        retrieval of the archived data.
+This file provides a quick overview of the files in the source directory, and is
+bound to be out of date.  The following applications are built:
 
-    fa-prepare
-        Used to prepare the archive data area before running fa-archiver.
+fa-archiver
+    Saves FA sniffer data to an archive and provides a socket interface for
+    retrieval of the archived data.
 
-    fa-capture
-        Connects to a running archive and captures live or historical data.
+fa-prepare
+    Used to prepare the archive data area before running fa-archiver.
 
-    python/fa-viewer.py
-        Displays live FA data graphically
+fa-capture
+    Connects to a running archive and captures live or historical data.
+
+python/fa-viewer.py
+    Displays live FA data graphically
 
 
-Make files etc:
----------------
+Make files etc
+--------------
 
 makefile
     This is the makefile invoked in response to running `make`.  This is used to
@@ -32,8 +34,8 @@ build
     Build directory.  This can safely be deleted.
 
 
-Top level application files:
-----------------------------
+Top level application files
+---------------------------
 
 archiver.c archiver.h
     This is the main application, the FA sniffer archiver.
@@ -45,8 +47,8 @@ prepare.c
     Prepares a file or volume for use as an FA sniffer archive.
 
 
-Supporting components:
-----------------------
+Supporting components
+---------------------
 
 buffer.c buffer.h
     Circular in-memory buffer supporting one writer (sniffer) and multiple
@@ -100,9 +102,9 @@ Notes on SSE
 ------------
 
 Here is the SSE stuff that used to be in transform.c (see commit c30eee83 in the
-pcie sniffer driver, or svn commit 50921):
+pcie sniffer driver, or svn commit 50921)::
 
-#include <xmmintrin.h>
+    #include <xmmintrin.h>
 
     /* This call is an SSE intrinsic, defined in xmmintrin.h, only enabled
      * if -msse specified on the command line.  The effect of this is to use
@@ -131,4 +133,3 @@ pcie sniffer driver, or svn commit 50921):
      * floating point state as otherwise subsequent floating point arithmetic
      * will fail mysteriously. */
     _mm_empty();
-

@@ -1,0 +1,32 @@
+#!/bin/sh
+
+# Because man pages need to be installed in the appropriate subdirectory of the
+# man directory and the section is buried inside the .rst file, we need to do a
+# little hackery to do this install.
+#
+# This script should be called with the build directory as the first argument
+# (containing the built .man pages to be installed), the destination directory
+# as the second argument, and the basenames of the pages to be installed as the
+# remaining arguments:
+#
+#   install_man build-dir man-dir topic-1 ... topic-n
+
+HERE="$(dirname "$0")"
+
+BUILD_DIR="${1:?Missing build directory}"
+MAN_DIR="${2:?Missing man dir}"
+shift 2
+
+Error() { echo >&2 "$@"; exit 1; }
+
+for topic; do
+    section="$(
+        sed -n '/^:Manual section: */{s///;p;q}' "$HERE/$topic.rst")"  &&
+    [ -n "$section" ]  ||
+        Error "Unable to read section for $topic"
+
+    echo "Installing $topic.$section"
+    mkdir -p "$MAN_DIR/man$section"  &&
+    install "$BUILD_DIR/$topic.man" "$MAN_DIR/man$section" ||
+        Error "Unable to install man page"
+done

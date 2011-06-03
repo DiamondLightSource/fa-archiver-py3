@@ -9,20 +9,10 @@ BUGS
     probably isn't worth fixing.
 
 
-* Sniffer thread simply exits if unable to open sniffer device.  Probably not
-  quite the right thing to do.
-
-
-ENHANCEMENTS
-
-* Updates to device driver to provide ioctl calls to restart a halted connection
-  and to provide more error information.  This will mean that we will hold the
-  sniffer device open the entire time the archiver is running.
-
-
 WORK IN PROGRESS
 
-* Line analyser.  Needs to work closely with fast feedback excitation.
+* Line analyser.  Needs to work closely with fast feedback excitation, probably
+  doesn't want to be a separate IOC anymore.
 
 
 IDEAS
@@ -36,4 +26,4 @@ IDEAS
 * Guard against floating point exceptions.
     Current approach is to ignore them unless -E used to enable, and -E isn't
     safe against an overflow which can occur in the decimation filter (ringing
-    on a very large step).
+    on a very large step).  This option now removed.
