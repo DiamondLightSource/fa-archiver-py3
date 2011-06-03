@@ -36,6 +36,7 @@ struct sniffer_context
     void (*reset)(void);
     bool (*read)(struct fa_row *block, size_t block_size);
     bool (*status)(struct fa_status *status);
+    bool (*interrupt)(void);
 };
 
 /* This will be initialised with the appropriate context to use. */
@@ -45,38 +46,31 @@ static struct sniffer_context *sniffer_context;
 static void * sniffer_thread(void *context)
 {
     const size_t fa_block_size = buffer_block_size(fa_block_buffer);
-    bool in_gap = false;    // Only report gap once
+    bool in_gap = false;            // Only report gap once
     while (true)
     {
-        while (true)
+        bool ok = true;
+        while (ok)
         {
-            void *buffer = get_write_block(fa_block_buffer);
-            if (buffer == NULL)
+            void *buffer;
+            ok = TEST_NULL(buffer = get_write_block(fa_block_buffer));
+            if (ok)
             {
-                /* Whoops: the archiver thread has fallen behind. */
-                log_message("Sniffer unable to write block");
-                break;
+                ok = sniffer_context->read(buffer, fa_block_size);
+                /* Get the time this block was read.  This is close enough to
+                 * the completion of the FA sniffer read to be a good timestamp
+                 * for the last frame. */
+                struct timespec ts;
+                IGNORE(TEST_IO(clock_gettime(CLOCK_REALTIME, &ts)));
+                release_write_block(
+                    fa_block_buffer, !ok, ts_to_microseconds(&ts));
             }
-            bool gap = !sniffer_context->read(buffer, fa_block_size);
 
-            /* Get the time this block was written.  This is close enough to the
-             * completion of the FA sniffer read to be a good timestamp for the
-             * last frame. */
-            struct timespec ts;
-            ASSERT_IO(clock_gettime(CLOCK_REALTIME, &ts));
-            release_write_block(fa_block_buffer, gap, ts_to_microseconds(&ts));
-            if (gap)
-            {
-                if (!in_gap)
-                    log_message("Unable to read block");
-                in_gap = true;
-                break;
-            }
-            else if (in_gap)
-            {
-                log_message("Block read successfully");
-                in_gap = false;
-            }
+            if (ok == in_gap)
+                /* Log change in gap status. */
+                log_message(ok ?
+                    "Block read successfully" : "Unable to read block");
+            in_gap = !ok;
         }
 
         /* Pause before retrying.  Ideally should poll sniffer card for
@@ -84,12 +78,18 @@ static void * sniffer_thread(void *context)
         sleep(1);
         sniffer_context->reset();
     }
+    return NULL;
 }
 
 
 bool get_sniffer_status(struct fa_status *status)
 {
     return sniffer_context->status(status);
+}
+
+bool interrupt_sniffer(void)
+{
+    return sniffer_context->interrupt();
 }
 
 
@@ -148,11 +148,19 @@ static bool read_sniffer_status(struct fa_status *status)
         "Unable to read sniffer status");
 }
 
+static bool interrupt_sniffer_device(void)
+{
+    return
+        TEST_OK_(ioctl_ok, "Interrupt not supported")  &&
+        TEST_IO(ioctl(fa_sniffer, FASNIF_IOCTL_HALT));
+}
+
 struct sniffer_context sniffer_device = {
     .initialise = initialise_sniffer_device,
     .reset = reset_sniffer_device,
     .read = read_sniffer_device,
     .status = read_sniffer_status,
+    .interrupt = interrupt_sniffer_device,
 };
 
 
@@ -167,11 +175,17 @@ static bool read_replay_status(struct fa_status *status)
     return FAIL_("Sniffer status unavailable in replay mode");
 }
 
+static bool interrupt_replay(void)
+{
+    return FAIL_("Interrupt unavailable in replay mode");
+}
+
 struct sniffer_context sniffer_replay = {
     .initialise = initialise_replay,
     .reset = reset_replay,
     .read = read_replay_block,
     .status = read_replay_status,
+    .interrupt = interrupt_replay,
 };
 
 

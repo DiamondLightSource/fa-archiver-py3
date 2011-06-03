@@ -40,6 +40,11 @@ static struct buffer *fa_block_buffer;
 /* Block buffer for decimated FA data. */
 static struct buffer *decimated_buffer;
 
+/* If set the debug commands are enabled.  These are normally only enabled for
+ * debugging, as we don't want to allow external users to normally have this
+ * control over the server. */
+static bool debug_commands;
+
 
 static bool __attribute__((format(printf, 2, 3)))
     write_string(int sock, const char *format, ...)
@@ -56,64 +61,41 @@ static bool __attribute__((format(printf, 2, 3)))
 }
 
 
-static double get_mean_frame_rate(void)
+/* Called if command not recognised. */
+static bool process_error(int scon, const char *buf)
 {
-    const struct disk_header *header = get_header();
-    return (1e6 * header->major_sample_count) / header->last_duration;
+    return write_string(scon, "Invalid command\n");
 }
 
 
-/* Returns the complete sniffer status in a single line.  The numbers returned
- * are:
- *      hardware link status        1 => ok, 2, 3 => link fault
- *      link partner                or 1023 if no connection
- *      last interrupt code         1 => running normally
- *      frame error count
- *      soft error count
- *      hard error count
- *      run state                   1 => Currently fetching data
- *      overrun                     1 => Halted due to buffer overrun */
-static bool send_sniffer_status(int scon)
-{
-    push_error_handling();
-    struct fa_status status;
-    char *message = pop_error_handling(!get_sniffer_status(&status));
-
-    bool ok;
-    if (message == NULL)
-        ok = write_string(scon, "%u %u %u %u %u %u %u %u\n",
-            status.status, status.partner, status.last_interrupt,
-            status.frame_errors, status.soft_errors, status.hard_errors,
-            status.running, status.overrun);
-    else
-    {
-        ok = write_string(scon, "%s\n", message);
-        free(message);
-    }
-    return ok;
-}
+/* This macro calls action1 with error handling pushed, and if it succeeds
+ * action2 is performed, otherwise the error message is sent to scon. */
+#define CATCH_ERROR(scon, action1, action2) \
+    ( { \
+        push_error_handling(); \
+        char *message = pop_error_handling(!(action1)); \
+        bool __ok = IF_ELSE(message == NULL, \
+            (action2), \
+            write_string(scon, "%s\n", message)); \
+        free(message); \
+        __ok; \
+    } )
 
 
-/* The C command prefix is followed by a sequence of one letter commands, and
- * each letter receives a one line response.  The following commands are
- * supported:
+
+/* These commands are only available if enabled on the command line.
+ * The following commands are supported:
  *
  *  Q   Closes archive server
  *  H   Halts data capture (only sensible for debug use)
  *  R   Resumes halted data capture
- *
- *  F   Returns current sample frequency
- *  d   Returns first decimation
- *  D   Returns second decimation
- *  T   Returns earliest available timestamp
- *  V   Returns protocol identification string
- *  M   Returns configured capture mask
- *  C   Returns live decimation factor if available
- *  S   Returns detailed sniffer status
+ *  I   Interrupts data capture (by sending halt command to hardware)
  */
-static bool process_command(int scon, const char *buf)
+static bool process_debug_command(int scon, const char *buf)
 {
-    const struct disk_header *header = get_header();
+    if (!debug_commands)
+        return process_error(scon, buf);
+
     bool ok = true;
     for (buf ++; ok  &&  *buf != '\0'; buf ++)
     {
@@ -133,7 +115,56 @@ static bool process_command(int scon, const char *buf)
                 log_message("Resume command received");
                 enable_buffer_write(fa_block_buffer, true);
                 break;
+            case 'I':
+                log_message("Interrupt command received");
+                ok = CATCH_ERROR(scon, interrupt_sniffer(), true);
+                break;
 
+            default:
+                ok = write_string(scon, "Unknown command '%c'\n", *buf);
+                break;
+        }
+    }
+    return ok;
+}
+
+
+static double get_mean_frame_rate(void)
+{
+    const struct disk_header *header = get_header();
+    return (1e6 * header->major_sample_count) / header->last_duration;
+}
+
+
+/* The C command prefix is followed by a sequence of one letter commands, and
+ * each letter receives a one line response.  The following commands are
+ * supported:
+ *
+ *  F   Returns current sample frequency
+ *  d   Returns first decimation
+ *  D   Returns second decimation
+ *  T   Returns earliest available timestamp
+ *  V   Returns protocol identification string
+ *  M   Returns configured capture mask
+ *  C   Returns live decimation factor if available
+ *  S   Returns detailed sniffer status.  The numbers returned are:
+ *          hardware link status        1 => ok, 2, 3 => link fault
+ *          link partner                or 1023 if no connection
+ *          last interrupt code         1 => running normally
+ *          frame error count
+ *          soft error count
+ *          hard error count
+ *          run state                   1 => Currently fetching data
+ *          overrun                     1 => Halted due to buffer overrun
+ */
+static bool process_command(int scon, const char *buf)
+{
+    const struct disk_header *header = get_header();
+    bool ok = true;
+    for (buf ++; ok  &&  *buf != '\0'; buf ++)
+    {
+        switch (*buf)
+        {
             case 'F':
                 ok = write_string(scon, "%f\n", get_mean_frame_rate());
                 break;
@@ -146,30 +177,39 @@ static bool process_command(int scon, const char *buf)
                      "%"PRIu32"\n", 1 << header->second_decimation_log2);
                 break;
             case 'T':
-                {
-                    uint64_t start = get_earliest_timestamp();
-                    ok = write_string(scon, "%"PRIu64".%06"PRIu64"\n",
-                        start / 1000000, start % 1000000);
-                }
+            {
+                uint64_t start = get_earliest_timestamp();
+                ok = write_string(scon, "%"PRIu64".%06"PRIu64"\n",
+                    start / 1000000, start % 1000000);
                 break;
+            }
             case 'V':
                 ok = write_string(scon, PROTOCOL_VERSION "\n");
                 break;
             case 'M':
-                {
-                    char string[RAW_MASK_BYTES + 1];
-                    format_raw_mask(&get_header()->archive_mask, string);
-                    ok = write_string(scon, "%s\n", string);
-                }
+            {
+                char string[RAW_MASK_BYTES + 1];
+                format_raw_mask(&get_header()->archive_mask, string);
+                ok = write_string(scon, "%s\n", string);
                 break;
+            }
 
             case 'C':
                 ok = write_string(scon, "%d\n", get_decimation_factor());
                 break;
 
             case 'S':
-                ok = send_sniffer_status(scon);
+            {
+                struct fa_status status;
+                ok = CATCH_ERROR(scon,
+                    get_sniffer_status(&status),
+                    write_string(scon, "%u %u %u %u %u %u %u %u\n",
+                        status.status, status.partner,
+                        status.last_interrupt, status.frame_errors,
+                        status.soft_errors, status.hard_errors,
+                        status.running, status.overrun));
                 break;
+            }
 
             default:
                 ok = write_string(scon, "Unknown command '%c'\n", *buf);
@@ -301,12 +341,6 @@ static bool process_subscribe(int scon, const char *buf)
 }
 
 
-static bool process_error(int scon, const char *buf)
-{
-    return write_string(scon, "Invalid command\n");
-}
-
-
 struct command_table {
     char id;            // Identification character
     bool (*process)(int scon, const char *buf);
@@ -314,6 +348,7 @@ struct command_table {
     { 'C', process_command },
     { 'R', process_read },
     { 'S', process_subscribe },
+    { 'D', process_debug_command },
     { 0,   process_error }
 };
 
@@ -437,10 +472,11 @@ static pthread_t server_thread;
 static int server_socket;
 
 bool initialise_server(
-    struct buffer *fa_buffer, struct buffer *decimated, int port)
+    struct buffer *fa_buffer, struct buffer *decimated, int port, bool extra)
 {
     fa_block_buffer = fa_buffer;
     decimated_buffer = decimated;
+    debug_commands = extra;
 
     struct sockaddr_in sin = {
         .sin_family = AF_INET,

@@ -1,7 +1,7 @@
 /* Interface to archive server. */
 
 bool initialise_server(
-    struct buffer *fa_buffer, struct buffer *decimated, int port);
+    struct buffer *fa_buffer, struct buffer *decimated, int port, bool extra);
 bool start_server(void);
 void terminate_server(void);
 

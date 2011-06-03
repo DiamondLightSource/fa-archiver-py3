@@ -66,6 +66,8 @@ static const char *decimation_config = NULL;
 static bool floating_point_exception = false;
 /* Set if replay configured. */
 static bool replay = false;
+/* If set enables extra socket server commands for debug control. */
+static bool extra_commands = false;
 
 
 static void usage(void)
@@ -87,6 +89,7 @@ static void usage(void)
 "    -s:  Specify server socket (default 8888)\n"
 "    -F:  Run dummy sniffer with canned data.\n"
 "    -E   Enable floating point exceptions (debug only)\n"
+"    -X   Enable extra commands (debug only)\n"
         , argv0, buffer_blocks);
 }
 
@@ -97,7 +100,7 @@ static bool process_options(int *argc, char ***argv)
     bool ok = true;
     while (ok)
     {
-        switch (getopt(*argc, *argv, "+hc:d:rb:vtDp:s:F:E"))
+        switch (getopt(*argc, *argv, "+hc:d:rb:vtDp:s:F:EX"))
         {
             case 'h':   usage();                                    exit(0);
             case 'c':   decimation_config = optarg;                 break;
@@ -110,6 +113,7 @@ static bool process_options(int *argc, char ***argv)
             case 'F':   fa_sniffer_device = optarg;
                         replay = true;                              break;
             case 'E':   floating_point_exception = true;            break;
+            case 'X':   extra_commands = true;                      break;
             case 'b':
                 ok = DO_PARSE("buffer blocks",
                     parse_uint, optarg, &buffer_blocks);
@@ -240,7 +244,9 @@ int main(int argc, char **argv)
             initialise_decimation(
                 decimation_config, fa_block_buffer, &decimated_buffer))  &&
         initialise_sniffer(fa_block_buffer, fa_sniffer_device, replay)  &&
-        initialise_server(fa_block_buffer, decimated_buffer, server_socket)  &&
+        initialise_server(
+            fa_block_buffer, decimated_buffer, server_socket,
+            extra_commands)  &&
         initialise_reader(output_filename)  &&
 
         maybe_daemonise()  &&
