@@ -16,9 +16,10 @@ bool timestamp_to_start(
     uint64_t timestamp, bool all_data, uint64_t *samples_available,
     unsigned int *block, unsigned int *offset);
 /* Similar to timestamp_to_start, but used for end time, in particular won't
- * skip over gaps to find a timestamp. */
+ * skip over gaps to find a timestamp.  Called with a start_block so that we can
+ * verify that *block is no earlier than start_block. */
 bool timestamp_to_end(
-    uint64_t timestamp, bool all_data,
+    uint64_t timestamp, bool all_data, unsigned int start_block,
     unsigned int *block, unsigned int *offset);
 
 /* Searches a range of index blocks for a gap in the timestamp, returning true

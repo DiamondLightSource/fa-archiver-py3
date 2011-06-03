@@ -220,14 +220,18 @@ static bool compute_end_samples(
     const struct disk_header *header = get_header();
     unsigned int end_block, end_offset;
 
-    bool ok = timestamp_to_end(end, all_data, &end_block, &end_offset);
+    bool ok =
+        timestamp_to_end(
+            end, all_data, start_block, &end_block, &end_offset)  &&
+        TEST_OK_(start_block != end_block  ||  start_offset <= end_offset,
+            "Time range runs backwards");
     if (ok)
     {
         /* Convert the two block and offset counts into a total FA count. */
         if (end_block < start_block)
             end_block += header->major_block_count;
-        int64_t fa_samples =
-            (int64_t) header->major_sample_count * (end_block - start_block) +
+        uint64_t fa_samples =
+            (uint64_t) header->major_sample_count * (end_block - start_block) +
             end_offset - start_offset;
 
         /* Finally convert FA samples to requested samples. */
@@ -250,7 +254,6 @@ static bool compute_start(
          * into that block. */
         timestamp_to_start(start, all_data, &available, ix_block, offset)  &&
         IF_(end != 0,
-            TEST_OK_(end > start, "Time range runs backwards")  &&
             compute_end_samples(
                 reader, end, *ix_block, *offset, all_data, samples))  &&
         /* Convert FA block, offset and available counts into numbers

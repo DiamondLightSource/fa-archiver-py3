@@ -136,6 +136,7 @@ static bool parse_date_or_time(
     const char **string, struct tm *tm, long *nsecs)
 {
     char *end = strptime(*string, format, tm);
+    tm->tm_isdst = -1;              // strptime() doesn't actually set this.
     return
         TEST_NULL_(end, "%s", error_message)  &&
         DO_(*string = end)  &&

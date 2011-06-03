@@ -534,11 +534,12 @@ static void initialise_index(void)
  *     Returns the index of the latest valid block with a starting timestamp no
  * later than the target timestamp.  If the archive is empty may return an
  * invalid index, this is recognised by comparing the result with current. */
-static unsigned int binary_search(uint64_t timestamp)
+static unsigned int binary_search(uint64_t timestamp, bool *first_block)
 {
     unsigned int N = header->major_block_count;
     unsigned int current = header->current_major_block;
-    unsigned int low  = (current + 1 + INDEX_SKIP) % N;
+    unsigned int start = (current + 1 + INDEX_SKIP) % N;
+    unsigned int low = start;
     unsigned int high = current;
     while ((low + 1) % N != high)
     {
@@ -553,6 +554,9 @@ static unsigned int binary_search(uint64_t timestamp)
             low = mid;
     }
 
+    /* To improve error reporting identify whether this is the first block. */
+    if (first_block)
+        *first_block = data_index[low].duration == 0  ||  low == start;
     /* Blocks with zero duration represent the start of the archive, so don't
      * return one of these.  Unless the archive is completely empty the result
      * will still be a valid block.  We don't worry about coping with an empty
@@ -565,19 +569,22 @@ uint64_t get_earliest_timestamp(void)
 {
     uint64_t result;
     LOCK(transform_lock);
-    result = data_index[binary_search(1)].timestamp;
+    result = data_index[binary_search(1, NULL)].timestamp;
     UNLOCK(transform_lock);
     return result;
 }
 
 
 /* Looks up timestamp and returns the block and offset into that block of the
- * "nearest" block. */
+ * "nearest" block.  If skip_gap is set it is possible that *block_out becomes
+ * invalid, which must be checked by comparing with header->current_major_block,
+ * but otherwise (except in the transient case of a completely empty archive)
+ * the block is guaranteed to be valid. */
 static void timestamp_to_block(
-    uint64_t timestamp, bool skip_gap,
+    uint64_t timestamp, bool skip_gap, bool *first_block,
     unsigned int *block_out, unsigned int *offset)
 {
-    unsigned int block = binary_search(timestamp);
+    unsigned int block = binary_search(timestamp, first_block);
     uint64_t block_start = data_index[block].timestamp;
     unsigned int duration = data_index[block].duration;
     unsigned int block_size = header->major_sample_count;
@@ -592,9 +599,12 @@ static void timestamp_to_block(
     else if (skip_gap)
     {
         /* Timestamp falls off this block but precedes the next.  This will be
-         * due to a data gap which we skip. */
+         * due to a data gap which we skip.  Caller must check validity of the
+         * returned block in this case. */
         block = (block + 1) % header->major_block_count;
         *offset = 0;
+        if (first_block)
+            *first_block = false;
     }
     else
         /* Data gap after this block but skipping disabled.  Point to the last
@@ -624,12 +634,13 @@ bool timestamp_to_start(
     bool ok;
     LOCK(transform_lock);
 
-    timestamp_to_block(timestamp, true, block, offset);
+    bool first_block;
+    timestamp_to_block(timestamp, true, &first_block, block, offset);
     ok =
         TEST_OK_(
             *block != header->current_major_block, "Start time too late")  &&
         TEST_OK_(all_data  ||  data_index[*block].timestamp <= timestamp,
-            "Start time in data gap");
+            first_block ? "Start time too early" : "Start time in data gap");
     if (ok)
         *samples_available = compute_samples(*block, *offset);
 
@@ -639,20 +650,32 @@ bool timestamp_to_start(
 
 
 bool timestamp_to_end(
-    uint64_t timestamp, bool all_data,
+    uint64_t timestamp, bool all_data, unsigned int start_block,
     unsigned int *block, unsigned int *offset)
 {
     uint64_t end_timestamp;
+    unsigned int current;
+
     LOCK(transform_lock);
 
-    timestamp_to_block(timestamp, false, block, offset);
+    current = header->current_major_block;
+    timestamp_to_block(timestamp, false, NULL, block, offset);
     struct data_index *ix = &data_index[*block];
     end_timestamp = ix->timestamp + ix->duration;
 
     UNLOCK(transform_lock);
 
-    return TEST_OK_(all_data  ||  timestamp <= end_timestamp,
-        "End timestamp too late");
+    return
+        TEST_OK_(all_data  ||  timestamp <= end_timestamp,
+            "End time too late")  &&
+        TEST_OK_(
+            /* This test is a little tricky: checking that end comes no earlier
+             * than start, but need to take wraparound into account.
+             * Essentially can only see end below start if the gap (current
+             * block) lies inbetween. */
+            *block >= start_block  ||
+            (*block < current  &&  current < start_block),
+            "Time range runs backwards");
 }
 
 
