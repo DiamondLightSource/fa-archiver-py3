@@ -64,8 +64,8 @@ y2Max 1
 # Trace Properties
 numTraces 2
 xPv {
-  0 "SR-DI-SPEC-01:FREQ"
-  1 "SR-DI-SPEC-01:FREQ"
+  0 "$(control):FREQ"
+  1 "$(control):FREQ"
 }
 yPv {
   0 "$(device):SPEC:X$(suffix)"
@@ -91,7 +91,7 @@ x 784
 y 640
 w 48
 h 24
-controlPv "SR-DI-SPEC-01:COUNT"
+controlPv "$(control):COUNT"
 font "helvetica-medium-r-18.0"
 fgColor index 14
 bgColor index 0
@@ -114,7 +114,7 @@ x 976
 y 640
 w 80
 h 24
-controlPv "SR-DI-SPEC-01:TARGET"
+controlPv "$(control):TARGET"
 font "helvetica-medium-r-18.0"
 fgColor index 14
 bgColor index 0
@@ -214,14 +214,14 @@ symbol0 {
   7 "device"
 }
 PV0 {
-  0 "SR-DI-SPEC-01:PVS.ZRST"
-  1 "SR-DI-SPEC-01:PVS.ONST"
-  2 "SR-DI-SPEC-01:PVS.TWST"
-  3 "SR-DI-SPEC-01:PVS.THST"
-  4 "SR-DI-SPEC-01:PVS.FRST"
-  5 "SR-DI-SPEC-01:PVS.FVST"
-  6 "SR-DI-SPEC-01:PVS.SXST"
-  7 "SR-DI-SPEC-01:PVS.SVST"
+  0 "$(control):PVS.ZRST"
+  1 "$(control):PVS.ONST"
+  2 "$(control):PVS.TWST"
+  3 "$(control):PVS.THST"
+  4 "$(control):PVS.FRST"
+  5 "$(control):PVS.FVST"
+  6 "$(control):PVS.SXST"
+  7 "$(control):PVS.SVST"
 }
 endObjectProperties
 

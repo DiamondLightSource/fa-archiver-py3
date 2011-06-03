@@ -20,7 +20,11 @@ fa-spectrum [*options*] *location* *id-list*
 
 Description
 ===========
-Computes full spectrum analysis for the given PVs.
+Computes full spectrum analysis for the given PVs.  Runs as a Python soft IOC,
+subscribes to the decimated archiver data stream, and computes detailed spectral
+analysis of the FA ids listed in *id-list*.
+
+The *location* is specified precisely as for fa-viewer_\(1).
 
 Options
 =======
@@ -48,3 +52,64 @@ Options
     Python numpy expression evaluating to a range of frequencies.  The default
     is `arange(1,301)`, but any monotonically increasing range from 1 to a
     sensible upper bound can be specified.
+
+Generated PVs
+=============
+A number of PVs are published by this IOC.
+
+The following 2 PVs are published for administration with `$(ioc-name)` set to
+the *ioc_name* parameter passed to the `-I` option:
+
+$(ioc-name):HOSTNAME
+    Host name of the machine running the IOC.
+
+$(ioc-name):WHOAMI
+    Brief description of the functionality of this IOC.
+
+The following PVs provide overall control and are published with `$(control)`
+set to the *device_name* parameter passed to the `-D` option:
+
+$(control):TARGET
+    Controls how many samples are accumulated before a cumulative spectrum
+    update is generated, initialised to the parameter passed to the `-t` option.
+
+$(control):COUNT
+    Counts up to `$(control):TARGET` as samples are accumulated.
+
+$(control):FREQ
+    A waveform of the frequencies being analysed, representing the top edge of
+    each frequency bin, in Hz.
+
+$(control):PVS
+    The enum strings in this PV contain the device names of the FA ids being
+    processed.  This is used by the show-spectrum EDM screen.
+
+For each FA id listed on the command line in the given *id-list* the following
+PVs are generated with `$(device)` set to the corresponding device name as
+looked up in the `BPM_LIST` field in the configuration file specified by
+*location*, see fa-viewer_\(1).
+
+$(device):XAMPL, $(device):YAMPL
+    Power density spectrum computed for the most recent sample and binned
+    according to the frequency bins defined by the `-F` option and recorded in
+    the `$(control):FREQ` PV, for both X and Y axes.  The units of this waveform
+    are in micrometres per sqrt(Hz), assuming FA data transmitted in nanometres.
+
+$(device):XSUM, $(device):YSUM
+    Cumulative power spectra for X and Y for the most recent sample.  Note that
+    because the power density curve is normalised to the bin size and internally
+    compensated for slightly varying bin size, this waveform is not an exact
+    integral of the corresponding `AMPL` waveform.
+
+$(device):XMEANAMPL, $(device):YMEANAMPL
+    Mean power density spectrum accumulated over `$(control):TARGET` samples.
+
+$(device):XMEANSUM, $(device):YMEANSUM
+    Mean cumulative power spectra accumulated over `$(control):TARGET` samples.
+
+
+See Also
+========
+fa-viewer_\(1)
+
+.. _fa-viewer: fa-viewer.html

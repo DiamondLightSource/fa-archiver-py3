@@ -181,11 +181,11 @@ parser.add_option(
     '-D', dest = 'device_name', default = None,
     help = 'Device name for control PVs')
 parser.add_option(
-    '-s', dest = 'sample_size', default = 4096,
+    '-s', dest = 'sample_size', default = 4096, type = 'int',
     help = 'Number of samples (at 1kHz) per update.  Should be power of 2, '
         'default is 4096 or around 4s per update')
 parser.add_option(
-    '-t', dest = 'target_count', default = 15,
+    '-t', dest = 'target_count', default = 15, type = 'int',
     help = 'Number of updates per mean spectrum.  Can be changed via PV.')
 parser.add_option(
     '-F', dest = 'frequencies', default = eval_expr('arange(1,301)'),
