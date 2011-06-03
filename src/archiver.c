@@ -61,13 +61,12 @@ static unsigned int buffer_blocks = BUFFER_BLOCKS;
 static int server_socket = 8888;
 /* Decimation configuration file. */
 static const char *decimation_config = NULL;
-/* Enable floating point exceptions.  Useful for debugging, but can cause
- * archiver to halt unexpectedly. */
-static bool floating_point_exception = false;
 /* Set if replay configured. */
 static bool replay = false;
 /* If set enables extra socket server commands for debug control. */
 static bool extra_commands = false;
+/* Enables logging of routine events and incoming commands. */
+static bool verbose = true;
 
 
 static void usage(void)
@@ -82,13 +81,12 @@ static void usage(void)
 "    -d:  Specify device to use for FA sniffer (default /dev/fa_sniffer0)\n"
 "    -r   Run sniffer thread at boosted priority.  Needs real time support\n"
 "    -b:  Specify number of buffered input blocks (default %u)\n"
-"    -v   Specify verbose output\n"
+"    -q   Quiet operation, only log errors\n"
 "    -t   Output timestamps with logs.  No effect when logging to syslog\n"
 "    -D   Run as a daemon\n"
 "    -p:  Write PID to specified file\n"
 "    -s:  Specify server socket (default 8888)\n"
 "    -F:  Run dummy sniffer with canned data.\n"
-"    -E   Enable floating point exceptions (debug only)\n"
 "    -X   Enable extra commands (debug only)\n"
         , argv0, buffer_blocks);
 }
@@ -100,19 +98,18 @@ static bool process_options(int *argc, char ***argv)
     bool ok = true;
     while (ok)
     {
-        switch (getopt(*argc, *argv, "+hc:d:rb:vtDp:s:F:EX"))
+        switch (getopt(*argc, *argv, "+hc:d:rb:qtDp:s:F:X"))
         {
             case 'h':   usage();                                    exit(0);
             case 'c':   decimation_config = optarg;                 break;
             case 'd':   fa_sniffer_device = optarg;                 break;
             case 'r':   boost_priority = true;                      break;
-            case 'v':   verbose_logging(true);                      break;
+            case 'q':   verbose = false;                            break;
             case 't':   timestamp_logging(true);                    break;
             case 'D':   daemon_mode = true;                         break;
             case 'p':   pid_filename = optarg;                      break;
             case 'F':   fa_sniffer_device = optarg;
                         replay = true;                              break;
-            case 'E':   floating_point_exception = true;            break;
             case 'X':   extra_commands = true;                      break;
             case 'b':
                 ok = DO_PARSE("buffer blocks",
@@ -136,10 +133,13 @@ static bool process_options(int *argc, char ***argv)
 
 static bool process_args(int argc, char **argv)
 {
-    return
+    bool ok =
         process_options(&argc, &argv)  &&
-        TEST_OK_(argc == 1, "Try `%s -h` for usage", argv0)  &&
-        DO_(output_filename = argv[0]);
+        TEST_OK_(argc == 1, "Try `%s -h` for usage", argv0);
+
+    output_filename = argv[0];
+    verbose_logging(verbose);
+    return ok;
 }
 
 
@@ -234,10 +234,6 @@ int main(int argc, char **argv)
     struct buffer *decimated_buffer = NULL;
     bool ok =
         process_args(argc, argv)  &&
-        initialise_signals()  &&
-        IF_(floating_point_exception,
-            TEST_IO(feenableexcept(
-                FE_DIVBYZERO | FE_INVALID | FE_OVERFLOW)))  &&
         initialise_disk_writer(output_filename, &input_block_size)  &&
         create_buffer(&fa_block_buffer, input_block_size, buffer_blocks)  &&
         IF_(decimation_config,
@@ -250,6 +246,8 @@ int main(int argc, char **argv)
         initialise_reader(output_filename)  &&
 
         maybe_daemonise()  &&
+        initialise_signals()  &&
+
         /* All the thread initialisation must be done after daemonising, as of
          * course threads don't survive across the daemon() call!  Alas, this
          * means that many startup errors go into syslog rather than stderr. */
