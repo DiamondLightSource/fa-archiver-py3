@@ -9,7 +9,7 @@ PROGRAM_PREFIX = fa-
 SHELL = bash
 INSTALL = install
 
-all:    # Default target comes first!
+default:    # Default target comes first!
 
 CFLAGS += -std=gnu99
 CFLAGS += -O3
@@ -72,7 +72,7 @@ capture_SRCS += matlab.c            # Matlab header support
 
 
 BUILD_NAMES = $(patsubst %,$(PROGRAM_PREFIX)%,$(BUILD))
-all: $(BUILD_NAMES)
+default: $(BUILD_NAMES)
 
 define expand_build
 $(PROGRAM_PREFIX)$(target): $(COMMON_SRCS:.c=.o) $($(target)_SRCS:.c=.o)
@@ -91,9 +91,6 @@ include $(patsubst %.c,%.d,$(foreach target,$(BUILD),$($(target)_SRCS)))
 
 # Installation: we install all the built executables in $(SCRIPT_DIR)
 install: $(BUILD_NAMES)
-ifndef SCRIPT_DIR
-	echo >&2 Must define SCRIPT_DIR; false
-endif
 	$(INSTALL) $^ $(SCRIPT_DIR)
 
-.PHONY: all install
+.PHONY: default install

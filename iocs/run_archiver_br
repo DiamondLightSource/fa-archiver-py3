@@ -7,4 +7,4 @@ ARCHIVE_FILE=/scratch/fa-archive
 ARCHIVE_ARGS='-v -c filters/decimate.config'
 
 cd "$(dirname "$0")"/..
-exec build-$(uname -m)/fa-archiver $ARCHIVE_ARGS "$ARCHIVE_FILE"
+exec build/$(uname -m)/fa-archiver $ARCHIVE_ARGS "$ARCHIVE_FILE"

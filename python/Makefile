@@ -1,15 +1,12 @@
 # Install files in global directory
 
-ifndef PYTHON
-PYTHON = python
-endif
 
 # Install a lightly edited wrapper to run fa-viewer.
 FA_SUBST = \
     's:^PYTHON=.*$$:PYTHON='\'$(PYTHON)\'':; \
      s:^HERE=.*$$:HERE='\'$(CURDIR)\'':'
 
-all:
+default:
 
 clean:
 	find -name \*.pyc -exec rm {} \;

@@ -5,6 +5,10 @@
 
 TOP = $(CURDIR)
 
+DEVICE_DIR = $(TOP)/device
+BUILD_DIR = $(CURDIR)/build
+
+
 # Any special installation instructions are picked up from Makefile.private
 # which is created by the dls-release process.
 #    The following symbols are used by this make file to configure the
@@ -14,31 +18,43 @@ TOP = $(CURDIR)
 #    SCRIPT_DIR     Where the executables should be installed
 #    PYTHON         Path to Python executable
 -include $(TOP)/Makefile.private
+PYTHON ?= python
+SCRIPT_DIR ?= $(PREFIX)/bin
 export PYTHON
 export PREFIX
 export SCRIPT_DIR
 
 
-BUILD_DIR = $(CURDIR)/build-$(shell uname -m)
-SRCDIR = $(CURDIR)/src
-DEVICE_DIR = $(TOP)/device
+BIN_BUILD_DIR = $(BUILD_DIR)/$(shell uname -m)
 
-MAKE_BUILD = \
-    VPATH=$(SRCDIR) $(MAKE) TOP=$(TOP) DEVICE_DIR=$(DEVICE_DIR) \
-        -C $(BUILD_DIR) -f $(SRCDIR)/Makefile
+BIN_BUILD = \
+    VPATH=$(CURDIR)/src $(MAKE) TOP=$(TOP) DEVICE_DIR=$(DEVICE_DIR) \
+        -C $(BIN_BUILD_DIR) -f $(CURDIR)/src/Makefile
 
-all $(filter-out all clean install $(BUILD_DIR),$(MAKECMDGOALS)): $(BUILD_DIR)
-	$(MAKE_BUILD) $@
+# Targets other than these are redirected to building the binary tools
+NON_BIN_TARGETS = default clean install docs
+BIN_TARGETS = $(filter-out $(NON_BIN_TARGETS) $(BIN_BUILD_DIR),$(MAKECMDGOALS))
+
+
+default $(BIN_TARGETS): $(BIN_BUILD_DIR)
+	$(BIN_BUILD) $@
+
+
+$(BUILD_DIR)/%: $(BUILD_DIR)
+	mkdir -p $@
 
 $(BUILD_DIR):
-	mkdir -p $(BUILD_DIR)
+	mkdir -p $@
 
 clean:
 	rm -rf $(BUILD_DIR)
 
-install:
-	$(MAKE_BUILD) install
+install: $(BIN_BUILD_DIR) $(DOCS_BUILD_DIR)
+ifndef PREFIX
+	@echo >&2 Must define PREFIX; false
+endif
+	$(BIN_BUILD) install
 	make -C $(TOP)/python install
 	make -C $(TOP)/matlab install
 
-.PHONY: all clean install
+.PHONY: default clean install
