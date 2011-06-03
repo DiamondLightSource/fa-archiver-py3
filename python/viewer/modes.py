@@ -470,11 +470,19 @@ class mode_integrated(mode_common):
         N = len(value)
         fft2 = condense(
             scaled_abs_fft(value, self.sample_frequency)[2:]**2, self.counts)
-        return numpy.sqrt(
-            self.sample_frequency / N * numpy.cumsum(fft2, axis=0))
+        if self.reversed:
+            cumsum = numpy.cumsum(fft2[::-1], axis=0)[::-1]
+        else:
+            cumsum = numpy.cumsum(fft2, axis=0)
+        return numpy.sqrt(self.sample_frequency / N * cumsum)
 
     def __init__(self, parent):
         mode_common.__init__(self, parent)
+
+        reversed = QtGui.QCheckBox('Reversed', parent.ui)
+        self.addWidget(reversed)
+        reversed.stateChanged.connect(self.set_reversed)
+        self.reversed = False
 
         yselect = QtGui.QCheckBox('Linear', parent.ui)
         self.addWidget(yselect)
@@ -506,6 +514,10 @@ class mode_integrated(mode_common):
         else:
             self.yscale = Qwt5.QwtLog10ScaleEngine
         self.parent.reset_mode()
+
+    def set_reversed(self, reversed):
+        self.reversed = reversed
+        self.parent.plot.replot()
 
     def show_xy(self, show_x, show_y):
         mode_common.show_xy(self, show_x, show_y)

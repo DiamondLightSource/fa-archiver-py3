@@ -53,7 +53,7 @@ def find_location_file(location, full_path):
 def list_location_files():
     '''Returns list of configured location files.'''
     return [
-        re.sub('.*/([^/]*)\.viewer\.conf', r'\1', conf)
+        re.sub('.*/([^/]*)\.conf', r'\1', conf)
         for conf in glob.glob(
             os.path.join(os.path.dirname(__file__), '..', 'conf', '*.conf'))]
 
