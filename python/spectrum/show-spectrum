@@ -1,7 +1,6 @@
 #!/bin/sh
 
 CONTROL="${1:-SR-DI-SPEC-01}"
-echo CONTROL = $CONTROL
 
 cd "$(dirname "$0")"
 exec edm -x -eolc -m control="$CONTROL" spectrum.edl

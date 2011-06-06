@@ -3,10 +3,10 @@ beginScreenProperties
 major 4
 minor 0
 release 1
-x 1973
-y 193
+x 1986
+y 171
 w 1181
-h 675
+h 671
 font "helvetica-medium-r-18.0"
 ctlFont "helvetica-medium-r-18.0"
 btnFont "helvetica-medium-r-18.0"
@@ -25,6 +25,31 @@ snapToGrid
 gridSize 8
 disableScroll
 endScreenProperties
+
+# (Text Control)
+object activeXTextDspClass
+beginObjectProperties
+major 4
+minor 5
+release 0
+x 8
+y 632
+w 200
+h 24
+controlPv "LOC\\device"
+font "helvetica-medium-r-18.0"
+fgColor index 14
+bgColor index 0
+useDisplayBg
+editable
+autoHeight
+motifWidget
+limitsFromDb
+nullColor index 0
+useHexPrefix
+newPos
+objType "controls"
+endObjectProperties
 
 # (X-Y Graph)
 object xyGraphClass
@@ -135,9 +160,9 @@ beginObjectProperties
 major 4
 minor 1
 release 0
-x 168
+x 216
 y 632
-w 152
+w 136
 h 32
 fgColor index 14
 bgColor index 3
@@ -184,7 +209,7 @@ major 4
 minor 0
 release 0
 x 8
-y 632
+y 672
 w 152
 h 32
 fgColour index 14
@@ -192,36 +217,15 @@ bgColour index 3
 topShadowColour index 1
 botShadowColour index 11
 font "helvetica-medium-r-18.0"
-numItems 8
+numItems 1
 symbolTag {
-  0 "One"
-  1 "Two"
-  2 "Three"
-  3 "Four"
-  4 "Five"
-  5 "Six"
-  6 "Seven"
-  7 "Eight"
+  0 "device"
 }
 symbol0 {
   0 "device"
-  1 "device"
-  2 "device"
-  3 "device"
-  4 "device"
-  5 "device"
-  6 "device"
-  7 "device"
 }
 PV0 {
-  0 "$(control):PVS.ZRST"
-  1 "$(control):PVS.ONST"
-  2 "$(control):PVS.TWST"
-  3 "$(control):PVS.THST"
-  4 "$(control):PVS.FRST"
-  5 "$(control):PVS.FVST"
-  6 "$(control):PVS.SXST"
-  7 "$(control):PVS.SVST"
+  0 "LOC\\device=s:SR01C-DI-EBPM-01"
 }
 endObjectProperties
 
@@ -292,7 +296,7 @@ minor 5
 release 0
 x 528
 y 640
-w 104
+w 96
 h 24
 controlPv "$(control):STATUS"
 font "helvetica-medium-r-18.0"
@@ -313,7 +317,7 @@ beginObjectProperties
 major 4
 minor 1
 release 0
-x 328
+x 360
 y 640
 w 88
 h 21
@@ -333,10 +337,10 @@ beginObjectProperties
 major 4
 minor 5
 release 0
-x 424
+x 456
 y 640
-w 80
-h 25
+w 64
+h 24
 controlPv "$(control):THRESHOLD"
 font "helvetica-medium-r-18.0"
 fgColor index 14

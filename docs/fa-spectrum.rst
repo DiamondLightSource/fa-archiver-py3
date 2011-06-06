@@ -92,10 +92,6 @@ $(control):FREQ
     A waveform of the frequencies being analysed, representing the top edge of
     each frequency bin, in Hz.
 
-$(control):PVS
-    The enum strings in this PV contain the device names of the FA ids being
-    processed.  This is used by the show-spectrum EDM screen.
-
 $(control):THRESHOLD
     If `-Q` was used to enable threshold detection this PV can be used to adjust
     the current threshold.

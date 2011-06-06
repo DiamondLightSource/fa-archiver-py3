@@ -99,7 +99,6 @@ class Monitor:
             'TARGET', 1, 600, initial_value = TARGET_COUNT)
         self.count_pv = builder.longIn('COUNT')
         builder.Waveform('FREQ', FREQUENCIES)
-        builder.mbbIn('PVS', *FA_NAMES)
         self.threshold_pv = builder.aOut(
             'THRESHOLD', EGU = 'mA', PREC = 2,
             initial_value = float(threshold))
