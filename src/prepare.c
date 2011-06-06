@@ -175,7 +175,6 @@ static bool reset_index(int file_fd, int index_data_size)
 
 static bool prepare_new_header(struct disk_header *header)
 {
-    memset(header, 0, DISK_HEADER_SIZE);
     return
         initialise_header(header,
             &archive_mask, file_size,
@@ -189,6 +188,7 @@ static bool write_new_header(int file_fd, int *written)
     struct disk_header *header;
     bool ok =
         TEST_NULL(header = valloc(DISK_HEADER_SIZE))  &&
+        DO_(memset(header, 0, DISK_HEADER_SIZE))  &&
         prepare_new_header(header)  &&
         TEST_IO(lseek(file_fd, 0, SEEK_SET))  &&
         TEST_write(file_fd, header, DISK_HEADER_SIZE)  &&
@@ -254,7 +254,7 @@ int main(int argc, char **argv)
     }
     else if (dry_run)
     {
-        struct disk_header header;
+        struct disk_header header = {};
         ok =
             IF_(!file_size_given,
                 TEST_IO_(file_fd = open(file_name, O_RDONLY),
