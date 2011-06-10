@@ -75,8 +75,11 @@ static void unlock_buffers(read_buffers_t buffers, unsigned int count)
     LOCK(buffer_lock);
     for (unsigned int i = 0; i < count; i ++)
     {
-        struct pool_entry *entry = (struct pool_entry *)
-            (buffers[i] - offsetof(struct pool_entry, buffer));
+        /* Ideally we should use the container_of() macro (from list.h) to
+         * recover the pool_entry address, but unfortunately array members
+         * behave differently enough that this just doesn't work. */
+        struct pool_entry *entry =
+            (void *) buffers[i] - offsetof(struct pool_entry, buffer);
         entry->next = buffer_pool;
         buffer_pool = entry;
     }
