@@ -77,6 +77,9 @@ bool initialise_disk_writer(const char *file_name, uint32_t *input_block_size)
 
 static void close_disk(void)
 {
+    ASSERT_IO(msync(dd_data, header->dd_data_size, MS_ASYNC));
+    ASSERT_IO(msync(data_index, header->index_data_size, MS_ASYNC));
+    ASSERT_IO(msync(header, DISK_HEADER_SIZE, MS_ASYNC));
     ASSERT_IO(munmap(dd_data, header->dd_data_size));
     ASSERT_IO(munmap(data_index, header->index_data_size));
     ASSERT_IO(munmap(header, DISK_HEADER_SIZE));
