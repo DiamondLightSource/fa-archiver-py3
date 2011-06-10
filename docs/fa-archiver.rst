@@ -190,9 +190,9 @@ D
 Configuration Command (C)
 -------------------------
 The rest of the configuration command line is interpreted as a sequence of
-single character sub-commands, and the archiver returns a one line text response
-to each command in turn before closing the connection.  The following
-sub-commands are recognised:
+single character sub-commands, and to most commands the archiver returns a one
+line text response to each command in turn before closing the connection.  The
+following sub-commands are recognised:
 
 F
     Returns the current estimate of the sample frequency as a floating point
@@ -244,6 +244,15 @@ S
         data stream.
     :run state:     0 means halted, 1 means fetching data
     :overrun:       1 means halted due to driver buffer overflow
+
+I
+    Returns a list of all currently connected clients, one client per line.
+    This command is an exception to the rule of one line per command, and so
+    should not normally be followed by other commands.
+
+    Each line returned has three fields showing the time the client connected,
+    the IP address and socket number of the connection, and the command sent to
+    the server by the client.
 
 Unrecognised commands or any command generating an error cause a one line error
 message, per command letter, to be returned instead of the response described

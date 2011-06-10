@@ -7,14 +7,15 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <stddef.h>
 #include <inttypes.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
-#include <signal.h>
 #include <pthread.h>
 #include <errno.h>
+#include <time.h>
 
 #include "error.h"
 #include "fa_sniffer.h"
@@ -27,6 +28,8 @@
 #include "transform.h"
 #include "decimate.h"
 #include "sniffer.h"
+#include "locking.h"
+#include "list.h"
 
 #include "socket_server.h"
 
@@ -45,6 +48,77 @@ static struct buffer *decimated_buffer;
  * control over the server. */
 static bool debug_commands;
 
+
+
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+/* Client list management. */
+
+
+DECLARE_LOCKING(client_lock);
+/* List of all connected clients, updated as clients connect and disconnect. */
+static LIST_HEAD(client_list);
+
+struct client_info
+{
+    struct list_head list;
+    struct timespec ts;             // Time client connection completed
+    char name[64];                  // Socket address of client
+    char buf[256];                  // Command sent by client
+};
+
+/* Macro for walking lists of client_info structures. */
+#define for_clients(cursor, clients) \
+    list_for_each_entry(struct client_info, list, client, clients)
+
+/* Adds newly connected client to list of connections. */
+static struct client_info * add_client(void)
+{
+    struct client_info *client = calloc(1, sizeof(struct client_info));
+    clock_gettime(CLOCK_REALTIME, &client->ts);
+    LOCK(client_lock);
+    list_add(&client->list, &client_list);
+    UNLOCK(client_lock);
+    return client;
+}
+
+/* Removes departing client from connection list. */
+static void remove_client(struct client_info *client)
+{
+    LOCK(client_lock);
+    list_del(&client->list);
+    UNLOCK(client_lock);
+    free(client);
+}
+
+/* Grabs a snapshot of the client list.  To avoid complications with
+ * synchronisation the entire client list is copied wholesale. */
+static void copy_clients(struct list_head *clients)
+{
+    LOCK(client_lock);
+    for_clients(client, &client_list)
+    {
+        struct client_info *copy = malloc(sizeof(struct client_info));
+        memcpy(copy, client, sizeof(struct client_info));
+        list_add(&copy->list, clients);
+    }
+    UNLOCK(client_lock);
+}
+
+/* Releases a client list previously created by copy_clients(). */
+static void delete_clients(struct list_head *clients)
+{
+    while (clients->next != clients)
+    {
+        struct client_info *client =
+            container_of(clients->next, struct client_info, list);
+        list_del(&client->list);
+        free(client);
+    }
+}
+
+
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+/* Socket server commands. */
 
 static bool __attribute__((format(printf, 2, 3)))
     write_string(int sock, const char *format, ...)
@@ -136,9 +210,39 @@ static double get_mean_frame_rate(void)
 }
 
 
+/* Reports list of all currently connected clients. */
+static bool report_clients(int scon)
+{
+    /* Walking the list of clients is a bit of a challenge: it's changing under
+     * our feed, and we can't hold it locked as we walk it, as sending our
+     * report can take time.  Instead for simplicitly we grab a copy of the list
+     * under the lock. */
+    LIST_HEAD(clients);
+    copy_clients(&clients);
+
+    bool ok = true;
+    for_clients(client, &clients)
+    {
+        struct tm tm;
+        ok =
+            TEST_NULL(gmtime_r(&client->ts.tv_sec, &tm))  &&
+            write_string(scon,
+                "%4d-%02d-%02dT%02d:%02d:%02d.%03ldZ %s: %s\n",
+                tm.tm_year + 1900, tm.tm_mon, tm.tm_mday,
+                tm.tm_hour, tm.tm_min, tm.tm_sec,
+                client->ts.tv_nsec / 1000000, client->name, client->buf);
+        if (!ok)
+            break;
+    }
+
+    delete_clients(&clients);
+    return ok;
+}
+
+
 /* The C command prefix is followed by a sequence of one letter commands, and
- * each letter receives a one line response.  The following commands are
- * supported:
+ * each letter receives a one line response (except for the I command).  The
+ * following commands are supported:
  *
  *  F   Returns current sample frequency
  *  d   Returns first decimation
@@ -156,6 +260,7 @@ static double get_mean_frame_rate(void)
  *          hard error count
  *          run state                   1 => Currently fetching data
  *          overrun                     1 => Halted due to buffer overrun
+ *  I   Returns list of all conected clients, one client per line.
  */
 static bool process_command(int scon, const char *buf)
 {
@@ -210,6 +315,10 @@ static bool process_command(int scon, const char *buf)
                         status.running, status.overrun));
                 break;
             }
+
+            case 'I':
+                ok = report_clients(scon);
+                break;
 
             default:
                 ok = write_string(scon, "Unknown command '%c'\n", *buf);
@@ -420,21 +529,20 @@ static bool dispatch_command(
 static void * process_connection(void *context)
 {
     int scon = (intptr_t) context;
+    struct client_info *client = add_client();
 
     /* Retrieve client address so we can log all messages associated with this
      * client with the appropriate address. */
-    char client_name[64];
-    get_client_name(scon, client_name);
+    get_client_name(scon, client->name);
 
     /* Read the command, required to be one line terminated by \n, and dispatch
      * to the appropriate handler.  Any errors are handled locally and are
      * reported below. */
-    char buf[4096];
     push_error_handling();
     bool ok = FINALLY(
         set_socket_timeout(scon, 1, 0)  &&      // 1 second rx timeout
-        read_line(scon, buf, sizeof(buf))  &&
-        dispatch_command(scon, client_name, buf),
+        read_line(scon, client->buf, sizeof(client->buf))  &&
+        dispatch_command(scon, client->name, client->buf),
 
         // Always close the socket when done
         TEST_IO(close(scon)));
@@ -442,8 +550,9 @@ static void * process_connection(void *context)
     /* Report any errors. */
     char *error_message = pop_error_handling(!ok);
     if (!ok)
-        log_message("Client %s: %s", client_name, error_message);
+        log_message("Client %s: %s", client->name, error_message);
     free(error_message);
+    remove_client(client);
 
     return NULL;
 }
