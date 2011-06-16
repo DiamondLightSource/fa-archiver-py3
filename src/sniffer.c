@@ -67,9 +67,26 @@ static void * sniffer_thread(void *context)
             }
 
             if (ok == in_gap)
+            {
                 /* Log change in gap status. */
-                log_message(ok ?
-                    "Block read successfully" : "Unable to read block");
+                if (ok)
+                    log_message("Block read successfully");
+                else
+                {
+                    /* Try and pick up the reason for the failure. */
+                    struct fa_status status;
+                    if (sniffer_context->status(&status))
+                        log_message(
+                            "Unable to read block: "
+                            "%d, %d, 0x%x, %d, %d, %d, %d, %d",
+                            status.status, status.partner,
+                            status.last_interrupt, status.frame_errors,
+                            status.soft_errors, status.hard_errors,
+                            status.running, status.overrun);
+                    else
+                        log_message("Unable to read block");
+                }
+            }
             in_gap = !ok;
         }
 
@@ -100,18 +117,16 @@ static const char *fa_sniffer_device;
 static int fa_sniffer;
 static bool ioctl_ok;
 
+
 static bool initialise_sniffer_device(const char *device_name)
 {
     fa_sniffer_device = device_name;
     bool ok = TEST_IO_(
         fa_sniffer = open(fa_sniffer_device, O_RDONLY),
         "Can't open sniffer device %s", fa_sniffer_device);
-    int version;
-    ioctl_ok =
-        TEST_IO_(version = ioctl(fa_sniffer, FASNIF_IOCTL_GET_VERSION),
-            "Sniffer device doesn't support ioctl interface")  &&
-        TEST_OK_(version == FASNIF_IOCTL_VERSION,
-            "Sniffer device ioctl version mismatch");
+    ioctl_ok = ok  &&  TEST_IO_(
+        ioctl(fa_sniffer, FASNIF_IOCTL_GET_VERSION),
+        "Sniffer device doesn't support ioctl interface");
     return ok;
 }
 

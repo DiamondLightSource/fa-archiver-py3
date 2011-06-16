@@ -154,7 +154,10 @@ static sem_t shutdown_semaphore;
 
 void shutdown_archiver(void)
 {
-    ASSERT_IO(sem_post(&shutdown_semaphore));
+    if (daemon_mode)
+        ASSERT_IO(sem_post(&shutdown_semaphore));
+    else
+        close(STDIN_FILENO);
 }
 
 
@@ -206,14 +209,32 @@ static bool maybe_daemonise(void)
 }
 
 
+/* If running as a daemon wait for the shutdown semaphore, otherwise read lines
+ * from stdin until it closes or we see an exit command. */
+static void wait_for_exit(void)
+{
+    if (daemon_mode)
+        /* Wait for a shutdown signal.  Ignore the signal, instead waiting for
+         * the clean shutdown request. */
+        while (sem_wait(&shutdown_semaphore) == -1  &&  TEST_OK(errno == EINTR))
+            ; /* Repeat wait while we see EINTR. */
+    else
+    {
+        char line[80];
+        while (fgets(line, sizeof(line), stdin))
+        {
+            if (strcmp(line, "exit\n") == 0)
+                break;
+            printf("> ");
+        }
+    }
+}
+
+
 static void run_archiver(void)
 {
     log_message("Started");
-
-    /* Wait for a shutdown signal.  Ignore the signal, instead waiting for
-     * the clean shutdown request. */
-    while (sem_wait(&shutdown_semaphore) == -1  &&  TEST_OK(errno == EINTR))
-        ; /* Repeat wait while we see EINTR. */
+    wait_for_exit();
 
     log_message("Shutting down");
     terminate_server();
