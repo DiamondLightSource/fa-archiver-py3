@@ -1,6 +1,6 @@
 '''Simple FA capture library for reading data from the FA sniffer.'''
 
-DEFAULT_SERVER = 'fa-archiver.cs.diamond.ac.uk'
+DEFAULT_SERVER = 'fa-archiver.diamond.ac.uk'
 DEFAULT_PORT = 8888
 
 import socket
@@ -10,7 +10,8 @@ import cothread
 
 
 __all__ = [
-    'connection', 'subscription', 'get_sample_frequency', 'get_decimation']
+    'connection', 'subscription', 'get_sample_frequency', 'get_decimation',
+    'Server']
 
 
 MASK_SIZE = 256         # Number of possible bits in a mask
@@ -134,3 +135,21 @@ def get_sample_frequency(**kargs):
 
 def get_decimation(**kargs):
     return int(server_command('CC\n', **kargs))
+
+
+class Server:
+    '''A simple helper class to gather together the information required to
+    identify the requested server and act as a proxy for the useful commands in
+    this module.'''
+
+    def __init__(self, server, port):
+        self.server = server
+        self.port = port
+
+        self.sample_frequency = \
+            get_sample_frequency(server = server, port = port)
+        self.decimation = get_decimation(server = server, port = port)
+
+    def subscription(self, mask, decimated=False):
+        return subscription(
+            mask, decimated, server = self.server, port = self.port)

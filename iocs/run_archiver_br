@@ -1,9 +1,9 @@
 #!/bin/sh
 
 # Runs the FA archiver for the booster ring.  This runs on the booster archiver,
-# IP 172.23.234.70
+# server cs03r-cs-serv-03
 
-ARCHIVE_FILE=/scratch/fa-archive
+ARCHIVE_FILE=/archive/fa-archive
 ARCHIVE_ARGS='-X -c filters/decimate.config'
 
 cd "$(dirname "$0")"/..

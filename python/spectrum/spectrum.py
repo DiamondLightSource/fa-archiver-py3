@@ -120,7 +120,7 @@ class Monitor:
             action(result, sum[:, n, :], power[:, n, :])
 
     def monitor(self):
-        sub = falib.subscription(FA_IDS, server = FA_SERVER, decimated = True)
+        sub = server.subscription(FA_IDS, decimated = True)
         count = 0
         total_sum = numpy.zeros((SPEC_LEN, len(FA_IDS), 2))
         total_power = numpy.zeros((SPEC_LEN, len(FA_IDS), 2))
@@ -234,6 +234,7 @@ else:
 # Load the configured location file.
 falib.load_location_file(
     globals(), location, options.full_path, options.server)
+server = falib.Server(FA_SERVER, FA_PORT)
 
 
 # BPMs are specified as a comma separated list of FA ids, and we map these to
@@ -251,8 +252,7 @@ FREQUENCIES = options.frequencies
 SPEC_LEN = len(FREQUENCIES)
 
 # Get the underlying sample frequency
-# Actually, this ought to be an attribute of the subscription...
-F_S = falib.get_sample_frequency() / falib.get_decimation()
+F_S = server.sample_frequency / server.decimation
 
 
 # Spectrum monitor and associated PVs.
