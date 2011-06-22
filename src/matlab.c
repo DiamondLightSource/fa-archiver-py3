@@ -166,8 +166,8 @@ void prepare_matlab_header(int32_t **hh, size_t buf_size)
     memset(mat_header, ' ', 124);
     sprintf(mat_header, "MATLAB 5.0 MAT-file generated from FA sniffer data");
     mat_header[strlen(mat_header)] = ' ';
-    *((uint32_t *)(*hh + 124)) = MATLAB_HEADER_MARK;
-    *hh = (int32_t *) (*hh + 128);
+    *((uint32_t *)(mat_header + 124)) = MATLAB_HEADER_MARK;
+    *hh = (int32_t *) (mat_header + 128);
 }
 
 
