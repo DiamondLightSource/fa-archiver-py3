@@ -7,9 +7,9 @@ function fa_zoomer(server)
     h = {};
 
     if nargin == 0
-        h.server = 'fa-archiver.cs.diamond.ac.uk';
+        h.server = 'fa-archiver.diamond.ac.uk';
     elseif strcmp(server, 'booster')
-        h.server = '172.23.234.70';
+        h.server = 'cs03r-cs-serv-03';
     else
         h.server = server;
     end
