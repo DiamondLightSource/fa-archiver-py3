@@ -125,7 +125,8 @@ class Monitor:
         total_sum = numpy.zeros((SPEC_LEN, len(FA_IDS), 2))
         total_power = numpy.zeros((SPEC_LEN, len(FA_IDS), 2))
         while True:
-            sum, power = self.spectrum.compute(sub.read(HALF_SAMPLE_SIZE))
+            sample = sub.read(HALF_SAMPLE_SIZE)
+            sum, power = self.spectrum.compute(sample)
             self.map_result(Results.update_value, sum, power)
 
             if self.running:

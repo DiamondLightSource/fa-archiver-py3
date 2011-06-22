@@ -148,7 +148,7 @@ output_sample_count [optional]
 
 output_block_count [optional]
     This controls how many `output_sample_count` sized blocks are buffered.  The
-    default is 10.  Two small a value can force clients to disconnect
+    default is 50.  Two small a value can force clients to disconnect
     unnecessarily.
 
 

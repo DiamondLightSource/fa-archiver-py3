@@ -45,7 +45,7 @@ static struct uint_array comb_orders;       // Array of comb orders
 static struct double_array compensation_filter; // Smoothes out overall response
 static int filter_decimation = 1;           // Extra decimation at FIR stage
 static int output_sample_count = 100;       // Samples per output block
-static int output_block_count = 10;         // Total number of buffered blocks
+static int output_block_count = 50;         // Total number of buffered blocks
 
 /* Description of settings above to be read from configuration file. */
 static const struct config_entry config_table[] = {
