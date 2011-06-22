@@ -27,6 +27,6 @@ for topic; do
 
     echo "Installing $topic.$section"
     mkdir -p "$MAN_DIR/man$section"  &&
-    install "$BUILD_DIR/$topic.man" "$MAN_DIR/man$section" ||
+    install -m444 "$BUILD_DIR/$topic.man" "$MAN_DIR/man$section" ||
         Error "Unable to install man page"
 done
