@@ -3,7 +3,7 @@ $(error Do not call this make file directly)
 endif
 
 MAN_DIR ?= $(PREFIX)/man
-DOCS_DIR ?= $(PREFIX)/docs/fa-archiver
+DOCS_DIR ?= $(PREFIX)/doc/fa-archiver
 
 RST2HTML = rst2html
 RST2MAN = rst2man
