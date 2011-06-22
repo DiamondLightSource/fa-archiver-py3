@@ -41,8 +41,9 @@ function fa_zoomer(server)
     h.ylim = control('checkbox', 'Zoomed', 70, ...
         'Limit vertical scale to +-100um', 'Value', 1, ...
         'Callback', protect(@reload_plot));
-    h.show_std = control('checkbox', 'Show std', 75, ...
-        'Show standard deviation', 'Callback', protect(@reload_plot));
+    h.data_type = control('popup', {'min/max', 'std', 'mean'}, 90, ...
+        'Choose decimated data type to display', 'Value', 1, ...
+        'Callback', protect(@reload_plot));
     clear global h_pos;
     h.history = cell(0, 2);
 
@@ -172,10 +173,14 @@ end
 
 
 function plotfa(h, d)
-    show_std = get(h.show_std, 'Value');
+    data_type = get(h.data_type, 'Value');
     if get(h.ylim, 'Value')
-        if length(size(d.data)) == 4  &&  show_std
-            set_ylim = [0 10];
+        if length(size(d.data)) == 4
+            switch data_type
+                case 1;     set_ylim = [-100 100];
+                case 2;     set_ylim = [0 10];
+                case 3;     set_ylim = [-10 10];
+            end
         else
             set_ylim = [-100 100];
         end
@@ -186,11 +191,14 @@ function plotfa(h, d)
     for n = 1:2
         subplot(2, 1, n)
         if length(size(d.data)) == 4
-            if show_std
-                plot(d.t, 1e-3 * squeeze(d.data(n, 4, :, :)))
-            else
-                plot(d.t, 1e-3 * squeeze(d.data(n, 2, :, :))); hold on
-                plot(d.t, 1e-3 * squeeze(d.data(n, 3, :, :))); hold off
+            switch data_type
+                case 1
+                    plot(d.t, 1e-3 * squeeze(d.data(n, 2, :, :))); hold on
+                    plot(d.t, 1e-3 * squeeze(d.data(n, 3, :, :))); hold off
+                case 2
+                    plot(d.t, 1e-3 * squeeze(d.data(n, 4, :, :)));
+                case 3
+                    plot(d.t, 1e-3 * squeeze(d.data(n, 1, :, :)));
             end
         else
             plot(d.t, 1e-3 * squeeze(d.data(n, :, :)))
@@ -206,6 +214,7 @@ end
 function label_axis(n)
     axes = {'X'; 'Y'};
     global data;
+    ylabel(gca, 'µm');
     if diff(data.t([1 end])) <= 2/(24*3600)
         title([datestr(data.timestamp) ' ' axes{n}])
         set(gca, 'XTickLabel', num2str( ...
