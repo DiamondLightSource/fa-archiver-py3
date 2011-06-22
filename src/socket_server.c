@@ -12,6 +12,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <pthread.h>
 #include <errno.h>
@@ -488,6 +489,13 @@ static bool set_socket_timeout(int sock, int secs, int usecs)
         sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)));
 }
 
+/* Using cork should be harmless and should increase write efficiency. */
+static bool set_socket_cork(int sock, bool cork)
+{
+    int _cork = cork;       // In case sizeof(bool) isn't sizeof(int)
+    return TEST_IO(setsockopt(sock, SOL_TCP, TCP_CORK, &_cork, sizeof(_cork)));
+}
+
 
 /* Reads from the given socket until one of the following is encountered: a
  * newline (the preferred case), end of input, end of buffer or an error.  The
@@ -540,6 +548,7 @@ static void * process_connection(void *context)
      * reported below. */
     push_error_handling();
     bool ok = FINALLY(
+        set_socket_cork(scon, true)  &&
         set_socket_timeout(scon, 1, 0)  &&      // 1 second rx timeout
         read_line(scon, client->buf, sizeof(client->buf))  &&
         dispatch_command(scon, client->name, client->buf),
