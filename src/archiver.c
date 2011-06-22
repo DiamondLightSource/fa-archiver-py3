@@ -67,6 +67,8 @@ static bool replay = false;
 static bool extra_commands = false;
 /* Enables logging of routine events and incoming commands. */
 static bool verbose = true;
+/* Enable SO_REUSEADDR option on listening socket. */
+static bool reuseaddr = false;
 
 
 static void usage(void)
@@ -88,6 +90,7 @@ static void usage(void)
 "    -s:  Specify server socket (default 8888)\n"
 "    -F:  Run dummy sniffer with canned data.\n"
 "    -X   Enable extra commands (debug only)\n"
+"    -R   Set SO_REUSEADDR on listening socket, debug use only\n"
         , argv0, buffer_blocks);
 }
 
@@ -98,7 +101,7 @@ static bool process_options(int *argc, char ***argv)
     bool ok = true;
     while (ok)
     {
-        switch (getopt(*argc, *argv, "+hc:d:rb:qtDp:s:F:X"))
+        switch (getopt(*argc, *argv, "+hc:d:rb:qtDp:s:F:XR"))
         {
             case 'h':   usage();                                    exit(0);
             case 'c':   decimation_config = optarg;                 break;
@@ -111,6 +114,7 @@ static bool process_options(int *argc, char ***argv)
             case 'F':   fa_sniffer_device = optarg;
                         replay = true;                              break;
             case 'X':   extra_commands = true;                      break;
+            case 'R':   reuseaddr = true;                           break;
             case 'b':
                 ok = DO_PARSE("buffer blocks",
                     parse_uint, optarg, &buffer_blocks);
@@ -263,7 +267,7 @@ int main(int argc, char **argv)
         initialise_sniffer(fa_block_buffer, fa_sniffer_device, replay)  &&
         initialise_server(
             fa_block_buffer, decimated_buffer, server_socket,
-            extra_commands)  &&
+            extra_commands, reuseaddr)  &&
         initialise_reader(output_filename)  &&
 
         maybe_daemonise()  &&

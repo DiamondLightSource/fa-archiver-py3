@@ -93,6 +93,10 @@ Options
 -X
     Enable extra commands (debug only), see `Debug Command (D)`_.
 
+-R
+    Set SO_REUSEADDR on the listening socket.  Only useful for debugging when
+    repeatedly restarting the server.
+
 The recommended options are -c and -t.
 
 The rest of this man page can be ignored by most users.

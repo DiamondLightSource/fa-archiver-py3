@@ -581,7 +581,8 @@ static pthread_t server_thread;
 static int server_socket;
 
 bool initialise_server(
-    struct buffer *fa_buffer, struct buffer *decimated, int port, bool extra)
+    struct buffer *fa_buffer, struct buffer *decimated, int port,
+    bool extra, bool reuseaddr)
 {
     fa_block_buffer = fa_buffer;
     decimated_buffer = decimated;
@@ -592,8 +593,12 @@ bool initialise_server(
         .sin_addr.s_addr = INADDR_ANY,
         .sin_port = htons(port)
     };
+    int reuse = 1;
     return
         TEST_IO(server_socket = socket(AF_INET, SOCK_STREAM, 0))  &&
+        IF_(reuseaddr,
+            TEST_IO(setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR,
+                &reuse, sizeof(reuse))))  &&
         TEST_IO(bind(server_socket, (struct sockaddr *) &sin, sizeof(sin)))  &&
         TEST_IO(listen(server_socket, 5))  &&
         DO_(log_message("Server listening on port %d", port));
