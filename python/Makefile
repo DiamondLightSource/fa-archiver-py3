@@ -18,5 +18,7 @@ endif
 	$(PYTHON) -m compileall .
 	sed <fa-viewer >$(SCRIPT_DIR)/fa-viewer $(FA_SUBST)
 	chmod +x $(SCRIPT_DIR)/fa-viewer
+	sed <fa-audio >$(SCRIPT_DIR)/fa-audio $(FA_SUBST)
+	chmod +x $(SCRIPT_DIR)/fa-audio
 
 .PHONY: all clean install
