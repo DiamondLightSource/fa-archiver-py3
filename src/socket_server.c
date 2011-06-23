@@ -330,6 +330,14 @@ static bool process_command(int scon, const char *buf)
 }
 
 
+/* Result of parsing a subscribe command. */
+struct subscribe_parse {
+    struct filter_mask mask;        // List of BPMs to be subscribed
+    struct buffer *buffer;          // Source of data (FA or decimated)
+    bool want_timestamp;            // Set if timestamp should be sent
+    bool want_t0;                   // Set if T0 should be sent
+};
+
 /* A subscribe request is a filter mask followed by options:
  *
  *  subscription = "S" filter-mask options
@@ -344,18 +352,19 @@ static bool process_command(int scon, const char *buf)
  * If both T and Z are specified then the timestamp is sent first before T0.
  */
 static bool parse_subscription(
-    const char **string, struct filter_mask *mask,
-    struct buffer **buffer, bool *want_timestamp, bool *want_t0)
+    const char **string, struct subscribe_parse *parse)
 {
     return
         parse_char(string, 'S')  &&
-        parse_mask(string, mask)  &&
+        parse_mask(string, &parse->mask)  &&
         DO_(
-            *want_timestamp = read_char(string, 'T');
-            *want_t0 = read_char(string, 'Z'))  &&
-        IF_(read_char(string, 'D'),
+            parse->want_timestamp = read_char(string, 'T');
+            parse->want_t0 = read_char(string, 'Z'))  &&
+        IF_ELSE(read_char(string, 'D'),
             TEST_NULL_(decimated_buffer, "Decimated data not available")  &&
-            DO_(*buffer = decimated_buffer));
+            DO_(parse->buffer = decimated_buffer),
+            // else D not set
+            DO_(parse->buffer = fa_block_buffer));
 }
 
 
@@ -383,22 +392,22 @@ bool report_socket_error(int scon, bool ok)
 
 static bool send_subscription(
     int scon, struct reader_state *reader, uint64_t timestamp,
-    bool want_timestamp, bool want_t0,
-    struct filter_mask *mask, const void **block)
+    struct subscribe_parse *parse, const void **block)
 {
     /* The transmitted block optionally begins with the timestamp and T0 values,
      * in that order, if requested. */
     bool ok =
-        IF_(want_timestamp,
+        IF_(parse->want_timestamp,
             TEST_write(scon, &timestamp, sizeof(uint64_t)))  &&
-        IF_(want_t0,
+        IF_(parse->want_t0,
             TEST_write(scon, *block, sizeof(uint32_t)));
 
     size_t block_size = reader_block_size(reader);
     while (ok)
     {
         ok = FINALLY(
-            write_frames(scon, mask, *block, block_size / FA_FRAME_SIZE),
+            write_frames(
+                scon, &parse->mask, *block, block_size / FA_FRAME_SIZE),
             // Always do this, even if write_frames fails.
             TEST_OK_(release_read_block(reader),
                 "Write underrun to client"));
@@ -420,17 +429,13 @@ static bool process_subscribe(int scon, const char *buf)
     push_error_handling();
 
     /* Parse the incoming request. */
-    struct filter_mask mask;
-    bool want_timestamp = false, want_t0 = false;
-    struct buffer *buffer = fa_block_buffer;
-    if (!DO_PARSE(
-            "subscription", parse_subscription, buf, &mask,
-            &buffer, &want_timestamp, &want_t0))
+    struct subscribe_parse parse;
+    if (!DO_PARSE("subscription", parse_subscription, buf, &parse))
         return report_socket_error(scon, false);
 
     /* See if we can start the subscription, report the final status to the
      * caller. */
-    struct reader_state *reader = open_reader(buffer, false);
+    struct reader_state *reader = open_reader(parse.buffer, false);
     uint64_t timestamp;
     const void *block = get_read_block(reader, NULL, &timestamp);
     bool start_ok = TEST_NULL_(block, "No data currently available");
@@ -438,8 +443,7 @@ static bool process_subscribe(int scon, const char *buf)
 
     /* Send the requested subscription if all is well. */
     if (start_ok  &&  ok)
-        ok = send_subscription(
-            scon, reader, timestamp, want_timestamp, want_t0, &mask, &block);
+        ok = send_subscription(scon, reader, timestamp, &parse, &block);
 
     /* Clean up resources.  Rather important to get this right, as this can
      * happen many times. */
