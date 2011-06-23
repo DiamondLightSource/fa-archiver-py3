@@ -61,13 +61,13 @@ class Viewer:
         'middle click to zoom out, right click and drag to pan.'
 
     '''application class'''
-    def __init__(self, ui, server, port):
+    def __init__(self, ui, server):
         self.ui = ui
 
         self.makeplot()
 
         self.monitor = buffer.monitor(
-            server, port, self.on_data_update, self.on_connect, self.on_eof,
+            server, self.on_data_update, self.on_connect, self.on_eof,
             500000, 10000)
 
         # Prepare the selections in the controls
@@ -359,13 +359,9 @@ falib.load_location_file(
     globals(), location, options.full_path, options.server)
 BPM_list = falib.compute_bpm_groups(BPM_LIST, GROUPS, PATTERNS)
 
-
-F_S = falib.get_sample_frequency(server = FA_SERVER, port = FA_PORT)
-try:
-    decimation_factor = falib.get_decimation(server = FA_SERVER, port = FA_PORT)
-except:
-    # Assume unable to receive decimation because not supported by server
-    decimation_factor = 0
+server = falib.Server(server = FA_SERVER, port = FA_PORT)
+F_S = server.sample_frequency
+decimation_factor = server.decimation
 
 
 qapp = cothread.iqt()
@@ -375,6 +371,6 @@ qapp.installEventFilter(key_filter)
 # create and show form
 ui_viewer = uic.loadUi(os.path.join(os.path.dirname(__file__), 'viewer.ui'))
 # Bind code to form
-s = Viewer(ui_viewer, FA_SERVER, FA_PORT)
+s = Viewer(ui_viewer, server)
 
 cothread.WaitForQuit()

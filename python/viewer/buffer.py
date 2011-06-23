@@ -37,9 +37,8 @@ class buffer:
 
 class monitor:
     def __init__(self,
-            server, port, on_event, on_connect, on_eof, buffer_size, read_size):
+            server, on_event, on_connect, on_eof, buffer_size, read_size):
         self.server = server
-        self.port = port
         self.on_event = on_event
         self.on_connect = on_connect
         self.on_eof = on_eof
@@ -53,9 +52,8 @@ class monitor:
     def start(self):
         assert not self.running, 'Strange: we are already running'
         try:
-            self.subscription = falib.subscription(
-                [self.id], server = self.server, port = self.port,
-                decimated = self.decimated)
+            self.subscription = self.server.subscription(
+                [self.id], decimated = self.decimated, uncork = self.decimated)
         except Exception, message:
             self.on_eof('Unable to connect to server: %s' % message)
         else:

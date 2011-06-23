@@ -87,7 +87,7 @@ class subscription(connection):
     connection to the server doesn't overflow.
     '''
 
-    def __init__(self, mask, decimated=False, **kargs):
+    def __init__(self, mask, decimated=False, uncork=False, **kargs):
         connection.__init__(self, **kargs)
         self.mask = normalise_mask(mask)
         self.count = count_mask(self.mask)
@@ -98,6 +98,7 @@ class subscription(connection):
             self.decimation = 1
 
         flags = 'Z'
+        if uncork: flags = flags + 'U'
         if decimated: flags = flags + 'D'
         self.sock.send('SR%s%s\n' % (format_mask(self.mask), flags))
         c = self.recv(1)
@@ -142,14 +143,17 @@ class Server:
     identify the requested server and act as a proxy for the useful commands in
     this module.'''
 
-    def __init__(self, server, port):
+    def __init__(self, server = DEFAULT_SERVER, port = DEFAULT_PORT):
         self.server = server
         self.port = port
 
-        self.sample_frequency = \
-            get_sample_frequency(server = server, port = port)
-        self.decimation = get_decimation(server = server, port = port)
+        response = self.server_command('CFC\n').split('\n')
+        self.sample_frequency = float(response[0])
+        self.decimation = int(response[1])
 
-    def subscription(self, mask, decimated=False):
+    def server_command(self, command):
+        return server_command(command, server = self.server, port = self.port)
+
+    def subscription(self, mask, **kargs):
         return subscription(
-            mask, decimated, server = self.server, port = self.port)
+            mask, server = self.server, port = self.port, **kargs)
