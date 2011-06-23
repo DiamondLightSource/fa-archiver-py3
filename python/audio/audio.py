@@ -34,7 +34,7 @@ class Sub:
 
     def __subscriber(self, bpm):
         try:
-            sub = falib.subscription([bpm], server = self.server)
+            sub = server.subscription([bpm])
         except Exception, error:
             print 'Error', error, 'connecting to archiver'
             os._exit(0)
@@ -161,12 +161,16 @@ parser.add_option(
 parser.add_option(
     '-b', dest = 'bpm_id', default = 1, type = 'int',
     help = 'Choose initial FA id for playback, default is 1')
+parser.add_option(
+    '-p', dest = 'port', default = 8888, type = 'int',
+    help = 'Override default archiver port')
 options, args = parser.parse_args()
 
 try:
-    server, = args
+    server_name, = args
 except:
     parser.error("Expected FA server as only argument")
 
+server = falib.Server(server = server_name, port = options.port)
 player = Player(options.bpm_id, server, options.volume)
 player.shell()

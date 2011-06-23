@@ -58,6 +58,9 @@ The following options can be specified on the command line:
 -b fa-id
     Set the initial FA id for playback, the default is number 1.
 
+-p port
+    Override the default archiver port number, port 8888.
+
 See Also
 ========
 aplay(1)
