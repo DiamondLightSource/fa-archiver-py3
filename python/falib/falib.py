@@ -92,19 +92,14 @@ class subscription(connection):
         self.mask = normalise_mask(mask)
         self.count = count_mask(self.mask)
         self.decimated = decimated
-        if decimated:
-            self.decimation = get_decimation(**kargs)
-        else:
-            self.decimation = 1
 
-        flags = 'Z'
+        flags = ''
         if uncork: flags = flags + 'U'
         if decimated: flags = flags + 'D'
         self.sock.send('SR%s%s\n' % (format_mask(self.mask), flags))
         c = self.recv(1)
         if c != chr(0):
             raise self.Error((c + self.recv())[:-1])    # Discard trailing \n
-        self.t0 = struct.unpack('<I', self.recv(4))[0]
 
     def read(self, samples):
         '''Returns a waveform of samples indexed by sample count, bpm count
@@ -112,15 +107,9 @@ class subscription(connection):
             wf = s.read(N)
         wf[n, b, x] = sample n of BPM b on channel x, where x=0 for horizontal
         position and x=1 for vertical position.'''
-        self.t0 = (self.t0 + self.decimation * samples) & 0xffffffff
         raw = self.read_block(8 * samples * self.count)
         array = numpy.frombuffer(raw, dtype = numpy.int32)
         return array.reshape((samples, self.count, 2))
-
-    def read_t0(self, samples):
-        t0 = self.t0
-        data = self.read(samples)
-        return data, t0
 
 
 def server_command(command, **kargs):

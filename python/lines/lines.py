@@ -126,8 +126,7 @@ class updater:
         cothread.Spawn(self.run)
 
     def subscription(self):
-        sub = falib.subscription(
-            (0,) + FA_IDS, server=FA_SERVER, decimated=DECIMATED)
+        sub = server.subscription((0,) + FA_IDS, decimated=DECIMATED)
         mean.reset()
         while True:
             r = sub.read(SAMPLE_SIZE)
@@ -213,10 +212,11 @@ falib.load_location_file(
     globals(), location, options.full_path, options.server)
 
 # Extract remaining options for processing.
+server = falib.Server(server = FA_SERVER, port = FA_PORT)
 IOC_NAME = options.ioc_name
 DECIMATED = not options.raw_data
 if DECIMATED:
-    decimation = falib.get_decimation(server = FA_SERVER)
+    decimation = server.decimation
 else:
     decimation = 1
 SAMPLE_SIZE = options.sample_size // decimation
@@ -235,7 +235,7 @@ assert (numpy.diff(numpy.array(FA_IDS)) > 0).all(), \
     'BPM ids not in ascending order'
 
 # Working sample frequency for nominal frequency calculation
-F_S = falib.get_sample_frequency(server = FA_SERVER)
+F_S = server.sample_frequency
 
 
 # ------------------------------------------------------------------------------
