@@ -8,6 +8,7 @@
 #include <stdarg.h>
 #include <syslog.h>
 #include <pthread.h>
+#include <time.h>
 
 #include "error.h"
 #include "locking.h"

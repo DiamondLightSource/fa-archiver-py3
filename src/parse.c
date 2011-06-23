@@ -27,7 +27,7 @@ bool parse_whitespace(const char **string)
 bool skip_whitespace(const char **string)
 {
     bool seen = false;
-    while (isspace(**string))
+    while (isspace((unsigned char) **string))
     {
         *string += 1;
         seen = true;
