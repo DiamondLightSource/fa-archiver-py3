@@ -316,6 +316,13 @@ Z
     first sample, if available from the data stream, sent as a 32 bit number in
     little endian order.
 
+U
+    Don't use the TCP_CORK option to buffer the data stream.  By default the
+    subscribed data stream is sent in full MTU sized chunks, but in one case
+    this is too bursty: when subscribing to a single id of decimated data this
+    means we'll only see an update every 200ms.  This option ensures smoother
+    updates.
+
 D
     Requests decimated data stream.  If the decimated data stream was enabled
     with `-c` then this will be returned instead of the full data stream.

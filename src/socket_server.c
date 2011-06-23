@@ -143,6 +143,24 @@ static bool process_error(int scon, const char *buf)
 }
 
 
+/* Sets socket receive timeout.  Used so we don't have threads hanging waiting
+ * for users to complete sending their commands.  (Also so I can remember how to
+ * do this!)  See socket(7) for documentatino of SO_RCVTIMEO option. */
+static bool set_socket_timeout(int sock, int secs, int usecs)
+{
+    struct timeval timeout = { .tv_sec = secs, .tv_usec = usecs };
+    return TEST_IO(setsockopt(
+        sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)));
+}
+
+/* Using cork should be harmless and should increase write efficiency. */
+static bool set_socket_cork(int sock, bool cork)
+{
+    int _cork = cork;       // In case sizeof(bool) isn't sizeof(int)
+    return TEST_IO(setsockopt(sock, SOL_TCP, TCP_CORK, &_cork, sizeof(_cork)));
+}
+
+
 /* This macro calls action1 with error handling pushed, and if it succeeds
  * action2 is performed, otherwise the error message is sent to scon. */
 #define CATCH_ERROR(scon, action1, action2) \
@@ -336,17 +354,19 @@ struct subscribe_parse {
     struct buffer *buffer;          // Source of data (FA or decimated)
     bool want_timestamp;            // Set if timestamp should be sent
     bool want_t0;                   // Set if T0 should be sent
+    bool uncork;                    // Set if stream should be uncorked
 };
 
 /* A subscribe request is a filter mask followed by options:
  *
  *  subscription = "S" filter-mask options
- *  options = [ "T" ] [ "Z" ] [ "D" ]
+ *  options = [ "T" ] [ "Z" ] [ "U" ] [ "D" ]
  *
  * The options have the following meanings:
  *
  *  T   Start subscription stream with timestamp
  *  Z   Start subscription stream with t0
+ *  U   Uncork data stream
  *  D   Want decimated data stream
  *
  * If both T and Z are specified then the timestamp is sent first before T0.
@@ -359,7 +379,8 @@ static bool parse_subscription(
         parse_mask(string, &parse->mask)  &&
         DO_(
             parse->want_timestamp = read_char(string, 'T');
-            parse->want_t0 = read_char(string, 'Z'))  &&
+            parse->want_t0 = read_char(string, 'Z');
+            parse->uncork = read_char(string, 'U'))  &&
         IF_ELSE(read_char(string, 'D'),
             TEST_NULL_(decimated_buffer, "Decimated data not available")  &&
             DO_(parse->buffer = decimated_buffer),
@@ -400,7 +421,9 @@ static bool send_subscription(
         IF_(parse->want_timestamp,
             TEST_write(scon, &timestamp, sizeof(uint64_t)))  &&
         IF_(parse->want_t0,
-            TEST_write(scon, *block, sizeof(uint32_t)));
+            TEST_write(scon, *block, sizeof(uint32_t)))  &&
+        IF_(parse->uncork,
+            set_socket_cork(scon, false));
 
     size_t block_size = reader_block_size(reader);
     while (ok)
@@ -480,24 +503,6 @@ static void get_client_name(int scon, char *client_name)
     }
     else
         sprintf(client_name, "unknown");
-}
-
-
-/* Sets socket receive timeout.  Used so we don't have threads hanging waiting
- * for users to complete sending their commands.  (Also so I can remember how to
- * do this!)  See socket(7) for documentatino of SO_RCVTIMEO option. */
-static bool set_socket_timeout(int sock, int secs, int usecs)
-{
-    struct timeval timeout = { .tv_sec = secs, .tv_usec = usecs };
-    return TEST_IO(setsockopt(
-        sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)));
-}
-
-/* Using cork should be harmless and should increase write efficiency. */
-static bool set_socket_cork(int sock, bool cork)
-{
-    int _cork = cork;       // In case sizeof(bool) isn't sizeof(int)
-    return TEST_IO(setsockopt(sock, SOL_TCP, TCP_CORK, &_cork, sizeof(_cork)));
 }
 
 
