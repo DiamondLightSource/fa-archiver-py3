@@ -91,6 +91,6 @@ include $(patsubst %.c,%.d,$(foreach target,$(BUILD),$($(target)_SRCS)))
 
 # Installation: we install all the built executables in $(SCRIPT_DIR)
 install: $(BUILD_NAMES)
-	$(INSTALL) $^ $(SCRIPT_DIR)
+	$(INSTALL) -m 555 $^ $(SCRIPT_DIR)
 
 .PHONY: default install
