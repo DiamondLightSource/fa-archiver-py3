@@ -497,6 +497,8 @@ static void get_client_name(int scon, char *client_name)
     socklen_t namelen = sizeof(name);
     if (TEST_IO(getpeername(scon, (struct sockaddr *) &name, &namelen)))
     {
+        /* Consider using inet_ntop() here.  However doesn't include the port
+         * number, so probably not so interesting until IPv6 in use. */
         uint8_t * ip = (uint8_t *) &name.sin_addr.s_addr;
         sprintf(client_name, "%u.%u.%u.%u:%u",
             ip[0], ip[1], ip[2], ip[3], ntohs(name.sin_port));

@@ -276,7 +276,7 @@ The syntax of a subscription request is::
     filter-mask = "R" raw-mask | mask
     raw-mask = hex-digit{64}
     mask = id [ "-" id ] [ "," mask ]
-    options = [ "T" ] [ "Z" ] [ "D" ]
+    options = [ "T" ] [ "Z" ] [ "U" ] [ "D" ]
 
 In other words, a subscription request consists of a list of BPM ids to be
 observed followed by options.  The list of ids can be specified either as a
@@ -301,7 +301,7 @@ reporting success)::
     X(2,0) Y(2,0) X(5,0) Y(5,0) X(2,1) Y(2,1) X(5,1) Y(5,1) ...
 
 where `X(n,t)` is the X position for BPM `n` at time `t`.  A new update (two
-pairs of X,Y values) is transmitted every 100 microseconds.
+pairs of X,Y values) is transmitted every 100 microseconds on average.
 
 The options have the following meanings.
 
