@@ -31,6 +31,7 @@ class Sub:
 
         self.running = True
         self.process = cothread.Spawn(self.__subscriber, bpm)
+        self.bpm = bpm
 
     def __subscriber(self, bpm):
         try:
@@ -54,15 +55,23 @@ class Sub:
 
 class Player:
     def __init__(self, bpm, server, volume):
-        self.bpm = bpm
         self.server = server
         self.volume = volume
         self.channels = 'b'
 
         self.queue = cothread.EventQueue()
-        self.sub = Sub(self.queue, self.bpm, self.server)
+        self.sub = None
+        self.set_bpm(bpm)
+
+        # Hang onto input volume level history for last 5 seconds.
+        self.mvolume = 100 * numpy.ones(50)
 
         cothread.Spawn(self.player)
+
+    def set_bpm(self, bpm):
+        if self.sub:
+            self.sub.close()
+        self.sub = Sub(self.queue, bpm, self.server)
 
 
     # Rescales audio to avoid clipping after volume scaling.
@@ -75,6 +84,11 @@ class Player:
         vscale = 10 ** ((self.volume + volume_offset) / 20.)
         mscale = (2**31 - 1.) / range
         block *= min(vscale, mscale)
+
+        # Convert mscale into a measure of raw volume
+        mvol = 20 * numpy.log10(mscale) - volume_offset
+        self.mvolume = numpy.roll(self.mvolume, 1)
+        self.mvolume[0] = mvol
 
         return block
 
@@ -102,6 +116,11 @@ class Player:
 
 
     # Command definitions
+    def command_h(self, arg):
+        '''h        Show this list of possible commands'''
+        for command in self.commands:
+            print self.get_command(command).__doc__
+
     def command_q(self, arg):
         '''q        Quit'''
         sys.exit(0)
@@ -110,7 +129,8 @@ class Player:
         '''b<n>     Set FA id <n> for playback'''
         bpm = int(arg)
         assert 0 <= bpm <= 255
-        self.bpm = bpm
+        self.set_bpm(bpm)
+
     def command_v(self, arg):
         '''v<n>     Set volume to <n>dB.  Default volume is 0dB'''
         self.volume = float(arg)
@@ -125,7 +145,14 @@ class Player:
         '''a        Play X channel in left speaker, Y channel in right'''
         self.channels = 'b'
 
-    commands = 'qbvxya'
+    def command_i(self, arg):
+        '''i        Show information about current settings'''
+        print 'BPM', self.sub.bpm
+        print 'Volume', self.volume, 'dB'
+        print 'Channel', self.channels
+        print 'Max volume: %.1f dB' % numpy.min(self.mvolume)
+
+    commands = 'hqbvxyai'
 
 
     def get_command(self, command):
@@ -148,8 +175,8 @@ class Player:
                         print 'Error', error, 'in command'
                 else:
                     print 'Unknown command.  Possible commands are:'
-                    for command in self.commands:
-                        print self.get_command(command).__doc__
+                    self.command_h(arg)
+
 
 parser = optparse.OptionParser(usage = '''\
 fa-audio [options] server

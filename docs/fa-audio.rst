@@ -27,6 +27,9 @@ interface is available with the following commands:
 q
     Quit
 
+h
+    Shows list of commands (also shown if unrecognised command given)
+
 b *fa-id*
     Select given *fa-id* for playback
 
@@ -47,6 +50,11 @@ y
 a
     Selects playback of X data in left speaker channel, Y data in right speaker
     channel.
+
+i
+    Shows currently selected BPM, volumen level and channel selection, together
+    with the maximum volume level that can currently be set without clipping
+    (computed over the last five seconds).
 
 Options
 =======
