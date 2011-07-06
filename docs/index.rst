@@ -65,12 +65,6 @@ fa-audio_
     is particularly successful as the FA data rate of 10kHz is a good match for
     audio.
 
-fa-spectrum_
-    This is a tool designed to continuously monitor a limited number of FA
-    devices and compute the power spectrum over an extended time.  The resulting
-    output is generated as EPICS PVs designed to be saved by the EPICS PV
-    archiver.
-
 The following supporting libraries are also worth noting:
 
 falib_
@@ -84,14 +78,13 @@ fa_load_
 See Also
 --------
 fa_sniffer_, fa-archiver_, fa-prepare_, fa-capture_, fa-viewer_, fa-audio_,
-fa-spectrum_, falib_, fa_zoomer_, fa_load_
+falib_, fa_zoomer_, fa_load_
 
 .. _fa-archiver:    fa-archiver.html
 .. _fa-audio:       fa-audio.html
 .. _fa-capture:     fa-capture.html
 .. _fa-prepare:     fa-prepare.html
 .. _fa_sniffer:     fa_sniffer.html
-.. _fa-spectrum:    fa-spectrum.html
 .. _fa-viewer:      fa-viewer.html
 .. _fa_zoomer:      fa_zoomer.html
 .. _fa_load:        fa_load.html

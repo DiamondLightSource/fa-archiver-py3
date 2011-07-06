@@ -17,7 +17,7 @@ RST2MAN = rst2man
 
 MANPAGES = \
     fa_sniffer fa-prepare fa-archiver fa-capture \
-    fa-viewer fa-spectrum fa-audio falib \
+    fa-viewer fa-audio falib \
     fa_zoomer fa_load
 
 HTMLDOCS = index.html $(MANPAGES:=.html)
