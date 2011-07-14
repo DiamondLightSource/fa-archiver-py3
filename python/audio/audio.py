@@ -19,6 +19,7 @@ import falib
 # Offset applied to user programmed volume, in dB.
 volume_offset = 50
 
+DEFAULT_LOCATION = 'SR'
 
 
 class Sub:
@@ -179,7 +180,7 @@ class Player:
 
 
 parser = optparse.OptionParser(usage = '''\
-fa-audio [options] server
+fa-audio [options] [location]
 
 Plays back FA data stream as audio through the PC speakers.''')
 parser.add_option(
@@ -189,15 +190,23 @@ parser.add_option(
     '-b', dest = 'bpm_id', default = 1, type = 'int',
     help = 'Choose initial FA id for playback, default is 1')
 parser.add_option(
-    '-p', dest = 'port', default = 8888, type = 'int',
-    help = 'Override default archiver port')
+    '-f', dest = 'full_path', default = False, action = 'store_true',
+    help = 'Location is full path to location file')
+parser.add_option(
+    '-S', dest = 'server', default = None,
+    help = 'Override server address in location file')
 options, args = parser.parse_args()
 
-try:
-    server_name, = args
-except:
-    parser.error("Expected FA server as only argument")
+if len(args) > 1:
+    parser.error('Unexpected arguments')
+elif args:
+    location = args[0]
+else:
+    location = DEFAULT_LOCATION
+falib.load_location_file(
+    globals(), location, options.full_path, options.server)
 
-server = falib.Server(server = server_name, port = options.port)
+
+server = falib.Server(server = FA_SERVER, port = FA_PORT)
 player = Player(options.bpm_id, server, options.volume)
 player.shell()
