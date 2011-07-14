@@ -59,14 +59,14 @@ class Player:
         self.volume = volume
         self.channels = 'b'
 
+        cothread.Spawn(self.player)
+
         self.queue = cothread.EventQueue()
         self.sub = None
         self.set_bpm(bpm)
 
         # Hang onto input volume level history for last 5 seconds.
         self.mvolume = 100 * numpy.ones(50)
-
-        cothread.Spawn(self.player)
 
     def set_bpm(self, bpm):
         if self.sub:
