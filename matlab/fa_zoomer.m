@@ -163,7 +163,7 @@ function spectrogram_callback(fig, event)
 
             set(gca, 'Ydir', 'normal');
             caxis([2 6])
-            label_axis(n)
+            label_axis(n, 'Hz')
         end
         describe;
     else
@@ -206,15 +206,15 @@ function plotfa(h, d)
 
         xlim([d.t(1) d.t(end)]);
         if length(set_ylim) > 0; ylim(set_ylim); end
-        label_axis(n)
+        label_axis(n, 'µm')
     end
 end
 
 
-function label_axis(n)
+function label_axis(n, yname)
     axes = {'X'; 'Y'};
     global data;
-    ylabel(gca, 'µm');
+    ylabel(gca, yname);
     if diff(data.t([1 end])) <= 2/(24*3600)
         title([datestr(data.timestamp) ' ' axes{n}])
         set(gca, 'XTickLabel', num2str( ...
