@@ -32,10 +32,13 @@
 #include <errno.h>
 #include <stdarg.h>
 #include <pthread.h>
+#include <sys/time.h>
 
 #include "error.h"
 
 #include "locking.h"
+
+#define NSECS   1000000000      // 1e9
 
 
 void initialise_locking(struct locking *locking)
@@ -62,4 +65,28 @@ void psignal(struct locking *locking)
 void pwait(struct locking *locking)
 {
     ASSERT_0(pthread_cond_wait(&locking->signal, &locking->mutex));
+}
+
+bool pwait_timeout(struct locking *locking, int secs, long nsecs)
+{
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    struct timespec timeout = {
+        .tv_sec = now.tv_sec + secs,
+        .tv_nsec = 1000 * now.tv_usec + nsecs
+    };
+    if (timeout.tv_nsec >= NSECS)
+    {
+        timeout.tv_nsec -= NSECS;
+        timeout.tv_sec += 1;
+    }
+    int rc = pthread_cond_timedwait(
+        &locking->signal, &locking->mutex, &timeout);
+    if (rc == ETIMEDOUT)
+        return false;
+    else
+    {
+        ASSERT_0(rc);
+        return true;
+    }
 }

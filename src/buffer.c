@@ -192,10 +192,18 @@ const void * get_read_block(
         /* If we're on the tail of the writer then we have to wait for a new
          * entry in the block, unless writing is currently halted. */
         while (reader->running  &&
-               reader->index_out == buffer->buffer_index_in)
-            pwait(&buffer->lock);
+               reader->index_out == buffer->buffer_index_in  &&
+               pwait_timeout(&buffer->lock, 2, 0))
+            ;
         if (!reader->running)
             block = NULL;
+        else if (reader->index_out == buffer->buffer_index_in)
+        {
+            /* If we get here there must have been a timeout.  This is
+             * definitely not normal, log and treat as no data. */
+            log_error("Timeout waiting for circular buffer");
+            block = NULL;
+        }
         else if (buffer->frame_info[reader->index_out].gap)
         {
             /* Nothing to actually read at this point, just return gap
