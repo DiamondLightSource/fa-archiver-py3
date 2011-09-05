@@ -64,15 +64,17 @@ class Player:
 
         self.queue = cothread.EventQueue()
         self.sub = None
-        self.set_bpm(bpm)
 
         # Hang onto input volume level history for last 5 seconds.
         self.mvolume = 100 * numpy.ones(50)
+        self.set_bpm(bpm)
 
     def set_bpm(self, bpm):
         if self.sub:
             self.sub.close()
         self.sub = Sub(self.queue, bpm, self.server)
+        # Reset volume history when changing FA id
+        self.mvolume[:] = 100
 
 
     # Rescales audio to avoid clipping after volume scaling.
