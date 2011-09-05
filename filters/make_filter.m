@@ -1,3 +1,6 @@
+% result = make_filter( ...
+%    comb, cic_decimation, fir_len, fir_decimation, pass, stop)
+%
 % Computes compensation filter for given CIC filter
 function result = make_filter( ...
     comb, cic_decimation, len, fir_decimation, pass, stop)

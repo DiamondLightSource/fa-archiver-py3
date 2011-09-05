@@ -1,20 +1,3 @@
-% Copyright (C) 2000 Paul Kienzle
-% Converted to be Matlab compatible 2011 Michael Abbott to avoid dependency on
-% Matlab signal toolbox.
-%
-% This program is free software; you can redistribute it and/or modify
-% it under the terms of the GNU General Public License as published by
-% the Free Software Foundation; either version 2 of the License, or
-% (at your option) any later version.
-%
-% This program is distributed in the hope that it will be useful,
-% but WITHOUT ANY WARRANTY; without even the implied warranty of
-% MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-% GNU General Public License for more details.
-%
-% You should have received a copy of the GNU General Public License
-% along with this program; If not, see <http://www.gnu.org/licenses/>.
-
 % usage: b = fir2(n, f, m [, grid_n [, ramp_n]] [, window])
 %
 % Produce an FIR filter of order n with arbitrary frequency response,
@@ -44,6 +27,23 @@
 %   f=[0, 0.3, 0.3, 0.6, 0.6, 1]; m=[0, 0, 1, 1/2, 0, 0];
 %   [h, w] = freqz(fir2(100,f,m));
 %   plot(f,m,';target response;',w/pi,abs(h),';filter response;');
+
+% Copyright (C) 2000 Paul Kienzle
+% Converted to be Matlab compatible 2011 by Michael Abbott to avoid dependency
+% on Matlab signal toolbox.
+%
+% This program is free software; you can redistribute it and/or modify
+% it under the terms of the GNU General Public License as published by
+% the Free Software Foundation; either version 2 of the License, or
+% (at your option) any later version.
+%
+% This program is distributed in the hope that it will be useful,
+% but WITHOUT ANY WARRANTY; without even the implied warranty of
+% MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+% GNU General Public License for more details.
+%
+% You should have received a copy of the GNU General Public License
+% along with this program; If not, see <http://www.gnu.org/licenses/>.
 
 % Feb 27, 2000 PAK
 %     use ramping on any transition less than ramp_n units

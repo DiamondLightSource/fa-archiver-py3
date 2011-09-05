@@ -1,4 +1,7 @@
+% response = cic_response(com, decimation, f)
+%
 % Returns the response of the given cic filter
+% Helper function used by make_filter.m
 function response = cic_response(comb, decimation, f)
 
 epsilon = 1e-6;

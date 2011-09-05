@@ -1,5 +1,6 @@
-% function names = fa_id2name(ids)
-% returns names for a vector of FA ids
+% names = fa_id2name(ids)
+%
+% Returns corresponding EPICS names for a vector of FA ids
 function names = fa_id2name(ids)
     fa_ids_file = '/home/ops/diagnostics/concentrator/fa-ids.sr';
     [allids, allnames] = ...

@@ -1,5 +1,6 @@
-% function ids = fa_name2id(names)
-% returns FA ids for names (either one string or a cell array of strings)
+% ids = fa_name2id(names)
+%
+% Returns FA ids for names (either one string or a cell array of strings)
 function ids = fa_name2id(names)
     fa_ids_file = '/home/ops/diagnostics/concentrator/fa-ids.sr';
     [allids, allnames] = ...

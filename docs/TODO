@@ -27,3 +27,20 @@ IDEAS
     Current approach is to ignore them unless -E used to enable, and -E isn't
     safe against an overflow which can occur in the decimation filter (ringing
     on a very large step).  This option now removed.
+
+
+FURTHER WORK
+
+* The timestamp array returned by fa_load is dodgy at best.  It would be better
+  to compute this from the knowledge available to us.  This will require server
+  support.
+
+* Want some mechanism for streaming the decimation variance information so that
+  we can compute long term beam variance statistics.
+
+* Might be worth trying to make fa-capture build under Windows.  This is a bit
+  of a pain as Microsoft seem unwilling to implement C99 and of course there is
+  no Posix, and make behaves differently.  Hopefully mingw will do the trick.
+
+* Looks like falib(3) is incomplete.  Actually need to restructure falib a
+  little, anyway.

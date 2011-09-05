@@ -1,3 +1,7 @@
+% write_filter(filename, filter)
+%
+% Writes filter structure computed with make_filter to given file in format
+% suitable for use as an fa-archiver decimation configuration file.
 function write_filter(filename, filter)
 
 N = 5;

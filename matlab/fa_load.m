@@ -1,18 +1,27 @@
-% fa_load
-%
-% Grab bpm data from the fa archiver for the last 36 hours or so.
-%
 % d = fa_load(tse, mask [, type [,server]])
+%
+% Grab bpm data from the FA archiver
 %
 % Input:
 %   tse = [start_time end_time]
-%   mask = vector containing bmps [1 2 3], or [78 79] etc.
+%   mask = vector containing FA ids [1 2 3], or [78 79] etc.
 %   type = 'F' for full data
 %          'd' for 10072/64 decimated
 %          'D' for 10072/16384 decimated
+%   server = IP address of FA archiver
 %
 % Output:
-%   d = object containing all of the data
+%   d = object containing all of the data, containing the following fields:
+%
+%   d.decimation    Decimation factor corresponding to requested type
+%   d.f_s           Sample rate of captured data at selected decimation
+%   d.timestamp     Timestamp (in Matlab format) of first point
+%   d.ids           Array of FA ids, copy of mask
+%   d.gapix         Array of start of segment pointer
+%   d.gaptimes      Array of segment start times
+%   d.data          The returned data
+%   d.t             Timestamp array roughly timestamping each sample point
+%   d.day           Matlab number of day containing first sample
 function d = fa_load(tse, mask, type, server)
     fa_capture = 'fa-capture';
     if nargin < 3
