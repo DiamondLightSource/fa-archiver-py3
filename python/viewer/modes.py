@@ -37,6 +37,8 @@ class mode_common:
         parent.ui.bottom_row.addWidget(self.__tray)
         self.__tray_layout.setContentsMargins(0, 0, 0, 0)
 
+        self.show_x = True
+        self.show_y = True
         self.__tray.setVisible(False)
 
     def set_enable(self, enabled):
@@ -153,8 +155,6 @@ class mode_raw(mode_common):
         self.maxy = parent.makecurve(Y_colour, True)
         self.minx = parent.makecurve(X_colour, True)
         self.miny = parent.makecurve(Y_colour, True)
-        self.show_x = True
-        self.show_y = True
         self.set_visible(False)
 
     def set_diff(self, diff):
@@ -494,8 +494,6 @@ class mode_integrated(mode_common):
 
         self.cxb = parent.makecurve(X_colour, True)
         self.cyb = parent.makecurve(Y_colour,  True)
-        self.show_x = True
-        self.show_y = True
 
     def set_enable(self, enabled):
         mode_common.set_enable(self, enabled)
