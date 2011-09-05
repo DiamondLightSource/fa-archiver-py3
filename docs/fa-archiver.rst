@@ -251,8 +251,8 @@ S
 
 I
     Returns a list of all currently connected clients, one client per line.
-    This command is an exception to the rule of one line per command, and so
-    should not normally be followed by other commands.
+    This command is an exception to the rule of one response line per command,
+    and so should not normally be followed by other commands.
 
     Each line returned has three fields showing the time the client connected,
     the IP address and socket number of the connection, and the command sent to
