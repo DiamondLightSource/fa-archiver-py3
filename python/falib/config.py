@@ -68,8 +68,8 @@ def find_nearby_file(module, filename, file_pattern, full_path = False):
     if full_path:
         return filename
     else:
-        return os.path.join(
-            os.path.dirname(module), file_pattern % filename)
+        return os.path.realpath(os.path.join(
+            os.path.dirname(module), file_pattern % filename))
 
 def find_location_file(location, full_path):
     '''Computes full path to given location file.'''
@@ -83,26 +83,12 @@ def list_location_files():
         for conf in glob.glob(
             os.path.join(os.path.dirname(__file__), '..', 'conf', '*.conf'))]
 
-def load_config(config_file):
-    '''Loads given configuration file.'''
-    config = {}
-    execfile(config_file, {}, config)
-    return config
-
-
-def load_bpm_defs(location, full_path = False, server = None):
-    '''Loads BPM definitions for the specified location.  Returns the name and
-    port of the server and the appropriate group pattern list.'''
-    bpm_defs = load_config(find_location_file(location, full_path))
-    groups = compute_bpm_groups(
-        bpm_defs['BPM_LIST'], bpm_defs['GROUPS'], bpm_defs['PATTERNS'])
-    if server:
-        bpm_defs['FA_SERVER'] = server
-    return bpm_defs['FA_SERVER'], bpm_defs.get('FA_PORT', 8888), groups
-
 
 def load_location_file(globs, location, full_path, server = None):
-    globs['FA_PORT'] = falib.DEFAULT_PORT
-    execfile(find_location_file(location, full_path), {}, globs)
+    result = dict(FA_PORT = falib.DEFAULT_PORT)
+    config_file = find_location_file(location, full_path)
+    context = dict(here = os.path.dirname(config_file), os = os)
+    execfile(config_file, context, result)
     if server:
-        globs['FA_SERVER'] = server
+        result['FA_SERVER'] = server
+    globs.update(result)
