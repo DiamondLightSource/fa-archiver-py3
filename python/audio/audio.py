@@ -40,7 +40,6 @@ import math
 import numpy
 
 import cothread
-from cothread import catools
 import falib
 
 
