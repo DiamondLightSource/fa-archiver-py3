@@ -1,0 +1,133 @@
+\begin{tikzpicture}[
+    single arrow head extend=1.5mm]
+\small
+
+% Draws a circular buffer with name #1 east of #2 with top label #3 and centre
+% label #4
+\newcommand{\buffer}[4]{
+\begin{pgfonlayer}{foreground}
+\path
+    node [draw, thick, circle, background fill,
+        minimum width=18mm, anchor=west,
+        label={above:#3}] (#1) at (#2.east) {}
+    node [draw, thick, fill=white, circle, minimum width=10mm] at (#1) {}
+    node [align=center, font=\small] at (#1) {#4};
+\end{pgfonlayer}
+}
+
+% Sniffer device and its connections
+\node [draw, single arrow, highlight fill, anchor=west] (cc) {CC};
+\node at (0,-13mm) (anchor) {};
+\node [draw, thick, anchor=west, minimum height=12mm, minimum width=15mm]
+    (fpga) at (cc.east) {FPGA};
+\node [draw, single arrow, anchor=west]
+    (dma) at ($(fpga.east)-(0.2mm,0)$) {DMA};
+\node [fit=(cc) (dma.center) (anchor-|dma.center),
+    inner sep=0, below delimiter=\},
+    label={[yshift=-3mm, font=\normalsize, align=center]below:
+        FA Sniffer\\device}] {};
+
+% Device driver
+\buffer{device buffer}{dma}{Driver buffer}{512\,K\\$\times$5}
+\node [draw, single arrow, anchor=west] at ($(device buffer.east)-(0.4mm,0)$)
+    (device) {\texttt{read()}};
+\node [fit=(dma.center) (device.center) (anchor-|dma.center),
+    inner sep=0, below delimiter=\},
+    label={[yshift=-3mm, font=\normalsize, align=center]below:
+        Sniffer\\device driver}] {};
+
+% Central raw circular buffer and decimated buffer
+\buffer{raw buffer}{device}{User space buffer}{512\,K\\$\times$64}
+\node [draw, single arrow, anchor=west] at ($(raw buffer.east)-(0.4mm,0)$)
+    (decimate) {Decimate};
+\buffer{decimated buffer}{decimate}{Decimated buffer}{200\,K\\$\times$50}
+
+
+% Transposing to in-memory disk buffer
+\node [draw, single arrow, rotate=-90, anchor=west, minimum height=5mm]
+    (raw arrow) at ($(raw buffer.south)+(0,0.4mm)$) {};
+\node [draw, thick, anchor=north, inner sep=2mm] at (raw arrow.east)
+    (transpose) {Transpose};
+\node [draw, single arrow, rotate=-90, anchor=west, minimum height=8mm]
+    (transpose arrow) at ($(transpose.south)+(0,0.2mm)$) {};
+\begin{pgfonlayer}{foreground}
+\node [draw, thick, fill=white,
+    minimum height=20mm, minimum width=15mm, anchor=north, align=center,
+    left delimiter=\{, copy shadow={
+        shadow xshift=1.5mm, shadow yshift=-1.5mm, highlight fill},
+    label={[align=right, xshift=-3mm]left:Major\\Block\\double\\buffers}]
+    (major block) at (transpose arrow.east) {FA and D};
+\end{pgfonlayer}
+
+
+% Archive on disk and in memory
+\node [draw, single arrow, anchor=west, minimum width=1mm, minimum height=12mm,
+    highlight fill]
+    (archive arrow) at (major block.325) {};
+\node [disk icon, anchor=west, label={below:Archive}]
+    (archive) at (archive arrow.east) {};
+
+\node [draw, thick, inner sep=1.5mm]
+    (index) at ($(archive)+(-5mm,14mm)$) {Index};
+\node [draw, thick, inner sep=1.5mm] (dd) at ($(archive)+(+5mm,14mm)$) {DD};
+
+\draw [->, thick] (transpose arrow) -| (index);
+\draw [->, thick] (transpose arrow) -| (dd);
+\node [inner sep=0pt, line width=0] (via) at ($(archive.north)+(0,3mm)$) {};
+\draw [<-, thick] (index) |- (via);
+\draw [<->, thick] (dd) |- (via.center) -- (archive);
+
+\node [right=5mm of via, align=center] {
+    \scriptsize Memory\\[-1ex]\scriptsize mapped};
+
+
+% Socket Server
+\node [draw, double arrow, align=center, anchor=east, highlight fill]
+    (tcp ip) at (\linewidth, -19mm) {TCP\\/IP};
+\path [draw, thick]
+    ($(tcp ip.west)-(0,11mm)$) rectangle ++(-5mm,22mm) coordinate (a)
+    node [rotate=90, pos=0.5] {Socket Server}
+    rectangle ++(-20mm,-11mm) coordinate (b)
+    node [pos=0.5, align=center] {Subscription\\Server}
+    rectangle ++(20mm,-11mm) coordinate (c)
+    node [pos=0.5, align=center] {Archive\\Server}
+    node [tight fit=(a) (b), align=center] (subscription server) {}
+    node [tight fit=(b) (c), align=center] (archive server) {};
+
+\draw [<-] ($(subscription server.west)+(0,-2mm)$)
+    -- +(-25mm,0) -- (raw buffer);
+\draw [<-] ($(subscription server.west)+(0,2mm)$)
+    -- +(-6mm,0) -- (decimated buffer);
+\draw [<-] (archive server.west) -- +(-6mm,0) |- (archive);
+\draw [<-] (archive server.west) -- +(-6mm,0) |- (dd);
+
+
+% Text boxes, key and major block description
+\path coordinate (bottom) at ($(major block.south)+(0,-2mm)$) {};
+
+\node [text fill, text width=37mm, anchor=south east]
+    at ($(tcp ip.east |- subscription server.north)+(0,4mm)$) {
+Subscription data:
+\begin{itemize}[nolistsep, leftmargin=1em]
+\item Full 10\,kHz data
+\item Filtered $\div$10 at 1\,kHz
+\end{itemize}};
+
+\node [text fill, align=left, anchor=south east]
+    at (tcp ip.east |- bottom) {
+Archive data:\\
+\begin{tabular}[t]{ll}
+FA & Full 10\,kHz data \\
+D & Decimated $\div$128 \\
+DD & Decimated $\div$16384
+\end{tabular}};
+
+\node [text fill, text width=52mm, anchor=south west, align=justify]
+    at (cc.west |- bottom) {
+A ``Major Block'' contains 6.5\,s of data for each archived id with all of the
+FA data for each id in a contiguous block to assist rapid retrieval --- each FA
+block is 512\,K bytes long.  This is followed by D data in 64\,K blocks for each
+id.
+};
+
+\end{tikzpicture}

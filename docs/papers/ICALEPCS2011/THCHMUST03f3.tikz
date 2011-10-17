@@ -1,0 +1,91 @@
+\begin{tikzpicture}[
+    interface/.style={draw, minimum width=\linewidth, minimum height=5mm},
+    left module/.style={draw, minimum width=0.28\linewidth, align=center},
+    right module/.style={draw, minimum width=0.55\linewidth, align=center},
+    buffer/.style={draw, fill=white, ellipse, minimum height=12mm,
+        copy shadow={shadow xshift=-2mm, shadow yshift=0, shadow fill}}]
+\small
+
+% External interface: endpoint core and internal interface
+\node[draw, double arrow, highlight fill, anchor=west,
+    double arrow head extend=1.5mm, inner sep=2pt]
+    (pcie) {\footnotesize PCIe};
+\path[draw] ($(pcie.east)+(0,-2.5mm)$) rectangle (\linewidth,2.5mm)
+    node[pos=0.5] (pcie core) {PCIe Endpoint Core};
+\node[interface, anchor=west] at (0,-9mm) (interface) {Interface};
+
+\draw[thick, ->, transform canvas={xshift=-20mm}]
+    (pcie core) -- (interface.north -| pcie core);
+\draw[thick, <-, transform canvas={xshift=20mm}]
+    (pcie core) -- (interface.north -| pcie core);
+
+
+% Internal control modules: register interface
+\node[left module, anchor=west, yshift=-22mm] at (interface.west)
+    (target) {Target};
+\node[left module, below=5mm of target, minimum height=20mm]
+    (registers) {Control/Status\\Registers};
+
+\draw[thick, ->]
+    ($(target.north west)!.25!(target.north east)$) node (start) {} --
+        (start |- interface.south)
+    node[pos=0.5, sloped, align=center] {\tiny COMPLETION\\[-1ex]\tiny TLPs};
+\draw[thick, <-]
+    ($(target.north west)!.75!(target.north east)$) node (start) {} --
+        (start |- interface.south)
+    node[pos=0.5, sloped, align=center] {\tiny READ/WRITE\\[-1ex]\tiny TLPs};
+\draw[thick, <->] (target) -- (registers);
+
+
+% Communication controller core and its SFP
+\node[right module, anchor=south east, xshift=\linewidth-7mm]
+    at (registers.south west)
+    (cc core) {Diamond\\Communication Controller\\Core};
+\node[draw, rotate=90, anchor=south west, xshift=1mm, yshift=1mm,
+    minimum width=10mm]
+    at (cc core.south east)
+    (sfp) {\tiny 1$\times$ SFP};
+\node[draw, single arrow, shape border rotate=180,
+    single arrow head extend=2mm,
+    anchor=west, highlight fill]
+    at (sfp.south) {\footnotesize CC};
+
+
+% Background for the big DMA engine in the middle
+\path[draw, highlight fill]
+    ($(cc core.north east)+(0,2mm)$) coordinate (dma se) {}
+    ($(interface.south -| cc core.east)-(0,2mm)$) coordinate (dma ne) {}
+    rectangle (dma se -| cc core.west) coordinate (dma sw) {}
+    (dma sw |- dma ne) coordinate (dma nw) {};
+\path (dma sw) -- (dma se)
+    node[pos=0.5, above] {\scriptsize DMA Logic};
+
+% Buffers and multiplexor in DMA engine
+\node[draw, fill=white, trapezium, minimum height=4mm, minimum width=18mm,
+    trapezium stretches body=true, trapezium angle=40]
+    at ($(dma nw)+(12mm,-4mm)$) (mux) {};
+\node[buffer] at ($(dma sw)+(10mm,8mm)$) (rx buf) {Rx};
+\node[buffer] at ($(dma se)+(-8mm,8mm)$) (tx buf) {Tx};
+
+
+\draw[thick, ->, dotted] (rx buf) -- (tx buf);
+\draw[thick, ->] (tx buf) -- (mux.335)
+    node[pos=0.5, sloped, above] {\tiny READ TLPs};
+\draw[thick, ->, transform canvas={xshift=1.5mm}]
+    (rx buf.north) -- (rx buf.north |- mux.south)
+    node[pos=0.5, sloped, align=center] {\tiny READ\\[-1ex]\tiny TLPs};
+\draw[thick, ->, transform canvas={xshift=-3.5mm}]
+    (rx buf.north) -- (rx buf.north |- mux.south)
+    node[pos=0.5, sloped, align=center] {\tiny WRITE\\[-1ex]\tiny TLPs};
+
+\draw[thick, ->] (mux) -- (mux |- interface.south);
+\draw[thick, ->] (tx buf |- interface.south) -- (tx buf)
+    node[pos=0.5, sloped, rotate=180, align=center]
+    {\tiny COMPLETION\\[-1ex]\tiny TLPs};
+
+
+\draw[thick, ->] (cc core.north -| rx buf) -- (rx buf);
+\draw[<->, dotted, thick] (cc core) -- (cc core -| registers.east);
+\draw[<->, dotted, thick, transform canvas={yshift=11mm}]
+    (cc core) -- (cc core -| registers.east);
+\end{tikzpicture}

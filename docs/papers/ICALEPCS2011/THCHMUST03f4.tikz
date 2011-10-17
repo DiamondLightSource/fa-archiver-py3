@@ -1,0 +1,53 @@
+\begin{tikzpicture}[
+    single arrow head extend=1.5mm,
+    buffer/.style={draw, thick, minimum width=12mm, minimum height=8mm}]
+
+\node [draw, thick, anchor=west, minimum height=20mm, minimum width=14mm]
+    (fpga) {FPGA};
+
+\node [draw, highlight fill, single arrow, anchor=west, minimum height=15mm]
+    (dma) at ($(fpga.east)+(-0.4pt,5mm)$) {DMA};
+\node [draw, dashed, single arrow, anchor=west, minimum height=15mm]
+    (next) at ($(fpga.east)+(-0.4pt,-5mm)$) {next};
+
+\node [buffer, anchor=west]
+    (dma buf) at (dma.east) {busy};
+\node [buffer, fill=white, dashed, anchor=west]
+    (next buf) at (next.east) {next};
+\node [buffer, xshift=10mm, background fill]
+    (data buf1) at (dma buf.east) {data};
+\node [buffer, xshift=10mm] (data buf2) at (next buf.east) {};
+\node [buffer, fill=white, anchor=center, yshift=-9mm]
+    (free) at ($(next buf)!.5!(data buf2)$) {free};
+
+\node [draw, isosceles triangle, rotate=180, anchor=east, inner sep=1pt,
+    label={[align=left, font=\scriptsize, yshift=2mm]above left:read\\pointer}]
+    (marker) at ($(data buf2.south east)!0.3!(data buf2.north east)$) {};
+
+\node [draw, single arrow, background fill, anchor=west, minimum height=14mm,
+    label={above:\small\texttt{read()}}]
+    at ($(marker.east)!.5!(data buf2.north east)-(0.4pt,0)$) {};
+
+
+\begin{pgfonlayer}{background}
+\node [line width=5pt, draw=gray, circle, minimum size=19mm]
+    (circle) at ($(next buf.north east)!.5!(data buf2.north west)-(0,4mm)$) {};
+\path [fill=white]
+    (data buf2.north west) rectangle (data buf2.south east);
+\path [highlight fill]
+    (dma buf.south west) rectangle
+    ($(dma buf.north east)!.3!(dma buf.south east)$);
+\path [background fill]
+    (data buf2.north west) rectangle (marker.east);
+\end{pgfonlayer}
+
+\path [->, draw=red, color=red, very thick] (dma) -- (next);
+\path [->, draw=red, color=red, very thick]
+    (next) -- ++(0,-6mm) -- +(13mm,0) arc (212:239:11.7mm);
+
+\draw[->]
+    (fpga.south) -- ++(0,-3mm) -- ++(24mm,0)
+    node[pos=0.5, below] {\smash[b]{interrupt}}
+    -- ($(circle.215)-(1.2mm,1.2mm)$);
+
+\end{tikzpicture}
