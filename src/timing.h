@@ -36,9 +36,15 @@ static bool __timing_reported = false;
 
 static __inline__ uint64_t get_ticks(void)
 {
+#if defined(__i386__)
     uint64_t ticks;
     __asm__ __volatile__("rdtsc" : "=A"(ticks));
     return ticks;
+#elif defined(__x86_64__)
+    uint32_t high, low;
+    __asm__ __volatile__("rdtsc" : "=a"(low), "=d"(high));
+    return ((uint64_t) high << 32) | low;
+#endif
 }
 
 static void update_timing(uint64_t interval)
