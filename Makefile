@@ -27,6 +27,7 @@ export SCRIPT_DIR
 
 BIN_BUILD_DIR = $(BUILD_DIR)/$(shell uname -m)
 DOCS_BUILD_DIR = $(BUILD_DIR)/docs
+MATLAB_BUILD_DIR = $(BUILD_DIR)/matlab
 
 VPATH_BUILD = \
     VPATH=$(CURDIR)/$1 $(MAKE) TOP=$(TOP) srcdir=$(CURDIR)/$1 \
@@ -35,9 +36,11 @@ BIN_BUILD = \
     $(call VPATH_BUILD,src,$(BIN_BUILD_DIR)) DEVICE_DIR=$(DEVICE_DIR)
 DOCS_BUILD = \
     $(call VPATH_BUILD,docs,$(DOCS_BUILD_DIR))
+MATLAB_BUILD = \
+    $(call VPATH_BUILD,matlab,$(MATLAB_BUILD_DIR))
 
 # Targets other than these are redirected to building the binary tools
-NON_BIN_TARGETS = default clean install docs
+NON_BIN_TARGETS = default clean install docs matlab
 BIN_TARGETS = $(filter-out $(NON_BIN_TARGETS) $(BIN_BUILD_DIR),$(MAKECMDGOALS))
 
 
@@ -47,6 +50,8 @@ default $(BIN_TARGETS): $(BIN_BUILD_DIR)
 docs: $(DOCS_BUILD_DIR)
 	$(DOCS_BUILD)
 
+matlab: $(MATLAB_BUILD_DIR)
+	$(MATLAB_BUILD)
 
 $(BUILD_DIR)/%:
 	mkdir -p $@
@@ -54,13 +59,13 @@ $(BUILD_DIR)/%:
 clean:
 	rm -rf $(BUILD_DIR)
 
-install: $(BIN_BUILD_DIR) $(DOCS_BUILD_DIR)
+install: $(BIN_BUILD_DIR) $(DOCS_BUILD_DIR) $(MATLAB_BUILD_DIR)
 ifndef PREFIX
 	@echo >&2 Must define PREFIX; false
 endif
 	$(BIN_BUILD) install
 	$(DOCS_BUILD) install
 	make -C $(TOP)/python install
-	make -C $(TOP)/matlab install
+	$(MATLAB_BUILD) install
 
 .PHONY: $(NON_BIN_TARGETS)
