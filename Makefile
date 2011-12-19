@@ -28,12 +28,13 @@ export SCRIPT_DIR
 BIN_BUILD_DIR = $(BUILD_DIR)/$(shell uname -m)
 DOCS_BUILD_DIR = $(BUILD_DIR)/docs
 
+VPATH_BUILD = \
+    VPATH=$(CURDIR)/$1 $(MAKE) TOP=$(TOP) srcdir=$(CURDIR)/$1 \
+        -C $2 -f $(CURDIR)/$1/Makefile
 BIN_BUILD = \
-    VPATH=$(CURDIR)/src $(MAKE) TOP=$(TOP) DEVICE_DIR=$(DEVICE_DIR) \
-        -C $(BIN_BUILD_DIR) -f $(CURDIR)/src/Makefile
+    $(call VPATH_BUILD,src,$(BIN_BUILD_DIR)) DEVICE_DIR=$(DEVICE_DIR)
 DOCS_BUILD = \
-    VPATH=$(CURDIR)/docs $(MAKE) TOP=$(TOP) \
-        -C $(DOCS_BUILD_DIR) -f $(CURDIR)/docs/Makefile
+    $(call VPATH_BUILD,docs,$(DOCS_BUILD_DIR))
 
 # Targets other than these are redirected to building the binary tools
 NON_BIN_TARGETS = default clean install docs
@@ -46,10 +47,8 @@ default $(BIN_TARGETS): $(BIN_BUILD_DIR)
 docs: $(DOCS_BUILD_DIR)
 	$(DOCS_BUILD)
 
-$(BUILD_DIR)/%: $(BUILD_DIR)
-	mkdir -p $@
 
-$(BUILD_DIR):
+$(BUILD_DIR)/%:
 	mkdir -p $@
 
 clean:
@@ -64,4 +63,4 @@ endif
 	make -C $(TOP)/python install
 	make -C $(TOP)/matlab install
 
-.PHONY: default docs clean install
+.PHONY: $(NON_BIN_TARGETS)
