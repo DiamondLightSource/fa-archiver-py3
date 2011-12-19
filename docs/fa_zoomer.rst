@@ -90,9 +90,13 @@ Zoomed
     If this is selected then the vertical scale is automatically forced to +-100
     microns -- this is useful for normal stored beam with position feedback.
 
-Show std
-    When decimated data is on display this selects the display of the standard
-    deviation value rather than min and max ranges.
+min/max or std or mean
+    When decimated data is on display this selects which data to show.  Has no
+    effect when decimation is equal to 1.
+
+Save
+    Brings up a form to save the current waveforms to disk in a matlab file.
+
 
 See Also
 ========

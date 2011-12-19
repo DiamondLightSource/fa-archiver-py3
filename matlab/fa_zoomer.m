@@ -70,6 +70,8 @@ function fa_zoomer(server)
     h.data_type = control('popup', {'min/max', 'std', 'mean'}, 90, ...
         'Choose decimated data type to display', 'Value', 1, ...
         'Callback', protect(@reload_plot));
+    control('pushbutton', 'Save', 40, 'Save data to file', ...
+        'Callback', protect(@save_data));
     clear global h_pos;
     h.history = cell(0, 2);
 
@@ -171,6 +173,16 @@ function load_data(fig, range, type, save)
     data = fa_load(range, pvs, type, h.server);
     plotfa(h, data);
     describe;
+end
+
+
+% Saves data to file
+function save_data(fig, event)
+    global data;
+    [file, path] = uiputfile('*.mat', 'Save archive data');
+    if ~isequal(file, 0) & ~isequal(path, 0)
+        save(fullfile(path, file), '-struct', 'data');
+    end
 end
 
 
