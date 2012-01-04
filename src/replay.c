@@ -240,23 +240,6 @@ static bool prepare_replay_data(struct region *region)
 }
 
 
-static bool initialise_replay(const char *replay_filename)
-{
-    int file;
-    struct region region;
-    return
-        TEST_IO_(file = open(replay_filename, O_RDONLY),
-            "Unable to open replay file \"%s\"", replay_filename)  &&
-        /* For simplicity, just map the entire file into memory! */
-        map_matlab_file(file, &region)  &&
-        prepare_replay_data(&region)  &&
-
-        /* Finally prepare the replay sleep target.  This ensures we pace the
-         * data correctly. */
-        TEST_IO(clock_gettime(CLOCK_MONOTONIC, &next_sleep));
-}
-
-
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /* Dummy sniffer using replay data. */
 
@@ -272,10 +255,27 @@ static bool interrupt_replay(void)
     return FAIL_("Interrupt unavailable in replay mode");
 }
 
-const struct sniffer_context sniffer_replay = {
-    .initialise = initialise_replay,
+static const struct sniffer_context sniffer_replay = {
     .reset = reset_replay,
     .read = read_replay_block,
     .status = read_replay_status,
     .interrupt = interrupt_replay,
 };
+
+
+const struct sniffer_context *initialise_replay(const char *replay_filename)
+{
+    int file;
+    struct region region;
+    bool ok =
+        TEST_IO_(file = open(replay_filename, O_RDONLY),
+            "Unable to open replay file \"%s\"", replay_filename)  &&
+        /* For simplicity, just map the entire file into memory! */
+        map_matlab_file(file, &region)  &&
+        prepare_replay_data(&region)  &&
+
+        /* Finally prepare the replay sleep target.  This ensures we pace the
+         * data correctly. */
+        TEST_IO(clock_gettime(CLOCK_MONOTONIC, &next_sleep));
+    return ok ? &sniffer_replay : NULL;
+}

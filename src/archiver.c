@@ -216,6 +216,19 @@ static bool initialise_signals(void)
 }
 
 
+static bool initialise_sniffer(struct buffer *fa_block_buffer)
+{
+    const struct sniffer_context *sniffer_context;
+    if (replay)
+        sniffer_context = initialise_replay(fa_sniffer_device);
+    else
+        sniffer_context = initialise_sniffer_device(fa_sniffer_device);
+    if (sniffer_context)
+        configure_sniffer(fa_block_buffer, sniffer_context);
+    return sniffer_context != NULL;
+}
+
+
 static bool maybe_daemonise(void)
 {
     int pid_file = -1;
@@ -291,7 +304,7 @@ int main(int argc, char **argv)
         IF_(decimation_config,
             initialise_decimation(
                 decimation_config, fa_block_buffer, &decimated_buffer))  &&
-        initialise_sniffer(fa_block_buffer, fa_sniffer_device, replay)  &&
+        initialise_sniffer(fa_block_buffer)  &&
         initialise_server(
             fa_block_buffer, decimated_buffer, server_socket,
             extra_commands, reuseaddr)  &&

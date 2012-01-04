@@ -27,24 +27,26 @@
  *      michael.abbott@diamond.ac.uk
  */
 
-struct buffer;
-bool initialise_sniffer(
-    struct buffer *buffer, const char *device_name, bool replay);
-bool start_sniffer(bool boost_priority);
-
-bool get_sniffer_status(struct fa_status *status);
-bool interrupt_sniffer(void);
-
-void terminate_sniffer(void);
-
-
 /* Abstraction of sniffer device interface so we can implement debug or
  * alternate versions of the sniffer. */
 struct sniffer_context
 {
-    bool (*initialise)(const char *source_name);
     void (*reset)(void);
     bool (*read)(struct fa_row *block, size_t block_size);
     bool (*status)(struct fa_status *status);
     bool (*interrupt)(void);
 };
+
+const struct sniffer_context *initialise_sniffer_device(
+    const char *device_name);
+
+struct buffer;
+void configure_sniffer(
+    struct buffer *buffer, const struct sniffer_context *sniffer_context);
+bool start_sniffer(bool boost_priority);
+
+
+bool get_sniffer_status(struct fa_status *status);
+bool interrupt_sniffer(void);
+
+void terminate_sniffer(void);

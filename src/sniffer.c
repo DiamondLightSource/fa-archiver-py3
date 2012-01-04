@@ -133,18 +133,6 @@ static int fa_sniffer;
 static bool ioctl_ok;
 
 
-static bool initialise_sniffer_device(const char *device_name)
-{
-    fa_sniffer_device = device_name;
-    bool ok = TEST_IO_(
-        fa_sniffer = open(fa_sniffer_device, O_RDONLY),
-        "Can't open sniffer device %s", fa_sniffer_device);
-    ioctl_ok = ok  &&  TEST_IO_(
-        ioctl(fa_sniffer, FASNIF_IOCTL_GET_VERSION),
-        "Sniffer device doesn't support ioctl interface");
-    return ok;
-}
-
 static void reset_sniffer_device(void)
 {
     if (ioctl_ok)
@@ -186,12 +174,23 @@ static bool interrupt_sniffer_device(void)
 }
 
 static const struct sniffer_context sniffer_device = {
-    .initialise = initialise_sniffer_device,
     .reset = reset_sniffer_device,
     .read = read_sniffer_device,
     .status = read_sniffer_status,
     .interrupt = interrupt_sniffer_device,
 };
+
+const struct sniffer_context *initialise_sniffer_device(const char *device_name)
+{
+    fa_sniffer_device = device_name;
+    bool ok = TEST_IO_(
+        fa_sniffer = open(fa_sniffer_device, O_RDONLY),
+        "Can't open sniffer device %s", fa_sniffer_device);
+    ioctl_ok = ok  &&  TEST_IO_(
+        ioctl(fa_sniffer, FASNIF_IOCTL_GET_VERSION),
+        "Sniffer device doesn't support ioctl interface");
+    return ok ? &sniffer_device : NULL;
+}
 
 
 
@@ -200,12 +199,11 @@ static const struct sniffer_context sniffer_device = {
 
 static pthread_t sniffer_id;
 
-bool initialise_sniffer(
-    struct buffer *buffer, const char *device_name, bool replay)
+void configure_sniffer(
+    struct buffer *buffer, const struct sniffer_context *sniffer)
 {
     fa_block_buffer = buffer;
-    sniffer_context = replay ? &sniffer_replay : &sniffer_device;
-    return sniffer_context->initialise(device_name);
+    sniffer_context = sniffer;
 }
 
 bool start_sniffer(bool boost_priority)

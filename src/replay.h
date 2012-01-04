@@ -28,4 +28,4 @@
  */
 
 /* Sniffer interface for replay. */
-const struct sniffer_context sniffer_replay;
+const struct sniffer_context *initialise_replay(const char *replay_filename);
