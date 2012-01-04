@@ -36,3 +36,15 @@ bool get_sniffer_status(struct fa_status *status);
 bool interrupt_sniffer(void);
 
 void terminate_sniffer(void);
+
+
+/* Abstraction of sniffer device interface so we can implement debug or
+ * alternate versions of the sniffer. */
+struct sniffer_context
+{
+    bool (*initialise)(const char *source_name);
+    void (*reset)(void);
+    bool (*read)(struct fa_row *block, size_t block_size);
+    bool (*status)(struct fa_status *status);
+    bool (*interrupt)(void);
+};

@@ -43,6 +43,7 @@
 #include "fa_sniffer.h"
 #include "mask.h"
 #include "matlab.h"
+#include "sniffer.h"
 
 #include "replay.h"
 
@@ -75,7 +76,7 @@ static void sleep_until(int duration)
         CLOCK_MONOTONIC, TIMER_ABSTIME, &next_sleep, NULL)));
 }
 
-bool read_replay_block(struct fa_row *rows, size_t size)
+static bool read_replay_block(struct fa_row *rows, size_t size)
 {
     int row_count = size / sizeof(struct fa_row);
     for (int i = 0; i < row_count; i ++)
@@ -239,7 +240,7 @@ static bool prepare_replay_data(struct region *region)
 }
 
 
-bool initialise_replay(const char *replay_filename)
+static bool initialise_replay(const char *replay_filename)
 {
     int file;
     struct region region;
@@ -254,3 +255,27 @@ bool initialise_replay(const char *replay_filename)
          * data correctly. */
         TEST_IO(clock_gettime(CLOCK_MONOTONIC, &next_sleep));
 }
+
+
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+/* Dummy sniffer using replay data. */
+
+static void reset_replay(void) { ASSERT_FAIL(); }
+
+static bool read_replay_status(struct fa_status *status)
+{
+    return FAIL_("Sniffer status unavailable in replay mode");
+}
+
+static bool interrupt_replay(void)
+{
+    return FAIL_("Interrupt unavailable in replay mode");
+}
+
+const struct sniffer_context sniffer_replay = {
+    .initialise = initialise_replay,
+    .reset = reset_replay,
+    .read = read_replay_block,
+    .status = read_replay_status,
+    .interrupt = interrupt_replay,
+};

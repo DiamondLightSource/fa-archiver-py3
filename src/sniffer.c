@@ -54,23 +54,11 @@
 /* This is where the sniffer data will be written. */
 static struct buffer *fa_block_buffer;
 
-
-/* Abstraction of sniffer device interface so we can implement debug versions of
- * the sniffer. */
-struct sniffer_context
-{
-    bool (*initialise)(const char *source_name);
-    void (*reset)(void);
-    bool (*read)(struct fa_row *block, size_t block_size);
-    bool (*status)(struct fa_status *status);
-    bool (*interrupt)(void);
-};
-
 /* This will be initialised with the appropriate context to use. */
-static struct sniffer_context *sniffer_context;
+static const struct sniffer_context *sniffer_context;
 
 
-static void * sniffer_thread(void *context)
+static void *sniffer_thread(void *context)
 {
     const size_t fa_block_size = buffer_block_size(fa_block_buffer);
     bool in_gap = false;            // Only report gap once
@@ -197,37 +185,12 @@ static bool interrupt_sniffer_device(void)
         TEST_IO(ioctl(fa_sniffer, FASNIF_IOCTL_HALT));
 }
 
-struct sniffer_context sniffer_device = {
+static const struct sniffer_context sniffer_device = {
     .initialise = initialise_sniffer_device,
     .reset = reset_sniffer_device,
     .read = read_sniffer_device,
     .status = read_sniffer_status,
     .interrupt = interrupt_sniffer_device,
-};
-
-
-
-/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-/* Dummy sniffer using replay data. */
-
-static void reset_replay(void) { ASSERT_FAIL(); }
-
-static bool read_replay_status(struct fa_status *status)
-{
-    return FAIL_("Sniffer status unavailable in replay mode");
-}
-
-static bool interrupt_replay(void)
-{
-    return FAIL_("Interrupt unavailable in replay mode");
-}
-
-struct sniffer_context sniffer_replay = {
-    .initialise = initialise_replay,
-    .reset = reset_replay,
-    .read = read_replay_block,
-    .status = read_replay_status,
-    .interrupt = interrupt_replay,
 };
 
 
