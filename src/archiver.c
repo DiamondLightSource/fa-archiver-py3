@@ -55,6 +55,7 @@
 #include "reader.h"
 #include "decimate.h"
 #include "replay.h"
+#include "gigabit.h"
 
 
 #define K               1024
@@ -88,8 +89,9 @@ static unsigned int buffer_blocks = BUFFER_BLOCKS;
 static int server_socket = 8888;
 /* Decimation configuration file. */
 static const char *decimation_config = NULL;
-/* Set if replay configured. */
-static bool replay = false;
+/* Selects data source. */
+static enum { SNIFFER_DEVICE, SNIFFER_REPLAY, SNIFFER_GIGABIT }
+    sniffer_source = SNIFFER_DEVICE;
 /* If set enables extra socket server commands for debug control. */
 static bool extra_commands = false;
 /* Enables logging of routine events and incoming commands. */
@@ -118,6 +120,7 @@ static void usage(void)
 "    -F:  Run dummy sniffer with canned data.\n"
 "    -X   Enable extra commands (debug only)\n"
 "    -R   Set SO_REUSEADDR on listening socket, debug use only\n"
+"    -G   Use gigabit ethernet as data source\n"
         , argv0, buffer_blocks);
 }
 
@@ -128,7 +131,7 @@ static bool process_options(int *argc, char ***argv)
     bool ok = true;
     while (ok)
     {
-        switch (getopt(*argc, *argv, "+hc:d:rb:qtDp:s:F:XR"))
+        switch (getopt(*argc, *argv, "+hc:d:rb:qtDp:s:F:XRG"))
         {
             case 'h':   usage();                                    exit(0);
             case 'c':   decimation_config = optarg;                 break;
@@ -139,9 +142,10 @@ static bool process_options(int *argc, char ***argv)
             case 'D':   daemon_mode = true;                         break;
             case 'p':   pid_filename = optarg;                      break;
             case 'F':   fa_sniffer_device = optarg;
-                        replay = true;                              break;
+                        sniffer_source = SNIFFER_REPLAY;            break;
             case 'X':   extra_commands = true;                      break;
             case 'R':   reuseaddr = true;                           break;
+            case 'G':   sniffer_source = SNIFFER_GIGABIT;           break;
             case 'b':
                 ok = DO_PARSE("buffer blocks",
                     parse_uint, optarg, &buffer_blocks);
@@ -218,11 +222,19 @@ static bool initialise_signals(void)
 
 static bool initialise_sniffer(struct buffer *fa_block_buffer)
 {
-    const struct sniffer_context *sniffer_context;
-    if (replay)
-        sniffer_context = initialise_replay(fa_sniffer_device);
-    else
-        sniffer_context = initialise_sniffer_device(fa_sniffer_device);
+    const struct sniffer_context *sniffer_context = NULL;
+    switch (sniffer_source)
+    {
+        case SNIFFER_DEVICE:
+            sniffer_context = initialise_sniffer_device(fa_sniffer_device);
+            break;
+        case SNIFFER_REPLAY:
+            sniffer_context = initialise_replay(fa_sniffer_device);
+            break;
+        case SNIFFER_GIGABIT:
+            sniffer_context = initialise_gigabit();
+            break;
+    }
     if (sniffer_context)
         configure_sniffer(fa_block_buffer, sniffer_context);
     return sniffer_context != NULL;

@@ -52,6 +52,7 @@ COMMON_SRCS += mask.c               # BPM capture mask support
 archiver_SRCS += archiver.c         # Command line interface to archiver
 archiver_SRCS += buffer.c           # Ring buffer for data capture
 archiver_SRCS += sniffer.c          # Interface to FA sniffer driver
+archiver_SRCS += gigabit.c          # Gigabit Ethernet interface
 archiver_SRCS += disk_writer.c      # Core disk writing access
 archiver_SRCS += disk.c             # Disk header format definitions
 archiver_SRCS += socket_server.c    # Socket server
