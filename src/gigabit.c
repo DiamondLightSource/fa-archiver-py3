@@ -78,6 +78,9 @@ static bool read_datagram(struct fa_entry *row)
 {
     COMPILE_ASSERT(LIBERA_BLOCK_SIZE == 16);
 
+    /* As reading can be quite sparse, zero initialise the row. */
+    memset(row, 0, sizeof(struct fa_row));
+
     /* Read a datagram from the socket. */
     struct libera_payload buffer[LIBERAS_PER_DATAGRAM];
     ssize_t bytes_rx;
@@ -103,9 +106,6 @@ static bool read_datagram(struct fa_entry *row)
 
 static bool read_gigabit_block(struct fa_row *block, size_t block_size)
 {
-    /* As reading can be quite sparse, zero initialise the block. */
-    memset(block, 0, block_size);
-
     bool ok = true;
     for (unsigned int i = 0; ok  &&  i < block_size / FA_FRAME_SIZE; i ++)
         ok = read_datagram(block[i].row);
