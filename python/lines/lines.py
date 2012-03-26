@@ -28,7 +28,7 @@
 #      michael.abbott@diamond.ac.uk
 
 from pkg_resources import require
-require('cothread==1.17')
+require('cothread==2.6')
 require('iocbuilder==3.3')
 
 import sys

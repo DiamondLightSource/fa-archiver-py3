@@ -29,7 +29,7 @@
 #      michael.abbott@diamond.ac.uk
 
 from pkg_resources import require
-require('cothread')
+require('cothread==2.6')
 
 import optparse
 import subprocess

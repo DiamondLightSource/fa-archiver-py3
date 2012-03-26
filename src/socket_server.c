@@ -258,7 +258,7 @@ static double get_mean_frame_rate(void)
 static bool report_clients(int scon)
 {
     /* Walking the list of clients is a bit of a challenge: it's changing under
-     * our feed, and we can't hold it locked as we walk it, as sending our
+     * our feet, and we can't hold it locked as we walk it, as sending our
      * report can take time.  Instead for simplicitly we grab a copy of the list
      * under the lock. */
     LIST_HEAD(clients);
@@ -503,7 +503,7 @@ static bool process_subscribe(int scon, const char *buf)
 }
 
 
-struct command_table {
+static const struct command_table {
     char id;            // Identification character
     bool (*process)(int scon, const char *buf);
 } command_table[] = {
@@ -563,7 +563,7 @@ static bool dispatch_command(
     int scon, const char *client_name, const char *buf)
 {
     log_message("Client %s: \"%s\"", client_name, buf);
-    struct command_table *command = command_table;
+    const struct command_table *command = command_table;
     while (command->id  &&  command->id != buf[0])
         command += 1;
     return command->process(scon, buf);

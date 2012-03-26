@@ -3,7 +3,7 @@
 # Tool to enable excitation of beam
 
 from pkg_resources import require
-require('cothread')
+require('cothread==2.6')
 
 import sys
 import time
@@ -111,3 +111,5 @@ for cell in CELLS:
 print time.ctime(time.time())
 caput(resets, 1)
 print
+
+# vim: set filetype=python:

@@ -61,6 +61,7 @@ struct libera_payload {
     /* Status bits are:
      *  0       MC PLL lock status (1 if locked)
      *  2-7     Libera ID
+     *  11      Data valid (1 if valid)
      *  14      ADC overflow (1 on overflow)
      *  15      Interlock status (1 on interlock active) */
     uint16_t status;

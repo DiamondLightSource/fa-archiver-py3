@@ -1,3 +1,5 @@
 /build
 *.pyc
 *~
+/docs/papers/*/*.aux
+/docs/papers/*/*.pdf
