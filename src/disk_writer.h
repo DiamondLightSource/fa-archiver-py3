@@ -36,6 +36,12 @@ bool start_disk_writer(struct buffer *buffer);
 /* Orderly shutdown of the disk writer. */
 void terminate_disk_writer(void);
 
+/* Can be used to halt and resume writing to disk. */
+void enable_disk_writer(bool enabled);
+/* Returns current state of enabled flag. */
+bool disk_writer_enabled(void);
+
+
 /* Methods for access to writer thread. */
 
 /* Asks the writer thread to write out the given block.  If a previously

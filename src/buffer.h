@@ -100,3 +100,5 @@ void stop_reader(struct reader_state *reader);
 
 /* Can be used to temporarily halt or resume buffered writing. */
 void enable_buffer_write(struct buffer *buffer, bool enabled);
+/* Returns state of buffer write enable flag. */
+bool buffer_write_enabled(struct buffer *buffer);

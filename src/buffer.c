@@ -311,6 +311,11 @@ void enable_buffer_write(struct buffer *buffer, bool enabled)
     buffer->write_blocked = !enabled;
 }
 
+bool buffer_write_enabled(struct buffer *buffer)
+{
+    return !buffer->write_blocked;
+}
+
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 

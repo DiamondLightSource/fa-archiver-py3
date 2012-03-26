@@ -201,6 +201,7 @@ void request_read(void)
 /* Data processing thread. */
 
 static struct reader_state *reader;
+static volatile bool transform_enabled = true;
 
 
 static void * transform_thread(void *context)
@@ -209,11 +210,22 @@ static void * transform_thread(void *context)
     {
         uint64_t timestamp;
         const void *block = get_read_block(reader, NULL, &timestamp);
-        process_block(block, timestamp);
+        process_block(transform_enabled ? block : NULL, timestamp);
         if (block)
             release_read_block(reader);
     }
     return NULL;
+}
+
+
+void enable_disk_writer(bool enabled)
+{
+    transform_enabled = enabled;
+}
+
+bool disk_writer_enabled(void)
+{
+    return transform_enabled;
 }
 
 

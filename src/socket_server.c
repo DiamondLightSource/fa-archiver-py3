@@ -56,6 +56,7 @@
 #include "sniffer.h"
 #include "locking.h"
 #include "list.h"
+#include "disk_writer.h"
 
 #include "socket_server.h"
 
@@ -208,6 +209,11 @@ static bool set_socket_cork(int sock, bool cork)
  *  H   Halts data capture (only sensible for debug use)
  *  R   Resumes halted data capture
  *  I   Interrupts data capture (by sending halt command to hardware)
+ *  D   Disables writing to disk, leaves all other functions running
+ *  E   Reenables writing to disk.
+ *  S   Returns current data capture enable flags as a pair of numbers:
+ *      capture_enable      0 => Data capture blocked by DH command
+ *      disk_enable         0 => Writing to disk blocked by DD command
  */
 static bool process_debug_command(int scon, const char *buf)
 {
@@ -236,6 +242,19 @@ static bool process_debug_command(int scon, const char *buf)
             case 'I':
                 log_message("Interrupt command received");
                 ok = CATCH_ERROR(scon, interrupt_sniffer(), true);
+                break;
+            case 'D':
+                log_message("Disabling writing to disk");
+                enable_disk_writer(false);
+                break;
+            case 'E':
+                log_message("Enabling writing to disk");
+                enable_disk_writer(true);
+                break;
+            case 'S':
+                ok = write_string(scon, "%d %d\n",
+                    buffer_write_enabled(fa_block_buffer),
+                    disk_writer_enabled());
                 break;
 
             default:

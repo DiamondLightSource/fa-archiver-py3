@@ -460,6 +460,18 @@ R
 I
     Interrupts data capture using HALT ioctl, see fa_sniffer_\(4).
 
+D
+    Disables capture to disk.  Subscription data carries on being published as
+    normal, but all archiving is halted.
+
+E
+    Reenables capture to disk.
+
+S
+    Returns data capture and disk writing status as a pair of numbers, 0 for
+    disabled, 1 for enabled.  The first value is 0 if `DH` has been used to halt
+    data capture, the second is 0 if `DD` has been used to halt disk capture.
+
 
 Canned Data Format
 ==================
