@@ -1,0 +1,56 @@
+% Disk layout
+
+\begin{tikzpicture}
+
+\node [draw, thick, rectangle split, rectangle split horizontal=false]
+    (disk layout)
+{
+    Header
+\nodepart{two}
+    Index {\scriptsize $\times N$}
+\nodepart{three}
+    DD data {\scriptsize $\times N$}
+\nodepart{four}
+    FA and D data
+};
+
+\node [tight fit=(disk layout.north west) (disk layout.three split west),
+    left delimiter=\{,
+    label={[align=right, xshift=-2ex]left:Memory\\Mapped}] {};
+
+\path[draw, thick]
+    node [draw, thick, rectangle split, minimum width=20mm,
+        rectangle split horizontal=false,
+        rectangle split parts=2] (fa layout) at (55mm,-1mm)
+        {FA data \nodepart{two} D data}
+
+    node [anchor=east, align=center, minimum width=20mm]
+        (major block) at (fa layout.west) {Major\\Block}
+    node [anchor=north] at (fa layout.south west)
+        (by N) {\scriptsize $\times N$}
+    ($(fa layout.north east)-(0.4pt,0.4pt)$)
+        rectangle (by N.south -| major block.west);
+
+\draw[dotted]
+    (disk layout.south east) -- (by N.south -| major block.west)
+    (disk layout.three split east) -- (major block.west |- fa layout.north);
+
+\node[text fill, anchor=north east] at (fa layout.east |- disk layout.north)
+    % We smash away the descender on j to improve the look of the enclosing box.
+    {$N=$ \smash[b]{major block count}};
+
+\end{tikzpicture}
+
+\smallskip
+Per major block, repeated for each archived FA id:
+\smallskip
+
+\begin{tabular}[t]{l>{$}l<{$}>{$}l<{$}}
+FA data: & \begin{array}{l}x,y\end{array} & \times 65536 \\
+D/DD data: &
+\begin{array}{l}
+\overline{x}, \overline{y}, \lfloor x\rfloor, \lfloor y\rfloor, \\
+\lceil x\rceil, \lceil y\rceil, \sigma_x, \sigma_y
+\end{array}
+& \times 512/ \mathord\times 4
+\end{tabular}

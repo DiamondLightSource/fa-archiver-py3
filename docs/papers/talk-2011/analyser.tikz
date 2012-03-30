@@ -1,0 +1,46 @@
+\begin{tikzpicture}
+
+\draw [very thick]
+    (0,0) coordinate(ar-nw) -- ++(0,-10mm) --
+    ++(25mm,0) coordinate[midway] (ar-s) -- ++(0,10mm) coordinate(ar-ne);
+\node [anchor=north, inner sep=0pt] at ($(ar-nw)!.5!(ar-ne)$) {FA Archiver};
+\node [anchor=south] at (ar-s) {$\div 10$};
+
+\node [draw, single arrow, rotate=-90, anchor=west, minimum height=14mm,
+    label={[align=left, xshift=2mm]above:Full orbit\\at 1\,kHz}]
+    (from-archiver) at (ar-s) {};
+\node [draw, very thick, anchor=north, align=center, minimum width=25mm,
+    fill=yellow!20]
+    (analyser) at (from-archiver.east) {Power\\Spectrum\\Analyser};
+
+\node [align=center] (pvs)
+    at ($(analyser.south)+(0,-20mm)$) {EPICS\\Waveform PVS};
+\draw [gray, line width=3pt, ->] (analyser) -- (pvs)
+    coordinate[pos=0.3] (pv nw)
+    node [anchor=east, pos=0.5, black, align=right, font=\footnotesize]
+    {Five minute integrated\\full orbit\\power spectra};
+
+\node [draw, very thick, align=center, anchor=north west, minimum width=20mm]
+    (epics ar) at (40mm,0) {EPICS\\Archiver};
+\node [disk icon, anchor=west, xshift=10mm, fill=black!10,
+    label={[align=center]below:Permanent\\Archive}]
+    (disk) at (epics ar.east) {};
+\draw [gray, line width=3pt, ->] (disk.160 -| epics ar.east) -- (disk.160);
+\draw [gray, line width=3pt, <-] (disk.190 -| epics ar.east) -- (disk.190);
+
+\draw [gray, line width=3pt, ->] (pv nw) -| (epics ar.-140)
+    node [pos=0.3, black, below, font=\small] {Selected PVs};
+
+
+\node [draw, thick, anchor=north west, inner sep=4mm, yshift=-12mm]
+    (matlab) at (epics ar.south) {Matlab};
+\draw [gray, line width=3pt, ->]
+    (epics ar.-40) -- (epics ar.-40 |- matlab.north);
+
+\node [draw, thick, anchor=north, yshift=-10mm, font=\small, dashed,
+    minimum height=10mm]
+    (figure) at (matlab.south) {Spectrogram};
+\draw [gray, line width=3pt, ->] (matlab) -- (figure);
+
+
+\end{tikzpicture}

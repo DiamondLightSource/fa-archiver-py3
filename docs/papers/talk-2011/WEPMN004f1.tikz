@@ -1,0 +1,80 @@
+\begin{tikzpicture}
+
+% Nice puffy cloud representing the FA network
+\path[xshift=27mm, yshift=5mm, thin]
+    node[draw, cloud, aspect=2, cloud puffs=11, inner sep=0pt, highlight fill]
+        (fa network) {CC Network};
+
+% Draw a stack of rectangles representing the liberas
+\path[xshift=-5mm, yshift=12mm,
+    libera/.style={
+        draw, rectangle, thick, fill=white, inner sep=0,
+        minimum width=1.7cm, minimum height=2mm}]
+
+    { [current point is local=true]
+    node[libera] {}
+    ++(-1mm,1mm) node[libera] {}
+    ++(-1mm,1mm) node[libera] (top libera) {}
+    }
+
+    +(0mm,-3mm) node {\dots}
+    ++(0mm,-8mm)
+    { [current point is local=true]
+    node[libera] (bottom libera) {}
+    ++(-1mm,1mm) node[libera] {}
+    ++(-1mm,1mm) node[libera] {}
+    }
+    node[tight fit=(top libera) (bottom libera),
+        right delimiter=\}, label=north:Liberas] (liberas) {};
+
+\draw[->] ($(liberas.east)+(2.6mm,0)$) -- (fa network);
+
+% Fast feedback controllers
+\path[xshift=50mm, yshift=10mm,
+    controller/.style={
+        draw, rectangle, thick, inner sep=0,
+        minimum width=2mm, minimum height=13mm}]
+
+    node[controller] (left controller) {}
+    ++(5mm,0mm) node {\dots}
+    ++(5mm,0mm) node[controller,
+        label={[align=left]right:Fast\\feedback\\controllers}]
+    (right controller) {};
+
+\draw[->] (fa network) -- (left controller);
+\draw[->] (fa network) -- (right controller);
+
+% The archiver saving into the archive store
+\path[xshift=5.5cm, yshift=-8mm]
+    node[draw, very thick, rectangle, inner sep=8pt, fill=yellow!20]
+        (archiver) {FA archiver}
+
+    node[disk icon, below=4mm of archiver, fill=black!10] (fa archive) {}
+    node[tight fit=(fa archive),
+        label={[align=left]right:4\textonehalf{} day\\archive}] {}
+    [draw,<->] (archiver) -- (fa archive);
+
+\draw[->] (fa network) -- (archiver);
+
+% Spectrum analyser saving into EPICS archive
+\path[xshift=15mm, yshift=-20mm]
+    node[draw, thick, rectangle, align=center, minimum height=10mm]
+        (spectrum) {Spectrum\\Analyser}
+
+    node[disk icon, anchor=shape center, fill=black!10,
+        label={[align=center]above:EPICS\\archive}]
+        (epics archive) at ($(spectrum.west)-(10mm,0)$) {}
+    node[tight fit=(epics archive)] (epics archive fit) {}
+
+    [draw,->] (spectrum) -- (epics archive fit);
+
+\draw[->] (archiver) -- ($(spectrum)+(0,8mm)$) -- (spectrum);
+
+% Client tools
+\path[xshift=35mm, yshift=-20mm]
+    node[draw, rectangle, align=center, minimum height=10mm, dashed]
+        (client tools) {Client\\Tools};
+
+\draw[->] (archiver) -- (client tools);
+
+\end{tikzpicture}

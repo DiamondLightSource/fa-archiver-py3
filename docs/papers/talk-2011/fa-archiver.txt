@@ -1,0 +1,45 @@
+Miscellaneous notes on FA Archiver Talk
+=======================================
+
+Need to give two versions of this talk:
+
+1.  To Libera Workshop.  This is a long slot (1/2 hour), everybody present knows
+    about Libera, but need to explain role of communication network.
+
+2.  To ICALEPCS.  This is a short slot (1/4 hour), more general audience.
+
+
+Themes
+======
+
+* Communication network.  This is a broadcast network with synchronous updates;
+  this has significant implications for the FA archiver: the data stream is a
+  sequence of uniformly spaced blocks of constant size.
+
+  Can emphasise how easy it is to add new data sources to the network.
+
+* Technology.  FPGA with PCI express and Rocket I/O interface needed to
+  interface between communcation network and FA archiver.  Archiver itself runs
+  on fairly basic technology.
+
+  One role of the archiver is to make the FA network data more accessible: only
+  need one FPGA card, full data stream is then available over ethernet to entire
+  accelerator network.
+
+  A demonstration of live data would be great!
+
+* Data Stream.  Position data at 10kHz from entire storage ring plus same stream
+  decimated to 1kHz for more convenient processing.  Can use architecture
+  diagram here.
+
+* Archive and access.
+
+* Client tools.  FA viewer and zoomer, spectrum analyser.
+
+* Applications.  Review of archive history through zoomer, spectr
+
+
+Notes
+=====
+
+Guenther suggests much less text and more diagrams.
