@@ -802,15 +802,30 @@ static bool write_header(uint64_t frames_written)
 }
 
 
-static double timestamp_at_offset(
-    struct extended_timestamp *timestamps,
-    unsigned int offset, time_t local_offset)
+
+/* Computes a block of timestamps starting at the given offset. */
+static void compute_timestamps(
+    struct extended_timestamp *timestamps, unsigned int offset,
+    double day_zero, time_t local_offset, double *buffer, size_t count)
 {
-    return matlab_timestamp(
-        timestamps->timestamp +
-            (uint64_t) offset * timestamps->duration /
-                timestamp_header.block_size,
-        local_offset);
+    unsigned int block_size = timestamp_header.block_size;
+
+    /* Matlab timestamp and conversion fixups. */
+    double conversion = 1e-6 / SECS_PER_DAY;
+    double matlab_epoch =
+        MATLAB_EPOCH + (double) local_offset / SECS_PER_DAY - day_zero;
+
+    double increment = conversion * timestamps->duration / block_size;
+    double timestamp =
+        conversion * timestamps->timestamp + matlab_epoch + offset * increment;
+
+    /* This way of filling the buffer is brisk and the accumulated increment
+     * error with double precision is negligible (count is at most 8192). */
+    for (unsigned int i = 0; i < count; i ++)
+    {
+        buffer[i] = timestamp;
+        timestamp += increment;
+    }
 }
 
 
@@ -824,9 +839,11 @@ static bool write_footer(unsigned int frames_written, time_t local_offset)
     struct extended_timestamp *timestamps = timestamps_array;
     unsigned int offset = timestamp_header.offset;
 
-    double timestamp = timestamp_at_offset(timestamps, offset, local_offset);
+    double timestamp;
+    compute_timestamps(timestamps, offset, 0, local_offset, &timestamp, 1);
     double day_zero = floor(timestamp);
 
+    /* Output the matlab values. */
     place_matlab_value(&h, "timestamp", miDOUBLE, &timestamp);
     place_matlab_value(&h, "day", miDOUBLE, &day_zero);
     place_matrix_header(
@@ -834,37 +851,38 @@ static bool write_footer(unsigned int frames_written, time_t local_offset)
         sizeof(double) * frames_written, 2, 1, frames_written);
     bool ok = TEST_OK(fwrite(header, (char *) h - header, 1, output_file) == 1);
 
+    if (!subtract_day_zero)
+        day_zero = 0;
+
     /* Need to buffer output as fwrite isn't as fast as it ought to be. */
-    size_t buf_index = 0;
+    unsigned int block_size = timestamp_header.block_size;
     size_t buffer_size = BUFFER_SIZE / sizeof(double);
     double buffer[buffer_size];
 
-    for (unsigned int i = 0; ok  &&  i < frames_written; i ++)
+    for (unsigned int i = 0; ok  &&  i < frames_written; )
     {
-        buffer[buf_index] =
-            timestamp_at_offset(timestamps, offset, local_offset);
-        if (subtract_day_zero)
-           buffer[buf_index] -= day_zero;
-        buf_index += 1;
+        /* We need to do timestamp conversion in reasonable sized blocks for
+         * speed.  Figure out how many will fit into the current block. */
+        size_t to_convert = buffer_size;
+        if (to_convert > block_size - offset)
+            to_convert = block_size - offset;
+        if (to_convert > frames_written - i)
+            to_convert = frames_written - i;
 
-        if (buf_index >= buffer_size)
-        {
-            ok = TEST_OK(fwrite(
-                buffer, sizeof(double), buf_index, output_file) == buf_index);
-            buf_index = 0;
-        }
+        compute_timestamps(
+            timestamps, offset, day_zero, local_offset, buffer, to_convert);
+        ok = TEST_OK(fwrite(
+            buffer, sizeof(double), to_convert, output_file) == to_convert);
 
-        offset += 1;
-        if (offset >= timestamp_header.block_size)
+        offset += to_convert;
+        i += to_convert;
+        if (offset >= block_size)
         {
             timestamps ++;
             offset = 0;
         }
     }
 
-    if (ok  &&  buf_index > 0)
-        ok = TEST_OK(fwrite(
-            buffer, sizeof(double), buf_index, output_file) == buf_index);
     return ok;
 }
 
