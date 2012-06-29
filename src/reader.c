@@ -300,8 +300,7 @@ static bool compute_end_samples(
     bool ok =
         timestamp_to_end(
             end, all_data, start_block, &end_block, &end_offset)  &&
-        TEST_OK_(start_block != end_block  ||  start_offset <= end_offset,
-            "Time range runs backwards");
+        TEST_OK(start_block != end_block  ||  start_offset <= end_offset);
     if (ok)
     {
         /* Convert the two block and offset counts into a total FA count. */
@@ -334,6 +333,7 @@ static bool compute_start(
          * into that block. */
         timestamp_to_start(start, all_data, &available, ix_block, offset)  &&
         IF_(end != 0,
+            TEST_OK_(start < end, "Time range runs backwards")  &&
             compute_end_samples(
                 reader, end, *ix_block, *offset, all_data, samples))  &&
         /* Convert offset and available counts into numbers appropriate for our

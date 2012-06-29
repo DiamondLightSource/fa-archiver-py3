@@ -702,7 +702,7 @@ bool timestamp_to_end(
              * block) lies inbetween. */
             *block >= start_block  ||
             (*block < current  &&  current < start_block),
-            "Time range runs backwards");
+            "No data in selected range");
 }
 
 
