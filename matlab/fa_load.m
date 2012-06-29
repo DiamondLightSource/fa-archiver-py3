@@ -8,6 +8,8 @@
 %   type = 'F' for full data
 %          'd' for 10072/64 decimated
 %          'D' for 10072/16384 decimated
+%          'C' for continuous data, in which case tse must be a single number
+%              specifying a duration in seconds
 %   server = IP address of FA archiver
 %
 % Output:
@@ -72,9 +74,16 @@ function d = fa_load(tse, mask, type, server)
 
     % Use fa-capture utility to read required data into temporary file
     maskstr = sprintf('%d,', request_mask);
+    if type == 'C'
+        args = '-C';
+        capture_count = sprintf(' %.4fs', tse);
+    else
+        args = ['-s' format_time(tse(1)) '~' format_time(tse(2)) ' -f' type];
+        capture_count = '';
+    end
     [r, o] = system([ ...
-        fa_capture ' -kad -s' format_time(tse(1)) '~' format_time(tse(2)) ...
-        ' -o' famat ' -f' type ' ' server ' ' maskstr(1:end-1)]);
+        fa_capture ' -kad ' args ...
+        ' -o' famat ' ' server ' ' maskstr(1:end-1) capture_count]);
     if r ~= 0
         delete(famat);
         error(o)
@@ -87,7 +96,7 @@ function d = fa_load(tse, mask, type, server)
     % Restore the originally requested permutation if necessary.
     if any(diff(perm) ~= 1)
         d.ids = d.ids(perm);
-        if type == 'F'
+        if type == 'F' || type == 'C'
             d.data = d.data(:, perm, :);
         else
             d.data = d.data(:, :, perm, :);
