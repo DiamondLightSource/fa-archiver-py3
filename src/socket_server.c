@@ -301,7 +301,7 @@ static bool report_clients(int scon)
             TEST_NULL(gmtime_r(&client->ts.tv_sec, &tm))  &&
             write_string(scon,
                 "%4d-%02d-%02dT%02d:%02d:%02d.%03ldZ %s: %s\n",
-                tm.tm_year + 1900, tm.tm_mon, tm.tm_mday,
+                tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
                 tm.tm_hour, tm.tm_min, tm.tm_sec,
                 client->ts.tv_nsec / 1000000, client->name, client->buf);
         if (!ok)
