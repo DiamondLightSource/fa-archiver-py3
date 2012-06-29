@@ -565,8 +565,10 @@ static void get_client_name(int scon, char *client_name)
 /* Reads from the given socket until one of the following is encountered: a
  * newline (the preferred case), end of input, end of buffer or an error.  The
  * newline and anything following is discarded. */
-static bool read_line(int sock, char *buf, size_t buflen)
+static bool read_line(int sock, struct client_info *client)
 {
+    char *buf = client->buf;
+    size_t buflen = sizeof(client->buf) - 1;    // Allow for '\0'
     ssize_t rx;
     while (
         TEST_OK_(buflen > 0, "Read buffer exhausted")  &&
@@ -583,6 +585,9 @@ static bool read_line(int sock, char *buf, size_t buflen)
         buflen -= rx;
         buf += rx;
     }
+    /* On failure report what we managed to read before failing. */
+    *buf = '\0';
+    log_message("Client %s sent \"%s\"", client->name, client->buf);
     return false;
 }
 
@@ -615,7 +620,7 @@ static void *process_connection(void *context)
     bool ok = FINALLY(
         set_socket_cork(scon, true)  &&
         set_socket_timeout(scon, 1, 0)  &&      // 1 second rx timeout
-        read_line(scon, client->buf, sizeof(client->buf))  &&
+        read_line(scon, client)  &&
         dispatch_command(scon, client->name, client->buf),
 
         // Always close the socket when done
