@@ -438,7 +438,8 @@ struct read_parse {
 };
 
 
-static bool read_data(int scon, struct read_parse *parse)
+static bool read_data(
+    int scon, const char *client_name, struct read_parse *parse)
 {
     unsigned int ix_block, block, offset;
     struct iter_mask iter = { 0 };
@@ -455,7 +456,7 @@ static bool read_data(int scon, struct read_parse *parse)
         mask_to_archive(&parse->read_mask, &iter)  &&
         lock_buffers(&read_buffers, iter.count)  &&
         TEST_IO(archive = open(archive_filename, O_RDONLY));
-    bool write_ok = report_socket_error(scon, ok);
+    bool write_ok = report_socket_error(scon, client_name, ok);
 
     if (ok  &&  write_ok)
         write_ok =
@@ -752,14 +753,14 @@ static bool parse_read_request(const char **string, struct read_parse *parse)
 
 
 /* Convert timestamp into block index. */
-bool process_read(int scon, const char *buf)
+bool process_read(int scon, const char *client_name, const char *buf)
 {
     struct read_parse parse;
     push_error_handling();      // Popped by report_socket_error()
     if (DO_PARSE("read request", parse_read_request, buf, &parse))
-        return read_data(scon, &parse);
+        return read_data(scon, client_name, &parse);
     else
-        return report_socket_error(scon, false);
+        return report_socket_error(scon, client_name, false);
 }
 
 

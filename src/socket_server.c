@@ -162,10 +162,19 @@ static bool __attribute__((format(printf, 2, 3)))
 }
 
 
-/* Called if command not recognised. */
-static bool process_error(int scon, const char *buf)
+/* Logs error message and reports error to client. */
+static bool report_error(
+    int scon, const char *client_name, const char *error_message)
 {
-    return write_string(scon, "Invalid command\n");
+    log_message("Client %s sent error: %s", client_name, error_message);
+    return write_string(scon, "%s\n", error_message);
+}
+
+
+/* Called if command not recognised. */
+static bool process_error(int scon, const char *client_name, const char *buf)
+{
+    return report_error(scon, client_name, "Invalid command");
 }
 
 
@@ -189,13 +198,13 @@ static bool set_socket_cork(int sock, bool cork)
 
 /* This macro calls action1 with error handling pushed, and if it succeeds
  * action2 is performed, otherwise the error message is sent to scon. */
-#define CATCH_ERROR(scon, action1, action2) \
+#define CATCH_ERROR(scon, client_name, action1, action2) \
     ( { \
         push_error_handling(); \
         char *message = pop_error_handling(!(action1)); \
         bool __ok = IF_ELSE(message == NULL, \
             (action2), \
-            write_string(scon, "%s\n", message)); \
+            report_error(scon, client_name, message)); \
         free(message); \
         __ok; \
     } )
@@ -215,10 +224,11 @@ static bool set_socket_cork(int sock, bool cork)
  *      capture_enable      0 => Data capture blocked by DH command
  *      disk_enable         0 => Writing to disk blocked by DD command
  */
-static bool process_debug_command(int scon, const char *buf)
+static bool process_debug_command(
+    int scon, const char *client_name, const char *buf)
 {
     if (!debug_commands)
-        return process_error(scon, buf);
+        return process_error(scon, client_name, buf);
 
     bool ok = true;
     for (buf ++; ok  &&  *buf != '\0'; buf ++)
@@ -241,7 +251,7 @@ static bool process_debug_command(int scon, const char *buf)
                 break;
             case 'I':
                 log_message("Interrupt command received");
-                ok = CATCH_ERROR(scon, interrupt_sniffer(), true);
+                ok = CATCH_ERROR(scon, client_name, interrupt_sniffer(), true);
                 break;
             case 'D':
                 log_message("Disabling writing to disk");
@@ -258,7 +268,7 @@ static bool process_debug_command(int scon, const char *buf)
                 break;
 
             default:
-                ok = write_string(scon, "Unknown command '%c'\n", *buf);
+                ok = report_error(scon, client_name, "Unknown command");
                 break;
         }
     }
@@ -325,7 +335,7 @@ static bool report_clients(int scon)
  *          overrun                     1 => Halted due to buffer overrun
  *  I   Returns list of all conected clients, one client per line.
  */
-static bool process_command(int scon, const char *buf)
+static bool process_command(int scon, const char *client_name, const char *buf)
 {
     const struct disk_header *header = get_header();
     bool ok = true;
@@ -369,7 +379,7 @@ static bool process_command(int scon, const char *buf)
             case 'S':
             {
                 struct fa_status status;
-                ok = CATCH_ERROR(scon,
+                ok = CATCH_ERROR(scon, client_name,
                     get_sniffer_status(&status),
                     write_string(scon, "%u %u %u %u %u %u %u %u\n",
                         status.status, status.partner,
@@ -384,7 +394,7 @@ static bool process_command(int scon, const char *buf)
                 break;
 
             default:
-                ok = write_string(scon, "Unknown command '%c'\n", *buf);
+                ok = report_error(scon, client_name, "Unknown command");
                 break;
         }
     }
@@ -433,25 +443,24 @@ static bool parse_subscription(
 }
 
 
-bool report_socket_error(int scon, bool ok)
+bool report_socket_error(int scon, const char *client_name, bool ok)
 {
-    bool write_ok;
     if (ok)
     {
         /* If all is well write a single null to let the caller know to expect a
          * normal response to follow. */
         pop_error_handling(false);
         char nul = '\0';
-        write_ok = TEST_write(scon, &nul, 1);
+        return TEST_write(scon, &nul, 1);
     }
     else
     {
         /* If an error is encountered write the error message to the socket. */
         char *error_message = pop_error_handling(true);
-        write_ok = write_string(scon, "%s\n", error_message);
+        bool write_ok = report_error(scon, client_name, error_message);
         free(error_message);
+        return write_ok;
     }
-    return write_ok;
 }
 
 
@@ -491,14 +500,15 @@ static bool send_subscription(
 
 /* A subscription is a command of the form S<mask> where <mask> is a mask
  * specification as described in mask.h.  The default mask is empty. */
-static bool process_subscribe(int scon, const char *buf)
+static bool process_subscribe(
+    int scon, const char *client_name, const char *buf)
 {
     push_error_handling();
 
     /* Parse the incoming request. */
     struct subscribe_parse parse;
     if (!DO_PARSE("subscription", parse_subscription, buf, &parse))
-        return report_socket_error(scon, false);
+        return report_socket_error(scon, client_name, false);
 
     /* See if we can start the subscription, report the final status to the
      * caller. */
@@ -506,7 +516,7 @@ static bool process_subscribe(int scon, const char *buf)
     uint64_t timestamp;
     const void *block = get_read_block(reader, NULL, &timestamp);
     bool start_ok = TEST_NULL_(block, "No data currently available");
-    bool ok = report_socket_error(scon, start_ok);
+    bool ok = report_socket_error(scon, client_name, start_ok);
 
     /* Send the requested subscription if all is well. */
     if (start_ok  &&  ok)
@@ -524,7 +534,7 @@ static bool process_subscribe(int scon, const char *buf)
 
 static const struct command_table {
     char id;            // Identification character
-    bool (*process)(int scon, const char *buf);
+    bool (*process)(int scon, const char *client_name, const char *buf);
 } command_table[] = {
     { 'C', process_command },
     { 'R', process_read },
@@ -585,7 +595,7 @@ static bool dispatch_command(
     const struct command_table *command = command_table;
     while (command->id  &&  command->id != buf[0])
         command += 1;
-    return command->process(scon, buf);
+    return command->process(scon, client_name, buf);
 }
 
 
@@ -614,7 +624,7 @@ static void *process_connection(void *context)
     /* Report any errors. */
     char *error_message = pop_error_handling(!ok);
     if (!ok)
-        log_message("Client %s: %s", client->name, error_message);
+        log_message("Client %s error: %s", client->name, error_message);
     free(error_message);
     remove_client(client);
 
