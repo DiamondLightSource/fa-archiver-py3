@@ -443,9 +443,23 @@ static bool parse_opts(int *argc, char ***argv)
 static bool parse_samples(const char **string, uint64_t *result)
 {
     bool ok = parse_uint64(string, result);
-    if (ok  &&  read_char(string, 's'))
-        *result = (uint64_t) round(
-            *result * sample_frequency / get_decimation());
+    if (ok)
+    {
+        double duration = *result;      // In case it's a duration after all
+        bool seconds = **string == '.';
+        if (seconds)
+        {
+            long nsec;
+            ok = parse_nanoseconds(string, &nsec)  &&  parse_char(string, 's');
+            duration += 1e-9 * nsec;
+        }
+        else
+            seconds = read_char(string, 's');
+        if (ok  &&  seconds)
+            *result = (uint64_t) round(
+                duration * sample_frequency / get_decimation());
+    }
+
     return ok  &&  TEST_OK_(*result > 0, "Zero sample count");
 }
 

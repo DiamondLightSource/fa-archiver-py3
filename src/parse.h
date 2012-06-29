@@ -55,6 +55,8 @@ bool parse_datetime(const char **string, struct timespec *ts);
 bool parse_time(const char **string, struct timespec *ts);
 /* Parses timestamp in format: secs[.nnn] */
 bool parse_seconds(const char **string, struct timespec *ts);
+/* Parses fractional part of number: [.nnn] */
+bool parse_nanoseconds(const char **string, long *nsec);
 
 /* Only succeeds if **string=='\0', ie end of string. */
 bool parse_eos(const char **string);

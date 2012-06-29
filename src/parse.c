@@ -135,7 +135,7 @@ bool parse_size64(const char **string, uint64_t *result)
 
 /* Parses optional number of the form .nnnnnnnnn expressing a fraction of a
  * second, converts into nanoseconds, allowing up to 9 digits. */
-static bool parse_nanoseconds(const char **string, long *nsec)
+bool parse_nanoseconds(const char **string, long *nsec)
 {
     bool ok = true;
     if (read_char(string, '.')  &&  '0' <= **string  &&  **string <= '9')
