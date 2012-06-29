@@ -87,16 +87,15 @@ void close_reader(struct reader_state *reader);
  * before calling get_read_block() again.
  *    If timestamp is not NULL then on a successful block read the timestamp of
  * the returned data is written to *timestamp. */
-const void *get_read_block(
-    struct reader_state *reader, int *backlog, uint64_t *timestamp);
+const void *get_read_block(struct reader_state *reader, uint64_t *timestamp);
 /* Releases the write block.  If false is returned then the block was
  * overwritten while locked due to reader underrun; however, if the reader was
  * opened with reserved_reader set this is guaranteed not to happen.  Only
  * call if non-NULL value returned by get_read_block(). */
 bool release_read_block(struct reader_state *reader);
-/* Permanently halts the reader, interruping any waits in release_read_block()
- * and forcing further calls to get_read_block() to return NULL. */
-void stop_reader(struct reader_state *reader);
+/* Interrupts the reader, interruping any waits in release_read_block() and
+ * forcing further calls to get_read_block() to immediately return NULL. */
+void interrupt_reader(struct reader_state *reader);
 
 /* Can be used to temporarily halt or resume buffered writing. */
 void enable_buffer_write(struct buffer *buffer, bool enabled);

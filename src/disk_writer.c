@@ -209,7 +209,7 @@ static void *transform_thread(void *context)
     while (writer_running)
     {
         uint64_t timestamp;
-        const void *block = get_read_block(reader, NULL, &timestamp);
+        const void *block = get_read_block(reader, &timestamp);
         process_block(transform_enabled ? block : NULL, timestamp);
         if (block)
             release_read_block(reader);
@@ -250,7 +250,7 @@ void terminate_disk_writer(void)
 {
     log_message("Waiting for writer");
     stop_writer_thread();
-    stop_reader(reader);
+    interrupt_reader(reader);
     ASSERT_0(pthread_join(transform_id, NULL));
     ASSERT_0(pthread_join(writer_id, NULL));
     close_reader(reader);

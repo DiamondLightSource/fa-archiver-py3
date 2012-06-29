@@ -327,8 +327,7 @@ static void *decimation_thread(void *context)
     while (running)
     {
         uint64_t timestamp;
-        const struct fa_row *block_in =
-            get_read_block(reader, NULL, &timestamp);
+        const struct fa_row *block_in = get_read_block(reader, &timestamp);
         if (block_in)
         {
             decimate_block(block_in, timestamp);
@@ -375,7 +374,7 @@ void terminate_decimation(void)
     log_message("Closing decimation");
     ASSERT_0(pthread_cancel(decimate_id));
     running = false;
-    stop_reader(reader);
+    interrupt_reader(reader);
     ASSERT_0(pthread_join(decimate_id, NULL));
     close_reader(reader);
 }

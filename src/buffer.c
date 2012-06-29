@@ -39,7 +39,6 @@
 #include <pthread.h>
 #include <time.h>
 
-#include "list.h"
 #include "error.h"
 #include "locking.h"
 
@@ -74,10 +73,12 @@ struct buffer
     size_t index_in;
     /* Flag to halt writes for debugging. */
     bool write_blocked;
+    /* Used to detect reader underflow. */
+    unsigned int cycle_count;
 
-    /* Lists of readers. */
-    struct list_head all_readers;
-    struct list_head reserved_readers;
+    /* One reserved reader is supported: we will never overwrite the block it's
+     * reading and a gap will be forced instead if necessary. */
+    struct reader_state *reserved_reader;
 };
 
 
@@ -89,7 +90,7 @@ static size_t advance_index(struct buffer *buffer, size_t index)
 {
     index += 1;
     if (index >= buffer->block_count)
-        index -= buffer->block_count;
+        index = 0;
     return index;
 }
 
@@ -106,55 +107,28 @@ static void *get_buffer(struct buffer *buffer, size_t index)
 struct reader_state
 {
     struct buffer *buffer;          // Associated buffer
-    size_t index_out;               // Next block to read
-    bool underflowed;               // Set if buffer overrun for this reader
-    bool running;                   // Used to halt reader
+    bool running;                   // Used to interrupt reader
     bool gap_reported;              // Set once we've reported a gap
-    int backlog;                    // Gap between read and write pointer
-    struct list_head list_entry;    // Links all active readers together
-    struct list_head reserved_entry;    // and all reserved readers
+    size_t index_out;               // Next block to read
+    unsigned int cycle_count;       // Buffer cycle count at last reading
 };
-
-
-/* Iterators for the two lists of readers. */
-#define for_all_readers(buffer, reader) \
-    list_for_each_entry( \
-        struct reader_state, list_entry, reader, &buffer->all_readers)
-#define for_reserved_readers(buffer, reader) \
-    list_for_each_entry( \
-        struct reader_state, reserved_entry, reader, &buffer->reserved_readers)
-
-
-/* Updates the backlog count.  This is computed as the maximum number of
- * unread frames from the write pointer to our read pointer.  As we're only
- * interested in the maximum value, this only needs to be updated when frames
- * are written. */
-static void update_backlog(struct reader_state *reader)
-{
-    int backlog = reader->buffer->index_in - reader->index_out;
-    if (backlog < 0)
-        backlog += reader->buffer->block_count;
-
-    if (backlog > reader->backlog)
-        reader->backlog = backlog;
-}
 
 
 struct reader_state *open_reader(struct buffer *buffer, bool reserved_reader)
 {
     struct reader_state *reader = malloc(sizeof(struct reader_state));
     reader->buffer = buffer;
-    reader->underflowed = false;
-    reader->gap_reported = false;
-    reader->backlog = 0;
     reader->running = true;
-    INIT_LIST_HEAD(&reader->reserved_entry);
+    reader->gap_reported = false;
 
     LOCK(buffer->lock);
     reader->index_out = buffer->index_in;
-    list_add_tail(&reader->list_entry, &buffer->all_readers);
+    reader->cycle_count = buffer->cycle_count;
     if (reserved_reader)
-        list_add_tail(&reader->reserved_entry, &buffer->reserved_readers);
+    {
+        ASSERT_OK(buffer->reserved_reader == NULL);
+        buffer->reserved_reader = reader;
+    }
     UNLOCK(buffer->lock);
 
     return reader;
@@ -166,70 +140,53 @@ void close_reader(struct reader_state *reader)
     struct buffer *buffer = reader->buffer;
 
     LOCK(buffer->lock);
-    list_del(&reader->list_entry);
-    list_del(&reader->reserved_entry);
+    if (buffer->reserved_reader == reader)
+        buffer->reserved_reader = NULL;
     UNLOCK(buffer->lock);
 
     free(reader);
 }
 
 
-const void *get_read_block(
-    struct reader_state *reader, int *backlog, uint64_t *timestamp)
+const void *get_read_block(struct reader_state *reader, uint64_t *timestamp)
 {
     struct buffer *buffer = reader->buffer;
     void *block;
+
     LOCK(buffer->lock);
-    if (reader->underflowed)
+
+    struct frame_info *frame_info = &buffer->frame_info[reader->index_out];
+    /* Wait until one of the following conditions is satisfied:
+     *  1. We're stopped by setting running to false
+     *  2. The out and in indexes don't coincide
+     *  3. The we haven't reported a gap yet and the new frame starts a new
+     *     gap. */
+    while (reader->running  &&
+           reader->index_out == buffer->index_in  &&
+           (reader->gap_reported  ||  !frame_info->gap)  &&
+           pwait_timeout(&buffer->lock, 2, 0))
+        ;
+
+    if (!reader->running)
+        block = NULL;
+    else if (frame_info->gap  &&  !reader->gap_reported)
+        /* This block is preceded by a gap.  Return a gap indicator this time,
+         * we'll return the block itself next time. */
+        block = NULL;
+    else if (reader->index_out == buffer->index_in)
     {
-        /* If we were underflowed then perform a complete reset of the read
-         * stream.  Discard everything in the block and start again.  This
-         * helps the writer which can rely on this.  We'll also start by
-         * reporting a synthetic gap. */
-        reader->index_out = buffer->index_in;
-        reader->underflowed = false;
+        /* If we get here there must have been a timeout.  This is definitely
+         * not normal, log and treat as no data. */
+        log_error("Timeout waiting for circular buffer");
         block = NULL;
     }
     else
     {
-        struct frame_info *frame_info = &buffer->frame_info[reader->index_out];
-        /* Wait until one of the following conditions is satisfied:
-         *  1. We're stopped by setting running to false
-         *  2. The out and in indexes don't coincide
-         *  3. The we haven't reported a gap yet and the new frame starts a new
-         *     gap. */
-        while (reader->running  &&
-               reader->index_out == buffer->index_in  &&
-               (reader->gap_reported  ||  !frame_info->gap)  &&
-               pwait_timeout(&buffer->lock, 2, 0))
-            ;
-
-        if (!reader->running)
-            block = NULL;
-        else if (frame_info->gap  &&  !reader->gap_reported)
-            /* This block is preceded by a gap.  Return a gap indicator this
-             * time, we'll return the block itself next time. */
-            block = NULL;
-        else if (reader->index_out == buffer->index_in)
-        {
-            /* If we get here there must have been a timeout.  This is
-             * definitely not normal, log and treat as no data. */
-            log_error("Timeout waiting for circular buffer");
-            block = NULL;
-        }
-        else
-        {
-            block = get_buffer(buffer, reader->index_out);
-            if (timestamp)
-                *timestamp = frame_info->timestamp;
-        }
+        block = get_buffer(buffer, reader->index_out);
+        if (timestamp)
+            *timestamp = frame_info->timestamp;
     }
 
-    if (backlog)
-    {
-        *backlog = reader->backlog * buffer->block_size;
-        reader->backlog = 0;
-    }
     UNLOCK(buffer->lock);
 
     reader->gap_reported = block == NULL;
@@ -237,7 +194,7 @@ const void *get_read_block(
 }
 
 
-void stop_reader(struct reader_state *reader)
+void interrupt_reader(struct reader_state *reader)
 {
     struct buffer *buffer = reader->buffer;
     LOCK(buffer->lock);
@@ -247,15 +204,53 @@ void stop_reader(struct reader_state *reader)
 }
 
 
+/* Detects buffer underflow, returns true if ok. */
+static bool check_underflow(struct reader_state *reader)
+{
+    struct buffer *buffer = reader->buffer;
+
+    /* Detect buffer underflow by inspecting the in and out pointers and
+     * checking the buffer cycle count.  We can only be deceived if a full 2^32
+     * cycles have ocurred since the last time we looked, but the pacing of
+     * reading and writing eliminates that risk. */
+    if (buffer->index_in == reader->index_out)
+        /* Unmistakable collision! */
+        return false;
+    else if (buffer->index_in > reader->index_out)
+        /* Out pointer ahead of in pointer.  We're ok if we're both on the same
+         * cycle. */
+        return buffer->cycle_count == reader->cycle_count;
+    else
+        /* Out pointer behind in pointer.  In this case the buffer should be one
+         * step ahead of us. */
+        return buffer->cycle_count == reader->cycle_count + 1;
+}
+
+
 bool release_read_block(struct reader_state *reader)
 {
     struct buffer *buffer = reader->buffer;
-    bool underflow;
+    bool ok;
+
     LOCK(buffer->lock);
-    reader->index_out = advance_index(buffer, reader->index_out);
-    underflow = reader->underflowed;
+    ok = check_underflow(reader);
+    if (ok)
+    {
+        reader->index_out = advance_index(buffer, reader->index_out);
+        if (reader->index_out == 0)
+            reader->cycle_count += 1;
+    }
+    else
+    {
+        /* If we were underflowed then perform a complete reset of the read
+         * stream.  Discard everything in the block and start again.  This
+         * helps the writer which can rely on this. */
+        reader->index_out = buffer->index_in;
+        reader->cycle_count = buffer->cycle_count;
+        reader->gap_reported = false;   // Strictly speaking, already set so!
+    }
     UNLOCK(buffer->lock);
-    return !underflow;
+    return ok;
 }
 
 
@@ -266,31 +261,6 @@ bool release_read_block(struct reader_state *reader)
 void *get_write_block(struct buffer *buffer)
 {
     return get_buffer(buffer, buffer->index_in);
-}
-
-
-/* Checks for the presence of a blocking reserved reader. */
-static bool check_blocking_readers(struct buffer *buffer, size_t index_in)
-{
-    for_reserved_readers(buffer, reader)
-        if (index_in == reader->index_out)
-            return true;
-    return false;
-}
-
-
-/* Let all readers know if they've suffered an underflow. */
-static void notify_underflow(struct buffer *buffer, size_t index_in)
-{
-    for_all_readers(buffer, reader)
-    {
-        if (index_in == reader->index_out)
-            /* Whoops.  We've collided with a reader.  Mark the reader as
-             * underflowed. */
-            reader->underflowed = true;
-        else
-            update_backlog(reader);
-    }
 }
 
 
@@ -308,17 +278,20 @@ bool release_write_block(struct buffer *buffer, bool gap, uint64_t timestamp)
         /* If a gap isn't forced we might still have to make one if we can't
          * actually advance. */
         size_t new_index = advance_index(buffer, buffer->index_in);
-        blocked = check_blocking_readers(buffer, new_index);
+        /* Check for presence of blocking reserved reader. */
+        blocked = buffer->reserved_reader  &&
+            new_index == buffer->reserved_reader->index_out;
         if (blocked)
+            /* Whoops.  Can't advance, instead force a gap and fail. */
             buffer->frame_info[buffer->index_in].gap = true;
         else
         {
-            /* This is the normal case: fresh data to be stored.  Advance the
-             * write pointer and ensure everybody knows. */
+            /* This is the normal case: fresh data to be stored. */
             buffer->frame_info[buffer->index_in].timestamp = timestamp;
             buffer->index_in = new_index;
             buffer->frame_info[new_index].gap = false;
-            notify_underflow(buffer, new_index);
+            if (new_index == 0)
+                buffer->cycle_count += 1;
         }
     }
     psignal(&buffer->lock);
@@ -372,8 +345,8 @@ bool create_buffer(
     initialise_locking(&(*buffer)->lock);
     (*buffer)->index_in = 0;
     (*buffer)->write_blocked = false;
-    INIT_LIST_HEAD(&(*buffer)->all_readers);
-    INIT_LIST_HEAD(&(*buffer)->reserved_readers);
+    (*buffer)->cycle_count = 0;
+    (*buffer)->reserved_reader = NULL;
     return
         TEST_NULL((*buffer)->frame_buffer)  &&
         TEST_NULL((*buffer)->frame_info);

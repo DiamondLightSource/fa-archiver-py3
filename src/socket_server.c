@@ -489,7 +489,7 @@ static bool send_subscription(
                 "Write underrun to client"));
         if (ok)
             ok = TEST_NULL_(
-                *block = get_read_block(reader, NULL, NULL),
+                *block = get_read_block(reader, NULL),
                 "Gap in subscribed data");
         else
             *block = NULL;
@@ -514,7 +514,7 @@ static bool process_subscribe(
      * caller. */
     struct reader_state *reader = open_reader(parse.buffer, false);
     uint64_t timestamp;
-    const void *block = get_read_block(reader, NULL, &timestamp);
+    const void *block = get_read_block(reader, &timestamp);
     bool start_ok = TEST_NULL_(block, "No data currently available");
     bool ok = report_socket_error(scon, client_name, start_ok);
 
