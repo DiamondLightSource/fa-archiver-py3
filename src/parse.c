@@ -221,7 +221,7 @@ bool report_parse_error(
         char *error_message = pop_error_handling(true);
         print_error(
             "Error parsing %s: %s at offset %zd in \"%s\"",
-            message, error_message, *end - string, string);
+            message, error_message, *end - string + 1, string);
         free(error_message);
         return false;
     }
