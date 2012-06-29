@@ -59,6 +59,11 @@ void do_unlock(struct locking *locking)
 
 void psignal(struct locking *locking)
 {
+    ASSERT_0(pthread_cond_signal(&locking->signal));
+}
+
+void pbroadcast(struct locking *locking)
+{
     ASSERT_0(pthread_cond_broadcast(&locking->signal));
 }
 

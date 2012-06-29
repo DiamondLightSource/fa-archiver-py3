@@ -49,5 +49,6 @@ void initialise_locking(struct locking *locking);
 void do_lock(struct locking *locking);
 void do_unlock(struct locking *locking);
 void psignal(struct locking *locking);
+void pbroadcast(struct locking *locking);
 void pwait(struct locking *locking);
 bool pwait_timeout(struct locking *locking, int secs, long nsecs);
