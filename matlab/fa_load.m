@@ -73,7 +73,7 @@ function d = fa_load(tse, mask, type, server)
     % Use fa-capture utility to read required data into temporary file
     maskstr = sprintf('%d,', request_mask);
     [r, o] = system([ ...
-        fa_capture ' -ka -s' format_time(tse(1)) '~' format_time(tse(2)) ...
+        fa_capture ' -kad -s' format_time(tse(1)) '~' format_time(tse(2)) ...
         ' -o' famat ' -f' type ' ' server ' ' maskstr(1:end-1)]);
     if r ~= 0
         delete(famat);
@@ -83,15 +83,6 @@ function d = fa_load(tse, mask, type, server)
     % Load the read data into memory
     d = load('-mat', famat);
     delete(famat);
-
-    % Compute the timestamps
-    g = [d.gapix length(d.data)] + 1;
-    for n = 1:(length(g)-1);
-        d.t(g(n):g(n+1)-1) = ...
-            d.gaptimes(n) + (0:diff(g([n n+1]))-1)/d.f_s/3600/24;
-    end
-    d.day = floor(d.t(1));
-    d.t = d.t - d.day;
 
     % Restore the originally requested permutation if necessary.
     if any(diff(perm) ~= 1)
