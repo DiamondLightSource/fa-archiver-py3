@@ -37,6 +37,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/mman.h>
 #include <fcntl.h>
 #include <errno.h>
 
@@ -72,14 +73,19 @@ static double sample_frequency = 10072.4;
 static bool dry_run = false;
 static bool quiet_allocate = false;
 
+/* Options for read only operation. */
 static bool read_only = false;
+static bool dump_header = true;
+static bool dump_index = false;
+static unsigned int dump_start = 0;
+static unsigned int dump_end = -1;
 
 
 static void usage(void)
 {
     printf(
 "Usage: %s [<options>] <capture-mask> <file-name>\n"
-"or:    %s -H <file-name>\n"
+"or:    %s -H [<H-options>] <file-name>\n"
 "\n"
 "Prepares or reinitalises a disk file <file-name> for use as an FA sniffer\n"
 "archive unless -H is given.  The given <file-name> can be a block device or\n"
@@ -103,7 +109,12 @@ static void usage(void)
 "kilo, mega, giga or terabytes, and similarly block sizes can be followed\n"
 "by one of K or M.\n"
 "\n"
-"If instead -H is given then the file header will be printed.\n"
+"If instead -H is given then the file header will be printed.  This can be\n"
+"followed by the following options:\n"
+"   -d   Dump index.  This can generate a lot of data, or -s/-e can be used\n"
+"   -s:  Offset of first index block to dump\n"
+"   -e:  Offset of last index block to dump\n"
+"   -n   Don't actually dump the header\n"
         , argv0, argv0,
         input_block_size, output_block_size,
         first_decimation, second_decimation,
@@ -162,15 +173,46 @@ static bool process_opts(int *argc, char ***argv)
 }
 
 
+static bool process_H_opts(int *argc, char ***argv)
+{
+    argv0 = (*argv)[0];
+    bool ok = true;
+    while (ok)
+    {
+        switch (getopt(*argc, *argv, "+Hdns:e:"))
+        {
+            case 'H':   break;      // Expected this one, ignore
+            case 'd':   dump_index = true;      break;
+            case 'n':   dump_header = false;    break;
+            case 's':
+                ok = DO_PARSE("start block", parse_uint, optarg, &dump_start);
+                break;
+            case 'e':
+                ok = DO_PARSE("end block", parse_uint, optarg, &dump_end);
+                break;
+            case '?':
+            default:
+                fprintf(stderr, "Try `%s -h` for usage\n", argv0);
+                return false;
+            case -1:
+                *argc -= optind;
+                *argv += optind;
+                return true;
+        }
+    }
+    return false;
+}
+
+
 static bool process_args(int argc, char **argv)
 {
-    if (argc >= 2  &&  strcmp(argv[1], "-H") == 0)
-    {
-        read_only = true;
+    read_only = argc >= 2  &&  strncmp(argv[1], "-H", 2) == 0;
+
+    if (read_only)
         return
-            TEST_OK_(argc == 3, "Try -h for usage")  &&
-            DO_(file_name = argv[2]);
-    }
+            process_H_opts(&argc, &argv)  &&
+            TEST_OK_(argc == 1, "Try -h for usage")  &&
+            DO_(file_name = argv[0]);
     else
         return
             process_opts(&argc, &argv)  &&
@@ -262,6 +304,47 @@ static bool fill_zeros(int file_fd, int written)
 }
 
 
+static bool do_dump_index(int file_fd, struct disk_header *header)
+{
+    /* Dumping the index isn't altogether straightforward -- we need to map it
+     * into memory first! */
+    struct data_index *data_index;
+    bool ok =
+        lock_archive(file_fd)  &&
+        TEST_IO(
+            data_index = mmap(NULL, header->index_data_size,
+                PROT_READ, MAP_SHARED, file_fd, header->index_data_start));
+    if (ok)
+    {
+        unsigned int block_count = header->major_block_count;
+        if (dump_start > block_count)
+            dump_start = block_count;
+        if (dump_end > block_count)
+            dump_end = block_count;
+        struct data_index *last_block = NULL;
+        for (unsigned int i = dump_start; i < dump_end; i ++)
+        {
+            struct data_index *block = &data_index[i];
+            printf("%6u: %10"PRIu64".%06"PRIu64" / %7u / %9u",
+                i, block->timestamp / 1000000, block->timestamp % 1000000,
+                block->duration, block->id_zero);
+            if (i == header->current_major_block)
+                printf(" <<<<<<<<<<<<<<<");
+            else if (last_block)
+            {
+                uint64_t delta_t = block->timestamp - last_block->timestamp;
+                printf(" => %1"PRIu64".%06"PRIu64" / %u",
+                    delta_t / 1000000, delta_t % 1000000,
+                    block->id_zero - last_block->id_zero);
+            }
+            printf("\n");
+            last_block = block;
+        }
+    }
+    return ok;
+}
+
+
 int main(int argc, char **argv)
 {
     if (!process_args(argc, argv))
@@ -277,7 +360,8 @@ int main(int argc, char **argv)
             TEST_IO_(file_fd = open(file_name, O_RDONLY),
                 "Unable to read file \"%s\"", file_name)  &&
             TEST_read(file_fd, &header, sizeof(header))  &&
-            DO_(print_header(stdout, &header));
+            IF_(dump_header, DO_(print_header(stdout, &header)))  &&
+            IF_(dump_index, do_dump_index(file_fd, &header));
     }
     else if (dry_run)
     {
