@@ -95,8 +95,13 @@ static int output_file = STDOUT_FILENO;
 /* Server connection core. */
 
 
+/* Macro for reading a single item from stream. */
+#define READ_ITEM(stream, item) \
+    TEST_OK(fread(&item, sizeof(item), 1, stream) == 1)
+
+
 /* Connnects to the server. */
-static bool connect_server(int *sock)
+static bool connect_server(FILE **stream)
 {
     struct sockaddr_in s_in = {
         .sin_family = AF_INET,
@@ -104,37 +109,31 @@ static bool connect_server(int *sock)
         .sin_port = htons(port)
     };
     struct hostent *hostent;
+    int sock;
     return
         TEST_NULL_(
             hostent = gethostbyname(server_name),
             "Unable to resolve server \"%s\"", server_name)  &&
         DO_(memcpy(
             &s_in.sin_addr.s_addr, hostent->h_addr, hostent->h_length))  &&
-        TEST_IO(*sock = socket(AF_INET, SOCK_STREAM, 0))  &&
+        TEST_IO(sock = socket(AF_INET, SOCK_STREAM, 0))  &&
         TEST_IO_(
-            connect(*sock, (struct sockaddr *) &s_in, sizeof(s_in)),
-            "Unable to connect to server %s:%d", server_name, port);
+            connect(sock, (struct sockaddr *) &s_in, sizeof(s_in)),
+            "Unable to connect to server %s:%d", server_name, port)  &&
+        TEST_NULL(*stream = fdopen(sock, "r+"));
 }
 
 
 /* Reads a complete (short) response from the server until end of input, fails
  * if buffer overflows (or any other reason). */
-static bool read_response(int sock, char *buf, size_t buflen)
+static bool read_response(FILE *stream, char *buf, size_t buflen)
 {
-    ssize_t rx;
-    bool ok;
-    while (
-        ok =
-            TEST_OK_(buflen > 0, "Read buffer exhausted")  &&
-            TEST_IO(rx = read(sock, buf, buflen)),
-        ok  &&  rx > 0)
-    {
-        buflen -= rx;
-        buf += rx;
-    }
-    if (ok)
-        *buf = '\0';
-    return ok;
+    size_t rx = fread(buf, 1, buflen - 1, stream);
+    buf[rx] = '\0';
+    return
+        TEST_OK_(rx < buflen, "Read buffer exhausted")  &&
+        TEST_OK(!ferror(stream))  &&
+        TEST_OK_(rx > 0, "No response from server");
 }
 
 
@@ -155,15 +154,15 @@ static bool parse_archive_parameters(const char **string)
  * factors. */
 static bool read_archive_parameters(void)
 {
-    int sock;
+    FILE *stream;
     char buffer[64];
     return
-        connect_server(&sock)  &&
-        TEST_write(sock, "CFdD\n", 5)  &&
+        connect_server(&stream)  &&
+        TEST_OK(fprintf(stream, "CFdD\n") > 0)  &&
         FINALLY(
-            read_response(sock, buffer, sizeof(buffer)),
+            read_response(stream, buffer, sizeof(buffer)),
             // Finally, whether read_response succeeds
-            TEST_IO(close(sock)))  &&
+            TEST_OK(fclose(stream) == 0))  &&
         DO_PARSE("server response", parse_archive_parameters, buffer);
 }
 
@@ -500,13 +499,13 @@ static void format_options(char *options)
 
 
 /* Sends request for archived or live data to archiver. */
-static bool request_data(int sock)
+static bool request_data(FILE *stream)
 {
     char raw_mask[RAW_MASK_BYTES+1];
     format_raw_mask(&capture_mask, raw_mask);
-    char request[1024];
     if (continuous_capture)
-        sprintf(request, "SR%s%s\n", raw_mask, matlab_format ? "TZ" : "");
+        return TEST_OK(fprintf(stream,
+            "SR%s%s\n", raw_mask, matlab_format ? "TZ" : "") > 0);
     else
     {
         char format[16];
@@ -524,35 +523,30 @@ static bool request_data(int sock)
         char options[64];
         format_options(options);
         // Send R<source> M<mask> S<start> <end> <options>
-        sprintf(request, "R%sMR%sS%ld.%09ld%s%s\n",
-            format, raw_mask, start.tv_sec, start.tv_nsec, end_str, options);
+        return TEST_OK(fprintf(stream, "R%sMR%sS%ld.%09ld%s%s\n",
+            format, raw_mask, start.tv_sec, start.tv_nsec,
+            end_str, options) > 0);
     }
-    return TEST_write(sock, request, strlen(request));
 }
 
 
 /* If the request was accepted the first byte of the response is a null
  * character, otherwise the entire response is an error message. */
-static bool check_response(int sock)
+static bool check_response(FILE *stream)
 {
     char response[1024];
-    int rx;
-    if (TEST_IO(rx = read(sock, response, 1)))
-    {
-        if (rx != 1)
-            return FAIL_("Unexpected server disconnect");
-        else if (*response == '\0')
-            return true;
-        else
-        {
-            /* Pass entire error response from server to stderr. */
-            if (read_response(sock, response + 1, sizeof(response) - 1))
-                fprintf(stderr, "%s", response);
-            return false;
-        }
-    }
+    int rx = fread(response, 1, 1, stream);
+    if (rx != 1)
+        return FAIL_("Unexpected server disconnect");
+    else if (*response == '\0')
+        return true;
     else
+    {
+        /* Pass entire error response from server to stderr. */
+        if (read_response(stream, response + 1, sizeof(response) - 1))
+            fprintf(stderr, "%s", response);
         return false;
+    }
 }
 
 
@@ -584,19 +578,6 @@ static void reset_progress(void)
 }
 
 
-/* Performs read until interrupted or end of file, treats both the same.  Any
- * errors are ignored.  It's arguable whether this is the right action... */
-static size_t do_read(int file, void *buffer, size_t length)
-{
-    ssize_t rx = read(file, buffer, length);
-    if (rx == -1)
-    {
-        IGNORE(TEST_OK_(errno == EINTR, "Error reading from archiver"));
-        rx = 0;
-    }
-    return rx;
-}
-
 /* Performs write even if interrupted, retrying as necessary: we've not enabled
  * signal retries as we want read() to be interruptible. */
 static bool do_write(int file, void *buffer, size_t length)
@@ -616,9 +597,9 @@ static bool do_write(int file, void *buffer, size_t length)
     return true;
 }
 
-/* This routine reads data from sock and writes out complete frames until either
- * the sample count is reached or the read is interrupted. */
-static bool capture_data(int sock, unsigned int *frames_written)
+/* This routine reads data from stream and writes out complete frames until
+ * either the sample count is reached or the read is interrupted. */
+static bool capture_data(FILE *stream, unsigned int *frames_written)
 {
     size_t frame_size =
         count_data_bits(data_mask) *
@@ -629,7 +610,7 @@ static bool capture_data(int sock, unsigned int *frames_written)
     *frames_written = 0;
     while (running  &&  (sample_count == 0  ||  *frames_written < sample_count))
     {
-        int rx = do_read(sock, buffer + residue, BUFFER_SIZE - residue);
+        size_t rx = fread(buffer + residue, 1, BUFFER_SIZE - residue, stream);
         if (rx == 0)
             break;              // Normal end of input
 
@@ -663,11 +644,11 @@ static bool capture_data(int sock, unsigned int *frames_written)
 
 
 /* Coordination of raw data capture. */
-static bool capture_raw_data(int sock)
+static bool capture_raw_data(FILE *stream)
 {
     unsigned int frames_written;
     return
-        capture_data(sock, &frames_written)  &&
+        capture_data(stream, &frames_written)  &&
         TEST_OK_(continuous_capture || frames_written == sample_count,
             "Only captured %u of %"PRIu64" frames",
             frames_written, sample_count);
@@ -687,19 +668,19 @@ static double gap_timestamps[MAX_GAP_COUNT];
 
 
 /* Reads id 0 from server. */
-static bool read_t0(int sock)
+static bool read_t0(FILE *stream)
 {
     gap_count = 0;
-    return TEST_read(sock, &id_zero, sizeof(uint32_t));
+    return READ_ITEM(stream, id_zero[0]);
 }
 
 
 /* Reads list of contiguous data blocks from server, see reader.c for detailed
  * definition. */
-static bool read_gap_list(int sock, time_t local_offset)
+static bool read_gap_list(FILE *stream, time_t local_offset)
 {
     bool ok =
-        TEST_read(sock, &gap_count, sizeof(uint32_t))  &&
+        READ_ITEM(stream, gap_count)  &&
         TEST_OK_(gap_count < MAX_GAP_COUNT,
             "Implausible gap count of %"PRIu32" rejected", gap_count);
     if (ok)
@@ -707,7 +688,7 @@ static bool read_gap_list(int sock, time_t local_offset)
         for (unsigned int i = 0; ok && i <= gap_count; i ++)
         {
             struct gap_data gap_data;
-            ok = TEST_read(sock, &gap_data, sizeof(gap_data));
+            ok = READ_ITEM(stream, gap_data);
             data_index[i] = gap_data.data_index;
             id_zero[i] = gap_data.id_zero;
             gap_timestamps[i] =
@@ -770,18 +751,18 @@ static bool write_header(
 
 
 /* Coordination of matlab data capture. */
-static bool capture_matlab_data(int sock)
+static bool capture_matlab_data(FILE *stream)
 {
     unsigned int frames_written;
     uint64_t timestamp;
     time_t local_offset = offset_matlab_times ? local_time_offset() : 0;
     return
-        TEST_read(sock, &timestamp, sizeof(uint64_t))  &&
+        READ_ITEM(stream, timestamp)  &&
         IF_ELSE(continuous_capture,
-            read_t0(sock),
-            read_gap_list(sock, local_offset))  &&
+            read_t0(stream),
+            read_gap_list(stream, local_offset))  &&
         write_header(sample_count, timestamp, local_offset)  &&
-        capture_data(sock, &frames_written)  &&
+        capture_data(stream, &frames_written)  &&
         IF_(frames_written != sample_count,
             /* For an incomplete capture, probably an interrupted continuous
              * capture, we need to rewrite the header with the correct
@@ -798,14 +779,14 @@ static bool capture_matlab_data(int sock)
 
 
 /* Captures open data stream to configured output file. */
-static bool capture_and_save(int sock)
+static bool capture_and_save(FILE *stream)
 {
     return
         IF_(!continuous_capture,
-            TEST_read(sock, &sample_count, sizeof(uint64_t)))  &&
+            READ_ITEM(stream, sample_count))  &&
         IF_ELSE(matlab_format,
-            capture_matlab_data(sock),
-            capture_raw_data(sock));
+            capture_matlab_data(stream),
+            capture_raw_data(stream));
 }
 
 
@@ -816,21 +797,21 @@ int main(int argc, char **argv)
     if (server != NULL)
         server_name = server;
 
-    int sock;
+    FILE *stream;
     bool ok =
         parse_args(argc, argv)  &&
         validate_args()  &&
 
-        connect_server(&sock)  &&
+        connect_server(&stream)  &&
         IF_(output_filename != NULL,
             TEST_IO_(
                 output_file = open(
                     output_filename, O_WRONLY | O_CREAT | O_TRUNC, 0666),
                 "Unable to open output file \"%s\"", output_filename))  &&
-        request_data(sock)  &&
-        check_response(sock)  &&
+        request_data(stream)  &&
+        check_response(stream)  &&
 
         initialise_signal()  &&
-        capture_and_save(sock);
+        capture_and_save(stream);
     return ok ? 0 : 1;
 }
