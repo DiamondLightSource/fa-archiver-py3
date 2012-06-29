@@ -98,7 +98,7 @@ struct client_info
     list_for_each_entry(struct client_info, list, client, clients)
 
 /* Adds newly connected client to list of connections. */
-static struct client_info * add_client(void)
+static struct client_info *add_client(void)
 {
     struct client_info *client = calloc(1, sizeof(struct client_info));
     clock_gettime(CLOCK_REALTIME, &client->ts);
@@ -543,7 +543,7 @@ static void get_client_name(int scon, char *client_name)
     {
         /* Consider using inet_ntop() here.  However doesn't include the port
          * number, so probably not so interesting until IPv6 in use. */
-        uint8_t * ip = (uint8_t *) &name.sin_addr.s_addr;
+        uint8_t *ip = (uint8_t *) &name.sin_addr.s_addr;
         sprintf(client_name, "%u.%u.%u.%u:%u",
             ip[0], ip[1], ip[2], ip[3], ntohs(name.sin_port));
     }
@@ -589,7 +589,7 @@ static bool dispatch_command(
 }
 
 
-static void * process_connection(void *context)
+static void *process_connection(void *context)
 {
     int scon = (intptr_t) context;
     struct client_info *client = add_client();
@@ -622,7 +622,7 @@ static void * process_connection(void *context)
 }
 
 
-static void * run_server(void *context)
+static void *run_server(void *context)
 {
     int sock = (int)(intptr_t) context;
     /* Note that we need to create the spawned threads with DETACHED attribute,

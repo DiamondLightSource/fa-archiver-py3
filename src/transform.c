@@ -94,13 +94,13 @@ static unsigned int fa_offset;     // Current sample count into current block
 static unsigned int d_offset;      // Current decimated sample count
 
 
-static inline struct fa_entry * fa_block(unsigned int id)
+static inline struct fa_entry *fa_block(unsigned int id)
 {
     return buffers[current_buffer] + fa_data_offset(header, fa_offset, id);
 }
 
 
-static inline struct decimated_data * d_block(unsigned int id)
+static inline struct decimated_data *d_block(unsigned int id)
 {
     return buffers[current_buffer] + d_data_offset(header, d_offset, id);
 }
@@ -732,7 +732,7 @@ bool find_gap(bool check_id0, unsigned int *start, unsigned int *blocks)
 }
 
 
-const struct data_index * read_index(unsigned int ix)
+const struct data_index *read_index(unsigned int ix)
 {
     return &data_index[ix];
 }
@@ -742,7 +742,7 @@ const struct disk_header *get_header(void)
     return header;
 }
 
-const struct decimated_data * get_dd_area(void)
+const struct decimated_data *get_dd_area(void)
 {
     return dd_area;
 }

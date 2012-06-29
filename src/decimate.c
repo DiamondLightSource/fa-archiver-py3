@@ -190,7 +190,7 @@ static bool advance_index(int *ix, int limit)
 
 /* Accumulates a single update into the accumulator array for the integrating
  * part of the CIC filter, returns the last row. */
-static const struct fa_row_int64 * accumulate(const struct fa_row *row_in)
+static const struct fa_row_int64 *accumulate(const struct fa_row *row_in)
 {
     /* The first stage converts 32 bit in into 64 bit intermediate results. */
     ACCUMULATE_ROW(&cic_accumulators[0], row_in);
@@ -320,7 +320,7 @@ static void decimate_block(const struct fa_row *block_in, uint64_t timestamp)
 /* Decimation control. */
 
 
-static void * decimation_thread(void *context)
+static void *decimation_thread(void *context)
 {
     block_out = get_write_block(decimation_buffer);
 

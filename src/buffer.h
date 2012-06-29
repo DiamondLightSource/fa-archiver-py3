@@ -70,14 +70,14 @@ size_t reader_block_size(struct reader_state *reader);
  * block of block_size bytes is returned, or NULL if the disk writer has
  * underrun and hasn't caught up yet -- in this case the writer needs to back
  * off and try again later. */
-void * get_write_block(struct buffer *buffer);
+void *get_write_block(struct buffer *buffer);
 /* Releases the previously reserved write block: only call if non-NULL value
  * returned by get_write_block(). */
 void release_write_block(struct buffer *buffer, bool gap, uint64_t timestamp);
 
 
 /* Creates a new reading connection to the buffer. */
-struct reader_state * open_reader(struct buffer *buffer, bool reserved_reader);
+struct reader_state *open_reader(struct buffer *buffer, bool reserved_reader);
 /* Closes a previously opened reader connection. */
 void close_reader(struct reader_state *reader);
 
@@ -87,7 +87,7 @@ void close_reader(struct reader_state *reader);
  * before calling get_read_block() again.
  *    If timestamp is not NULL then on a successful block read the timestamp of
  * the returned data is written to *timestamp. */
-const void * get_read_block(
+const void *get_read_block(
     struct reader_state *reader, int *backlog, uint64_t *timestamp);
 /* Releases the write block.  If false is returned then the block was
  * overwritten while locked due to reader underrun; however, if the reader was

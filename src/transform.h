@@ -53,7 +53,7 @@ bool timestamp_to_end(
  * iff a gap is found.  *start is updated to the index of the block directly
  * after the first gap and *blocks is decremented accordingly. */
 bool find_gap(bool check_id0, unsigned int *start, unsigned int *blocks);
-const struct data_index * read_index(unsigned int ix);
+const struct data_index *read_index(unsigned int ix);
 
 /* Returns an unlocked pointer to the header: should only be used to access the
  * constant header fields. */
@@ -66,4 +66,4 @@ void initialise_transform(
 
 // !!!!!!
 // Not right.  Returns DD data area.
-const struct decimated_data * get_dd_area(void);
+const struct decimated_data *get_dd_area(void);

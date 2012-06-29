@@ -145,7 +145,7 @@ static bool do_write(int file, void *buffer, size_t length)
     return true;
 }
 
-static void * writer_thread(void *context)
+static void *writer_thread(void *context)
 {
     bool ok = true;
     while (ok  &&  writer_running)
@@ -204,7 +204,7 @@ static struct reader_state *reader;
 static volatile bool transform_enabled = true;
 
 
-static void * transform_thread(void *context)
+static void *transform_thread(void *context)
 {
     while (writer_running)
     {

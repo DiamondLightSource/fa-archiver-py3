@@ -63,9 +63,9 @@ struct buffer
     size_t block_count;
     /* Contiguous array of blocks, page aligned to work nicely with unbuffered
      * direct disk IO. */
-    void * frame_buffer;
+    void *frame_buffer;
     /* Frame information including gap marks and timestamps. */
-    struct frame_info * frame_info;
+    struct frame_info *frame_info;
 
     /* Lock and pthread signal structure. */
     struct locking lock;
@@ -92,7 +92,7 @@ static void advance_index(struct buffer *buffer, size_t *index)
         *index -= buffer->block_count;
 }
 
-static void * get_buffer(struct buffer *buffer, size_t index)
+static void *get_buffer(struct buffer *buffer, size_t index)
 {
     return buffer->frame_buffer + index * buffer->block_size;
 }
@@ -138,7 +138,7 @@ static void update_backlog(struct reader_state *reader)
 }
 
 
-struct reader_state * open_reader(struct buffer *buffer, bool reserved_reader)
+struct reader_state *open_reader(struct buffer *buffer, bool reserved_reader)
 {
     struct reader_state *reader = malloc(sizeof(struct reader_state));
     reader->buffer = buffer;
@@ -171,7 +171,7 @@ void close_reader(struct reader_state *reader)
 }
 
 
-const void * get_read_block(
+const void *get_read_block(
     struct reader_state *reader, int *backlog, uint64_t *timestamp)
 {
     struct buffer *buffer = reader->buffer;
@@ -266,7 +266,7 @@ static bool blocking_readers(struct buffer *buffer)
 }
 
 
-void * get_write_block(struct buffer *buffer)
+void *get_write_block(struct buffer *buffer)
 {
     void *block;
     LOCK(buffer->lock);

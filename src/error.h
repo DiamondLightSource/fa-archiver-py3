@@ -84,9 +84,9 @@ void timestamp_logging(bool timestamps);
 void start_logging(const char *ident);
 
 /* Routines to write informative message or error to stderr or syslog. */
-void log_message(const char * message, ...)
+void log_message(const char *message, ...)
     __attribute__((format(printf, 1, 2)));
-void log_error(const char * message, ...)
+void log_error(const char *message, ...)
     __attribute__((format(printf, 1, 2)));
 void vlog_message(int priority, const char *format, va_list args);
 
@@ -98,13 +98,13 @@ void vlog_message(int priority, const char *format, va_list args);
  * caller is responsible for freeing the error message).  Error handlers can be
  * nested like exception handlers. */
 void push_error_handling(void);
-char * pop_error_handling(bool return_message);
+char *pop_error_handling(bool return_message);
 
 
 /* Internal routines called by error handling macros below. */
-void print_error(const char * message, ...)
+void print_error(const char *message, ...)
     __attribute__((format(printf, 1, 2)));
-void panic_error(const char * filename, int line)
+void panic_error(const char *filename, int line)
     __attribute__((__noreturn__));
 
 

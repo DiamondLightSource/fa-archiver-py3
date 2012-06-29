@@ -61,11 +61,11 @@ void push_error_handling(void)
     error_stack = new_entry;
 }
 
-char * pop_error_handling(bool return_message)
+char *pop_error_handling(bool return_message)
 {
     struct error_stack *top = error_stack;
     error_stack = top->last;
-    char * error_message = NULL;
+    char *error_message = NULL;
     if (return_message)
         error_message = top->message;
     else if (top->message != NULL)
@@ -176,7 +176,7 @@ void vlog_message(int priority, const char *format, va_list args)
     UNLOCK(log_lock);
 }
 
-void log_message(const char * message, ...)
+void log_message(const char *message, ...)
 {
     if (log_verbose)
     {
@@ -186,7 +186,7 @@ void log_message(const char * message, ...)
     }
 }
 
-void log_error(const char * message, ...)
+void log_error(const char *message, ...)
 {
     va_list args;
     va_start(args, message);
@@ -194,7 +194,7 @@ void log_error(const char * message, ...)
 }
 
 
-static char * add_strerror(char *message, int last_errno)
+static char *add_strerror(char *message, int last_errno)
 {
     if (last_errno == 0)
         return message;
@@ -222,7 +222,7 @@ static char * add_strerror(char *message, int last_errno)
 }
 
 
-void print_error(const char * format, ...)
+void print_error(const char *format, ...)
 {
     int last_errno = errno;
     va_list args;
@@ -238,7 +238,7 @@ void print_error(const char * format, ...)
 }
 
 
-void panic_error(const char * filename, int line)
+void panic_error(const char *filename, int line)
 {
     int last_errno = errno;
     char *message;

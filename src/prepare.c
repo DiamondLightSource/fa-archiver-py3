@@ -60,7 +60,7 @@
 
 static char *argv0;
 
-static const char * file_name;
+static const char *file_name;
 static bool file_size_given = false;
 static uint64_t file_size;
 static struct filter_mask archive_mask;
