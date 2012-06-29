@@ -34,9 +34,6 @@
 import cothread
 import numpy
 
-import falib
-
-
 
 class buffer:
     '''Circular buffer.'''

@@ -50,6 +50,7 @@
 #include "transform.h"
 #include "disk_writer.h"
 #include "socket_server.h"
+#include "list.h"
 
 #include "reader.h"
 
@@ -102,11 +103,9 @@ static void unlock_buffers(read_buffers_t buffers, unsigned int count)
     LOCK(buffer_lock);
     for (unsigned int i = 0; i < count; i ++)
     {
-        /* Ideally we should use the container_of() macro (from list.h) to
-         * recover the pool_entry address, but unfortunately array members
-         * behave differently enough that this just doesn't work. */
+        /* Recover the pool_entry address and chain back onto free list. */
         struct pool_entry *entry =
-            (void *) buffers[i] - offsetof(struct pool_entry, buffer);
+            container_of(buffers[i], struct pool_entry, buffer[0]);
         entry->next = buffer_pool;
         buffer_pool = entry;
     }
@@ -165,16 +164,29 @@ static bool mask_to_archive(
 
 
 struct reader {
-    /* Reads the requested block from archive into buffer. */
+    /* Reads the requested block from archive into buffer.  Arguments:
+     *  archive         File handle of archive to read
+     *  block           Major block to start reading
+     *  id              FA id to read
+     *  *buffer         Data written here, must be correct size
+     *  *samples        Returns number of samples actually read. */
     bool (*read_block)(
-        int archive, unsigned int block, unsigned int i,
+        int archive, unsigned int block, unsigned int id,
         void *buffer, unsigned int *samples);
-    /* Writes a single line from a list of buffers to an output buffer. */
+    /* Writes the given lines from a list of buffers to an output buffer:
+     *  line_count      Number of samples to be written
+     *  field_count     Number of FA ids per sample
+     *  read_buffers    Array of buffers, one for each FA id
+     *  offset          Starting offset into buffer of first sample to write
+     *  data_mask       Mask of decimated fields to write (ignored for FA)
+     *  output          Data buffer to be written to */
     void (*write_lines)(
         unsigned int line_count, unsigned int field_count,
         read_buffers_t read_buffers, unsigned int offset,
         unsigned int data_mask, void *output);
-    /* The size of a single output value. */
+    /* The size of a single output value.  For decimated data the output size
+     * depends on the selected data mask, which is of course meaningless for FA
+     * data. */
     size_t (*output_size)(unsigned int data_mask);
 
     unsigned int block_total_count;     // Range of block index

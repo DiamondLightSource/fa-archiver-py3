@@ -370,7 +370,7 @@ D, DD
 
     For decimated data four values are available for each data point, namely the
     mean, minimum, maximum and standard deviation of the underlying full
-    resolution data for the decimation interval (eg, 1.6 seconds), and the `M`
+    resolution data for the decimation interval (eg, 1.6 seconds), and the `F`
     option can be used to select which of these values are returned by or-ing
     together the following values:
 
@@ -378,6 +378,8 @@ D, DD
     :2:  Minimum
     :4:  Maximum
     :8:  Standard Deviation
+
+    If no `F` mask is specified then all four values are returned.
 
 The start time can be specified either as a time in seconds in the Unix epoch,
 or as a date and time string in a variant of ISO 8601 format, and the same

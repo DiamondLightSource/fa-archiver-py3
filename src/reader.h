@@ -40,4 +40,4 @@ struct gap_data {
     uint32_t data_index;
     uint32_t id_zero;
     uint64_t timestamp;
-};
+} __attribute__((packed));
