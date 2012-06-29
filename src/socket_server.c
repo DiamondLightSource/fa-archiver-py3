@@ -673,7 +673,9 @@ bool initialise_server(
         IF_(reuseaddr,
             TEST_IO(setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR,
                 &reuse, sizeof(reuse))))  &&
-        TEST_IO(bind(server_socket, (struct sockaddr *) &sin, sizeof(sin)))  &&
+        TEST_IO_(
+            bind(server_socket, (struct sockaddr *) &sin, sizeof(sin)),
+            "Unable to bind to server socket")  &&
         TEST_IO(listen(server_socket, 5))  &&
         DO_(log_message("Server listening on port %d", port));
 }

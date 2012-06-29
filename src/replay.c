@@ -58,6 +58,7 @@ static int replay_row_size;         // Length of an individual row
 static int32_t replay_id0_start;    // Reset id0 to this at start of cycle
 static int32_t replay_id0;          // Current value of id0
 static void (*convert_row)(struct fa_row *row); // Converts data to fa_entry
+static bool interrupted = false;    // Used to implement interrupt functionality
 
 static struct timespec next_sleep;  // Used for uniform sleep intervals
 
@@ -78,6 +79,9 @@ static void sleep_until(int duration)
 
 static bool read_replay_block(struct fa_row *rows, size_t size)
 {
+    if (interrupted)
+        return false;
+
     int row_count = size / sizeof(struct fa_row);
     for (int i = 0; i < row_count; i ++)
     {
@@ -243,7 +247,10 @@ static bool prepare_replay_data(struct region *region)
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /* Dummy sniffer using replay data. */
 
-static void reset_replay(void) { ASSERT_FAIL(); }
+static void reset_replay(void)
+{
+    interrupted = false;
+}
 
 static bool read_replay_status(struct fa_status *status)
 {
@@ -252,7 +259,8 @@ static bool read_replay_status(struct fa_status *status)
 
 static bool interrupt_replay(void)
 {
-    return FAIL_("Interrupt unavailable in replay mode");
+    interrupted = true;
+    return true;
 }
 
 static const struct sniffer_context sniffer_replay = {
