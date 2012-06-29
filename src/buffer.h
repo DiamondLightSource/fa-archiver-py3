@@ -67,13 +67,13 @@ size_t buffer_block_size(struct buffer *buffer);
 size_t reader_block_size(struct reader_state *reader);
 
 /* Reserves the next slot in the buffer for writing. An entire contiguous
- * block of block_size bytes is returned, or NULL if the disk writer has
- * underrun and hasn't caught up yet -- in this case the writer needs to back
- * off and try again later. */
+ * block of block_size bytes is guaranteed to be returned, and
+ * release_write_block() must be called when writing is complete. */
 void *get_write_block(struct buffer *buffer);
-/* Releases the previously reserved write block: only call if non-NULL value
- * returned by get_write_block(). */
-void release_write_block(struct buffer *buffer, bool gap, uint64_t timestamp);
+/* Releases the previously reserved write block, returning false if the block
+ * cannot be advanced -- in this case a gap is forced in the data stream.  Also
+ * a gap can be requested, in both these cases the data is discarded. */
+bool release_write_block(struct buffer *buffer, bool gap, uint64_t timestamp);
 
 
 /* Creates a new reading connection to the buffer. */

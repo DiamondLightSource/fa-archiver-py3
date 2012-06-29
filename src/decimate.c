@@ -282,7 +282,7 @@ static void advance_write_block(bool gap, uint64_t timestamp)
     {
         /* Ought to correct the timestamp here by the filter group delay and the
          * difference between the two data blocks. */
-        release_write_block(decimation_buffer, gap, timestamp);
+        IGNORE(TEST_OK(release_write_block(decimation_buffer, gap, timestamp)));
         block_out = get_write_block(decimation_buffer);
 
         /* In the presence of a gap we ought to reset all the filters. */
