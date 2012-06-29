@@ -664,15 +664,27 @@ static bool capture_data(FILE *stream, unsigned int *frames_written)
             timestamp_offset = 0;
         }
 
-        /* Read lines of data. */
-        char line_buffer[line_size];
-        if (fread(line_buffer, line_size, 1, stream) != 1)
-            break;          // End of input
-        lines_to_timestamp -= 1;
+        /* Figure out how many lines we can read in one chunk.  Can't read past
+         * the next timestamp, can't read more than a buffer full, can't be more
+         * than we're waiting for. */
+        size_t lines_to_read = BUFFER_SIZE / line_size;
+        if (matlab_format  &&  lines_to_read > lines_to_timestamp)
+            lines_to_read = lines_to_timestamp;
+        if (sample_count > 0  &&
+                lines_to_read > sample_count - *frames_written)
+            lines_to_read = sample_count - *frames_written;
 
-        /* Ship out line as read. */
-        ok = TEST_OK(fwrite(line_buffer, line_size, 1, output_file) == 1);
-        *frames_written += 1;
+        /* Read lines of data. */
+        char buffer[BUFFER_SIZE];
+        size_t lines_read = fread(buffer, line_size, lines_to_read, stream);
+        if (lines_read == 0)
+            break;          // End of input
+        lines_to_timestamp -= lines_read;
+
+        /* Ship out lines as read. */
+        ok = TEST_OK(
+            fwrite(buffer, line_size, lines_read, output_file) == lines_read);
+        *frames_written += lines_read;
 
         if (show_progress)
             update_progress(*frames_written, line_size);
@@ -822,12 +834,25 @@ static bool write_footer(unsigned int frames_written, time_t local_offset)
         sizeof(double) * frames_written, 2, 1, frames_written);
     bool ok = TEST_OK(fwrite(header, (char *) h - header, 1, output_file) == 1);
 
+    /* Need to buffer output as fwrite isn't as fast as it ought to be. */
+    size_t buf_index = 0;
+    size_t buffer_size = BUFFER_SIZE / sizeof(double);
+    double buffer[buffer_size];
+
     for (unsigned int i = 0; ok  &&  i < frames_written; i ++)
     {
-        timestamp = timestamp_at_offset(timestamps, offset, local_offset);
+        buffer[buf_index] =
+            timestamp_at_offset(timestamps, offset, local_offset);
         if (subtract_day_zero)
-           timestamp -= day_zero;
-        ok = TEST_OK(fwrite(&timestamp, sizeof(double), 1, output_file) == 1);
+           buffer[buf_index] -= day_zero;
+        buf_index += 1;
+
+        if (buf_index >= buffer_size)
+        {
+            ok = TEST_OK(fwrite(
+                buffer, sizeof(double), buf_index, output_file) == buf_index);
+            buf_index = 0;
+        }
 
         offset += 1;
         if (offset >= timestamp_header.block_size)
@@ -836,6 +861,10 @@ static bool write_footer(unsigned int frames_written, time_t local_offset)
             offset = 0;
         }
     }
+
+    if (ok  &&  buf_index > 0)
+        ok = TEST_OK(fwrite(
+            buffer, sizeof(double), buf_index, output_file) == buf_index);
     return ok;
 }
 
