@@ -129,6 +129,76 @@ static void initialise_buffer_pool(size_t buffer_size, unsigned int count)
 
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+/* Support for fast buffered socket writes. */
+
+/* Convenient buffer size for efficient writes.  The buffer size also needs to
+ * be long enough to accomodate a complete "line", which can be as large as 256
+ * decimated samples, or around 8K.  This will be allocated on the stack.*/
+#define WRITE_BUFFER_SIZE   (32 * K)
+
+
+/* Buffer for preparing data to be written to socket. */
+struct write_buffer {
+    int file;
+    size_t out_ptr;
+    char buffer[WRITE_BUFFER_SIZE];
+};
+
+
+/* Macro for allocating buffer on the stack to write to given file scon. */
+#define ALLOCATE_WRITE_BUFFER(buffer, scon) \
+    struct write_buffer buffer = { .file = scon, .out_ptr = 0 }
+
+
+/* Ensures all data in buffer is transmitted. */
+static bool flush_buffer(struct write_buffer *buffer)
+{
+    return IF_(buffer->out_ptr > 0,
+        TEST_write_(
+            buffer->file, buffer->buffer, buffer->out_ptr,
+            "Error writing to client")  &&
+        DO_(buffer->out_ptr = 0));
+}
+
+/* Helper routine to ensure length bytes free in buffer by flushing buffer if
+ * necessary. */
+static bool ensure_buffer(struct write_buffer *buffer, size_t length)
+{
+    return IF_(length + buffer->out_ptr > WRITE_BUFFER_SIZE,
+        flush_buffer(buffer));
+}
+
+/* Writes given data to buffer, flushing buffer to make room as required. */
+static bool write_buffer(
+    struct write_buffer *buffer, const void *data, size_t length)
+{
+    bool ok = ensure_buffer(buffer, length);
+    memcpy(buffer->buffer + buffer->out_ptr, data, length);
+    buffer->out_ptr += length;
+    return ok;
+}
+
+/* Returns pointer to internal buffer of length at least min_length.  Data is
+ * written if necessary, and the actual length available is returned. */
+static bool get_buffer(
+    struct write_buffer *buffer, size_t min_length,
+    void **result, size_t *length)
+{
+    bool ok = ensure_buffer(buffer, min_length);
+    *length = WRITE_BUFFER_SIZE - buffer->out_ptr;
+    *result = buffer->buffer + buffer->out_ptr;
+    return ok;
+}
+
+/* After calling get_buffer() this should be called to mark the given length as
+ * having been written. */
+static void release_buffer(struct write_buffer *buffer, size_t length)
+{
+    buffer->out_ptr += length;
+}
+
+
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /* Reading from disk: general support. */
 
 
@@ -282,7 +352,7 @@ static bool compute_start(
 
 
 static bool send_timestamp(
-    const struct reader *reader, int scon,
+    const struct reader *reader, struct write_buffer *buffer,
     unsigned int ix_block, unsigned int ix_offset)
 {
     const struct data_index *data_index = read_index(ix_block);
@@ -293,13 +363,13 @@ static bool send_timestamp(
          * the timestamp within the selected block. */
         (uint64_t) ix_offset * data_index->duration /
             reader->samples_per_fa_block;
-    return TEST_write(scon, &timestamp, sizeof(uint64_t));
+    return write_buffer(buffer, &timestamp, sizeof(uint64_t));
 }
 
 
 
 static bool send_gaplist(
-    const struct reader *reader, int scon, bool check_id0,
+    const struct reader *reader, struct write_buffer *buffer, bool check_id0,
     unsigned int ix_start, unsigned int offset, uint64_t samples)
 {
     /* First convert block, offset and samples into an index block count. */
@@ -313,9 +383,8 @@ static bool send_gaplist(
             find_gap(check_id0, &ix_block_, &ix_count_); )
         gap_count += 1;
 
-    /* Send the gap count and gaps to the client.  We don't bother to write
-     * buffer this as this won't happen very often. */
-    bool ok = TEST_write(scon, &gap_count, sizeof(uint32_t));
+    /* Send the gap count and gaps to the client. */
+    bool ok = write_buffer(buffer, &gap_count, sizeof(uint32_t));
     unsigned int ix_block = ix_start;
     for (unsigned int i = 0;  ok  &&  i <= gap_count;  i ++)
     {
@@ -342,7 +411,7 @@ static bool send_gaplist(
             gap_data.data_index = blocks * samples_per_block - offset;
         }
 
-        ok = TEST_write(scon, &gap_data, sizeof(gap_data));
+        ok = write_buffer(buffer, &gap_data, sizeof(gap_data));
         find_gap(check_id0, &ix_block, &ix_count);
     }
     return ok;
@@ -351,13 +420,14 @@ static bool send_gaplist(
 
 static bool transfer_data(
     const struct reader *reader, read_buffers_t read_buffers,
-    int archive, int scon, struct iter_mask *iter, unsigned int data_mask,
+    int archive, struct write_buffer *buffer, struct iter_mask *iter,
+    unsigned int data_mask,
     unsigned int ix_block, unsigned int offset, uint64_t count)
 {
     const struct disk_header *header = get_header();
     size_t line_size_out = iter->count * reader->output_size(data_mask);
 
-    bool ok = true;
+    bool ok = TEST_OK(line_size_out < WRITE_BUFFER_SIZE);   // Hope so!
     while (ok  &&  count > 0)
     {
         /* Read a single timeframe for each id from the archive.  This is
@@ -371,14 +441,17 @@ static bool transfer_data(
         unsigned int samples_read = reader->samples_per_fa_block;
         while (ok  &&  offset < samples_read  &&  count > 0)
         {
-            /* The write buffer determines how much we write to the socket layer
-             * at a time, so a comfortably large buffer is convenient.  Of
-             * course, it must be large enough to accomodate a single output
-             * line, but that is straightforward. */
-            char write_buffer[64 * K];
+            /* Ensure we get enough workspace to write a least a single line!
+             * Alas, can fail if writing fails. */
+            size_t buf_length;
+            void *line_buffer;
+            ok = get_buffer(buffer, line_size_out, &line_buffer, &buf_length);
+            if (!ok)
+                break;
+
             /* Enough lines to fill the write buffer, so long as we don't write
              * more than requested and we don't exhaust the read blocks. */
-            unsigned int line_count = sizeof(write_buffer) / line_size_out;
+            unsigned int line_count = buf_length / line_size_out;
             if (count < line_count)
                 line_count = count;
             if (offset + line_count > samples_read)
@@ -386,9 +459,8 @@ static bool transfer_data(
 
             reader->write_lines(
                 line_count, iter->count,
-                read_buffers, offset, data_mask, write_buffer);
-            ok = TEST_write_(scon, write_buffer, line_count * line_size_out,
-                "Error writing to client");
+                read_buffers, offset, data_mask, line_buffer);
+            release_buffer(buffer, line_count * line_size_out);
 
             count -= line_count;
             offset += line_count;
@@ -446,17 +518,21 @@ static bool read_data(
     bool write_ok = report_socket_error(scon, client_name, ok);
 
     if (ok  &&  write_ok)
+    {
+        ALLOCATE_WRITE_BUFFER(buffer, scon);
         write_ok =
             IF_(parse->send_sample_count,
-                TEST_write(scon, &samples, sizeof(samples)))  &&
+                write_buffer(&buffer, &samples, sizeof(samples)))  &&
             IF_(parse->timestamp,
-                send_timestamp(parse->reader, scon, ix_block, offset))  &&
+                send_timestamp(parse->reader, &buffer, ix_block, offset))  &&
             IF_(parse->gaplist,
-                send_gaplist(parse->reader, scon,
+                send_gaplist(parse->reader, &buffer,
                     parse->check_id0, ix_block, offset, samples))  &&
             transfer_data(
-                parse->reader, read_buffers, archive, scon,
-                &iter, parse->data_mask, ix_block, offset, samples);
+                parse->reader, read_buffers, archive, &buffer,
+                &iter, parse->data_mask, ix_block, offset, samples)  &&
+            flush_buffer(&buffer);
+    }
 
     if (read_buffers != NULL)
         unlock_buffers(read_buffers, iter.count);
