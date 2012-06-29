@@ -341,7 +341,7 @@ of a read request is defined by this syntax::
     time-or-seconds = "T" date-time | "S" seconds [ "." nanoseconds ] [ "Z" ]
     date-time = yyyy "-" mm "-" dd "T" hh ":" mm ":" ss [ "." ns ]
     samples = integer
-    options = [ "N" ] [ "A" ] [ "T" ] [ "G" ] [ "C" ] [ "Z" ]
+    options = [ "N" ] [ "A" ] [ "T" [ "E" ]] [ "G" ] [ "C" ] [ "Z" ]
 
 A read request specifies a source, one of `F`, `D` or `DD`, followed by a filter
 mask (as specified for the `S` command), followed by a time range consisting of
@@ -422,7 +422,15 @@ A
 T
     Send timestamp at head of dataset.  The timestamp of the first transmitted
     sample is sent as a 64 bit little endian integer counting microseconds in
-    the Unix epoch.
+    the Unix epoch.  Note that this is different from `TE`.
+
+TE
+    Send "extended timestamps".  A four byte header is transmitted at the start
+    of the transmitted data specifying the number of samples per block and the
+    offset into the first block of the first transmitted sample.  The remaining
+    data is transmitted in blocks with each block preceded by the timestamp and
+    block duration, both in microseconds.  The timestamp is sent as a 64 bit
+    number followed by the duration as a 32 bit number.
 
 G
     Send gap list at end of data capture.  After transmitting the complete

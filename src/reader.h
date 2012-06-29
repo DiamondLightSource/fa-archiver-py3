@@ -41,3 +41,15 @@ struct gap_data {
     uint32_t id_zero;
     uint64_t timestamp;
 } __attribute__((packed));
+
+/* Timestamp header when sending extended data. */
+struct extended_timestamp_header {
+    uint32_t block_size;        // Number of samples in each major block
+    uint32_t offset;            // Offset into block of first sample sent
+} __attribute__((packed));
+
+/* Timestamp sent at head of each block. */
+struct extended_timestamp {
+    uint64_t timestamp;         // Start of block in microseconds
+    uint32_t duration;          // Duration of block in microseconds
+} __attribute__((packed));
