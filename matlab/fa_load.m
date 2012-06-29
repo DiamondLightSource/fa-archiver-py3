@@ -22,6 +22,9 @@
 %   d.data          The returned data
 %   d.t             Timestamp array roughly timestamping each sample point
 %   d.day           Matlab number of day containing first sample
+%
+% FA ids are returned in the same order that they were requested, including
+% any duplicates.
 
 % Copyright (c) 2011 Michael Abbott, Diamond Light Source Ltd.
 %
@@ -59,6 +62,8 @@ function d = fa_load(tse, mask, type, server)
         server = ['-S' server];
     end
 
+    % Compute unique sorted list from id mask and remember the permuation.
+    [request_mask, dummy, perm] = unique(mask);
 
     % Create temporary file to capture into
     [r, famat] = system('mktemp');
@@ -66,7 +71,7 @@ function d = fa_load(tse, mask, type, server)
     famat = famat(1:end-1);     % Remove \n from returned filename
 
     % Use fa-capture utility to read required data into temporary file
-    maskstr = sprintf('%d,', mask);
+    maskstr = sprintf('%d,', request_mask);
     [r, o] = system([ ...
         fa_capture ' -ka -s' format_time(tse(1)) '~' format_time(tse(2)) ...
         ' -o' famat ' -f' type ' ' server ' ' maskstr(1:end-1)]);
@@ -87,6 +92,16 @@ function d = fa_load(tse, mask, type, server)
     end
     d.day = floor(d.t(1));
     d.t = d.t - d.day;
+
+    % Restore the originally requested permutation if necessary.
+    if any(diff(perm) ~= 1)
+        d.ids = d.ids(perm);
+        if type == 'F'
+            d.data = d.data(:, perm, :);
+        else
+            d.data = d.data(:, :, perm, :);
+        end
+    end
 end
 
 
