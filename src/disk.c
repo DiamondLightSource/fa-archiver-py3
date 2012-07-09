@@ -329,7 +329,7 @@ void print_header(FILE *out, struct disk_header *header)
         fprintf(out,
             "WARNING: Header validation failed, data below will be invalid\n");
     format_raw_mask(&header->archive_mask, header->fa_entry_count, mask_string);
-    if (!format_mask(
+    if (!format_readable_mask(
             &header->archive_mask, header->fa_entry_count,
             format_string, sizeof(format_string)))
         sprintf(format_string, "...");

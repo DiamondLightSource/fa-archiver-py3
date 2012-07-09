@@ -558,11 +558,11 @@ static void format_options(char *options)
 /* Sends request for archived or live data to archiver. */
 static bool request_data(FILE *stream)
 {
-    char raw_mask[RAW_MASK_BYTES+1];
-    format_raw_mask(&capture_mask, fa_entry_count, raw_mask);
+    char raw_mask[RAW_MASK_BYTES];
+    format_mask(&capture_mask, fa_entry_count, raw_mask);
     if (continuous_capture)
         return TEST_OK(fprintf(stream,
-            "SR%s%s\n", raw_mask, matlab_format ? "TEZ" : "") > 0);
+            "S%s%s\n", raw_mask, matlab_format ? "TEZ" : "") > 0);
     else
     {
         char format[16];

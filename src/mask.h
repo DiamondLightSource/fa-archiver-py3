@@ -55,12 +55,24 @@ unsigned int count_mask_bits(
     const struct filter_mask *mask, unsigned int fa_entry_count);
 
 
-#define RAW_MASK_BYTES  (MAX_FA_ENTRY_COUNT / 4)
+#define RAW_MASK_BYTES  (MAX_FA_ENTRY_COUNT / 4 + 2)
 
 /* Formats string represetation of mask into buffer, which must be at least
- * RAW_MASK_BYTES+1 bytes long.  Returns number of characters written. */
+ * RAW_MASK_BYTES bytes long.  Returns number of characters written. */
 unsigned int format_raw_mask(
     const struct filter_mask *mask, unsigned int fa_entry_count, char *buffer);
+
+/* Formats mask into buffer which must be at least RAW_MASK_BYTES bytes long
+ * using either readable or raw format, depending on the optimum format.
+ * Returns number of characters written. */
+unsigned int format_mask(
+    const struct filter_mask *mask, unsigned int fa_entry_count, char *buffer);
+
+/* Formats mask in canonical form into the given string buffer.  If the buffer
+ * overflows an error is reported and false returned. */
+bool format_readable_mask(
+    const struct filter_mask *mask, unsigned int fa_entry_count,
+    char *string, size_t length);
 
 /* Attempts to parse string as a mask specification, consisting of a sequence
  * of comma separated numbers or ranges, where a range is a pair of numbers
@@ -71,12 +83,6 @@ unsigned int format_raw_mask(
  * Prints error message and returns false if parsing fails. */
 bool parse_mask(
     const char **string, unsigned int fa_entry_count, struct filter_mask *mask);
-
-/* Formats mask in canonical form into the given string buffer.  If the buffer
- * overflows an error is reported and false returned. */
-bool format_mask(
-    struct filter_mask *mask, unsigned int fa_entry_count,
-    char *string, size_t length);
 
 /* Copies a single FA frame taking the mask into account, returns the number
  * of bytes copied into the target buffer (will be 8*count_mask_bits(mask)).
