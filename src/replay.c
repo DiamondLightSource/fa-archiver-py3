@@ -190,7 +190,8 @@ static void prepare_index_array(const struct matlab_matrix *ids, int columns)
     /* Use ids to replace column entries. */
     uint8_t *id_array = (uint8_t *) ids->real.start;
     for (int i = 0; i < columns; i ++)
-        column_index[id_array[i]] = i;
+        if (id_array[i] < fa_entry_count)
+            column_index[id_array[i]] = i;
 }
 
 static void prepare_id0(const struct matlab_matrix *id0)
