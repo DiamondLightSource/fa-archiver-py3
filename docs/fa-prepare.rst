@@ -18,13 +18,14 @@ Synopsis
 ========
 fa-prepare [*options*] *capture-mask* *archive-file*
 
-fa-prepare -H *archive-file*
+fa-prepare -H [*H-options*] *archive-file*
 
 
 Description
 ===========
 Prepares or reinitialises an archive file for use with fa-archiver_\(1).  Can
-also be used with `-H` to inspect the archive file.
+alternatively be used with `-H` to inspect the archive file without modifying
+it.
 
 The capture-mask is specified using the same syntax described for the pv-list
 for fa-capture_\(1), and defines which FA ids will be available for historical
@@ -45,9 +46,6 @@ For the remaining options the defaults are perfectly serviceable.
 
 Options
 =======
--H
-    If `-H` is used then the archive header is printed, and no other option can
-    be given.
 
 -s file-size
     Specify size of file.  The file will be resized to the given size with all
@@ -84,6 +82,56 @@ Options
 -q
     Use faster but quiet mechanism for allocating file buffer.  Only relevant if
     used with `-s` option.
+
+
+H Options
+=========
+
+If the `-H` option is given then the following options are available instead of
+the standard options listed above.
+
+-f
+    Normally if the archive header fails validation nothing is printed.  This
+    option will attempt to proceed anyway, with unpredictable results.
+
+-d
+    If this option is set then after printing the header (unless `-n` is
+    specified) the database index is printed.  The remaining options control the
+    printing of this index.
+
+    A typical index line looks as follows::
+
+        145: 1341064894.087784 / 6553599 / 145278818 => 6.553601 / 65536
+
+    while the currently written index block is flagged thus::
+
+        868: 1341063321.223783 / 6553601 / 144678010 <<<<<<<<<<<<<<<
+
+    This shows, in order: index block number, timestamp in seconds and
+    microseconds, duration of block in microseconds, communication controller
+    timestamp ("T0"), all followed by timestamp delta and T0 delta to previous
+    block.  The deltas are not meaningful for the current index block.
+
+-s first-block
+    Offset into index of first index block to print, otherwise printing will
+    start from the beginning of the index.
+
+-e last-block
+    Offset into index of last index block to print, otherwise printing will
+    proceed to the end of the index.
+
+-n
+    Setting this option will suppress printing of the header.  Combining `-n`
+    without `-d` will produce no output.
+
+-u
+    Normally the archive is locked while printing the index to ensure a
+    consistent display, but this option bypasses this lock so a live index can
+    be printed.
+
+-t
+    When printing the index displays the timestamp in UTC as well as its raw
+    value.
 
 
 See Also
