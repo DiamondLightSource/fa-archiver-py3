@@ -780,39 +780,37 @@ static bool write_header(uint64_t frames_written)
     uint32_t decimation = get_decimation();
     double frequency = sample_frequency / decimation;
 
-    char mat_header[4096];
-    int32_t *h = (int32_t *) mat_header;
-    prepare_matlab_header(&h, sizeof(mat_header));
+    DECLARE_MATLAB_BUFFER(header, 4096);
+    prepare_matlab_header(&header);
 
     /* Write out the decimation and sample frequency and timestamp. */
-    place_matlab_value(&h, "decimation", miINT32, &decimation);
-    place_matlab_value(&h, "f_s",        miDOUBLE, &frequency);
+    place_matlab_value(&header, "decimation", miINT32, &decimation);
+    place_matlab_value(&header, "f_s",        miDOUBLE, &frequency);
     if (check_id0)
-        place_matlab_vector(&h, "id0", miINT32, id_zero, gap_count + 1);
+        place_matlab_vector(&header, "id0", miINT32, id_zero, gap_count + 1);
 
     /* Write out the index array tying data back to original BPM ids. */
     uint8_t mask_ids[FA_ENTRY_COUNT];
     int mask_length = compute_mask_ids(mask_ids, &capture_mask);
-    place_matlab_vector(&h, "ids", miUINT8, mask_ids, mask_length);
+    place_matlab_vector(&header, "ids", miUINT8, mask_ids, mask_length);
 
     /* Write out the gap list data. */
     if (!continuous_capture)
     {
-        place_matlab_vector(&h, "gapix", miINT32, data_index, gap_count + 1);
-        place_matlab_vector(&h, "gaptimes",
+        place_matlab_vector(&header,
+            "gapix", miINT32, data_index, gap_count + 1);
+        place_matlab_vector(&header, "gaptimes",
             miDOUBLE, gap_timestamps, gap_count + 1);
     }
 
     /* Finally write out the matrix mat_header for the fa data. */
     int field_count = count_data_bits(data_mask);
-    place_matrix_header(&h, data_name,
+    place_matrix_header(&header, data_name,
         miINT32, squeeze,
         FA_ENTRY_SIZE * field_count * mask_length * frames_written,
         4, 2, field_count, mask_length, frames_written);
 
-    ASSERT_OK((char *) h < mat_header + sizeof(mat_header));
-    return TEST_OK(
-        fwrite(mat_header, (char *) h - mat_header, 1, output_file) == 1);
+    return write_matlab_buffer(output_file, &header);
 }
 
 
@@ -846,8 +844,7 @@ static void compute_timestamps(
 /* Writes timestamps vector at end of stream. */
 static bool write_footer(unsigned int frames_written, time_t local_offset)
 {
-    char header[256];       // Just need space for vector heading
-    int32_t *h = (int32_t *) header;
+    DECLARE_MATLAB_BUFFER(header, 512); // Just need space for vector heading
 
     /* Compute the timestamps from the arrays of timestamps we've read. */
     struct extended_timestamp *timestamps = timestamps_array;
@@ -858,12 +855,12 @@ static bool write_footer(unsigned int frames_written, time_t local_offset)
     double day_zero = floor(timestamp);
 
     /* Output the matlab values. */
-    place_matlab_value(&h, "timestamp", miDOUBLE, &timestamp);
-    place_matlab_value(&h, "day", miDOUBLE, &day_zero);
+    place_matlab_value(&header, "timestamp", miDOUBLE, &timestamp);
+    place_matlab_value(&header, "day", miDOUBLE, &day_zero);
     place_matrix_header(
-        &h, "t", miDOUBLE, NULL,
+        &header, "t", miDOUBLE, NULL,
         sizeof(double) * frames_written, 2, 1, frames_written);
-    bool ok = TEST_OK(fwrite(header, (char *) h - header, 1, output_file) == 1);
+    bool ok = write_matlab_buffer(output_file, &header);
 
     if (!subtract_day_zero)
         day_zero = 0;

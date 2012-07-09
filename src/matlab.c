@@ -89,37 +89,72 @@ int compute_mask_ids(uint8_t *array, struct filter_mask *mask)
 }
 
 
-static void write_matlab_string(int32_t **hh, const char *string)
+static void *ensure_buffer(struct matlab_buffer *buffer, size_t size)
 {
-    int32_t *h = *hh;
-    int l = strlen(string);
-    *h++ = miINT8;      *h++ = l;
-    memcpy(h, string, l);
-    *hh = h + 2 * ((l + 7) / 8);
+    ASSERT_OK(buffer->size + size <= buffer->max_size);
+    void *result = buffer->buffer + buffer->size;
+    buffer->size += size;
+    return result;
+}
+
+static void write_buffer(struct matlab_buffer *buffer, void *data, size_t size)
+{
+    void *target = ensure_buffer(buffer, size);
+    memcpy(target, data, size);
+}
+
+static uint32_t *ensure_buffer_uint32(struct matlab_buffer *buffer)
+{
+    return ensure_buffer(buffer, sizeof(int32_t));
+}
+
+static void write_buffer_uint32(struct matlab_buffer *buffer, uint32_t value)
+{
+    write_buffer(buffer, &value, sizeof(uint32_t));
+}
+
+
+bool write_matlab_buffer(FILE *output, struct matlab_buffer *buffer)
+{
+    return TEST_OK(fwrite(buffer->buffer, buffer->size, 1, output) == 1);
+}
+
+
+static void write_matlab_string(
+    struct matlab_buffer *buffer, const char *string)
+{
+    size_t l = strlen(string);
+    write_buffer_uint32(buffer, miINT8);
+    write_buffer_uint32(buffer, l);
+    /* Need to pad string size to multiple of 8. */
+    memcpy(ensure_buffer(buffer, (l + 7) & ~7), string, l);
 }
 
 
 /* Returns the number of bytes of padding required after data_length bytes of
  * following data to ensure that the entire matrix is padded to 8 bytes. */
 int place_matrix_header(
-    int32_t **hh, const char *name, int data_type,
+    struct matlab_buffer *buffer, const char *name, int data_type,
     bool *squeeze, int data_length, int dimensions, ...)
 {
     va_list dims;
     va_start(dims, dimensions);
 
-    int32_t *h = *hh;
-    *h++ = miMATRIX;
-    int32_t *l = h++;   // total length will be written here.
+    write_buffer_uint32(buffer, miMATRIX);
+    /* Remember location where total length will be written. */
+    uint32_t *l = ensure_buffer_uint32(buffer);
+
     // Matrix flags: consists of two uint32 words encoding the class.
-    *h++ = miUINT32;    *h++ = 8;
-    *h++ = mxDOUBLE_CLASS;
-    *h++ = 0;
+    write_buffer_uint32(buffer, miUINT32);
+    write_buffer_uint32(buffer, 8);
+    write_buffer_uint32(buffer, mxDOUBLE_CLASS);
+    write_buffer_uint32(buffer, 0);
 
     // Matrix dimensions: one int32 for each dimension
-    *h++ = miINT32;
-    int32_t *dim_size = h++;    // Size of dimensions to be written here
-    int squeezed_dims = 0;
+    write_buffer_uint32(buffer, miINT32);
+    // Size of dimensions to be written here
+    uint32_t *dim_size = ensure_buffer_uint32(buffer);
+    int total_dims = 0;
     for (int i = 0; i < dimensions; i ++)
     {
         int size = va_arg(dims, int32_t);
@@ -128,67 +163,62 @@ int place_matrix_header(
             ;
         else
         {
-            *h++ = size;
-            squeezed_dims += 1;
+            write_buffer_uint32(buffer, size);
+            total_dims += 1;
         }
     }
-    *dim_size = squeezed_dims * sizeof(int32_t);
-    h += squeezed_dims & 1;    // Padding if required
+    *dim_size = total_dims * sizeof(int32_t);
+    if (total_dims & 1)
+        write_buffer_uint32(buffer, 0);         // Padding if required
 
     // Element name
-    write_matlab_string(&h, name);
+    write_matlab_string(buffer, name);
 
     // Data header: data follows directly after.
-    int padding = (8 - data_length) & 7;
-    *h++ = data_type;   *h++ = data_length;
-    *l = data_length + (h - l - 1) * sizeof(int32_t) + padding;
+    write_buffer_uint32(buffer, data_type);
+    write_buffer_uint32(buffer, data_length);
 
-    *hh = h;
+    /* Total size of matrix element goes from just after l to the end of the
+     * data that's about to be written plus padding to multiple of 8 bytes. */
+    int padding = (8 - data_length) & 7;
+    *l = ensure_buffer(buffer, 0) - (void *) l - sizeof(int32_t) +
+        data_length + padding;
+
     return padding;
 }
 
 
-/* Advances pointer by length together with the precomputed padding. */
-static void pad(int32_t **hh, int length, int padding)
-{
-    *hh = (int32_t *)((void *)*hh + length + padding);
-}
-
-
 void place_matlab_value(
-    int32_t **hh, const char *name, int data_type, void *data)
+    struct matlab_buffer *buffer, const char *name, int data_type, void *data)
 {
     size_t data_size = lookup_size(data_type);
     int padding = place_matrix_header(
-        hh, name, data_type, NULL, data_size, 1, 1);
-    memcpy(*hh, data, data_size);
-    pad(hh, data_size, padding);
+        buffer, name, data_type, NULL, data_size, 1, 1);
+    memcpy(ensure_buffer(buffer, data_size + padding), data, data_size);
 }
 
 
 void place_matlab_vector(
-    int32_t **hh, const char *name, int data_type,
+    struct matlab_buffer *buffer, const char *name, int data_type,
     void *data, int vector_length)
 {
     int data_length = lookup_size(data_type) * vector_length;
     int padding = place_matrix_header(
-        hh, name, data_type, NULL, data_length, 2, 1, vector_length);
-    memcpy(*hh, data, data_length);
-    pad(hh, data_length, padding);
+        buffer, name, data_type, NULL, data_length, 2, 1, vector_length);
+    memcpy(ensure_buffer(buffer, data_length + padding), data, data_length);
 }
 
 
-void prepare_matlab_header(int32_t **hh, size_t buf_size)
+void prepare_matlab_header(struct matlab_buffer *buffer)
 {
-    char *mat_header = (char *) *hh;
-    memset(mat_header, 0, buf_size);
+    const char *description =
+        "MATLAB 5.0 MAT-file generated from FA sniffer data";
+    size_t l = strlen(description);
 
-    /* The first 128 bytes are the description and format marks. */
-    memset(mat_header, ' ', 124);
-    sprintf(mat_header, "MATLAB 5.0 MAT-file generated from FA sniffer data");
-    mat_header[strlen(mat_header)] = ' ';
-    *((uint32_t *)(mat_header + 124)) = MATLAB_HEADER_MARK;
-    *hh = (int32_t *) (mat_header + 128);
+    char *mat_header = ensure_buffer(buffer, 124);
+    memcpy(mat_header, description, l);
+    memset(mat_header + l, ' ', 124 - l);
+    write_buffer_uint32(buffer, MATLAB_HEADER_MARK);
 }
 
 

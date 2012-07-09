@@ -43,16 +43,32 @@
 #define miCOMPRESSED    15
 
 
+/* Buffer used to prepare Matlab structures. */
+struct matlab_buffer {
+    size_t max_size;
+    size_t size;
+    void *buffer;
+};
+
+#define DECLARE_MATLAB_BUFFER(buf, buf_size) \
+    struct matlab_buffer buf = { \
+        .max_size = buf_size, \
+        .size = 0, \
+        .buffer = alloca(buf_size) }
+
+
 /* Functions for writing matlab files. */
-void prepare_matlab_header(int32_t **hh, size_t buf_size);
+void prepare_matlab_header(struct matlab_buffer *buffer);
 int place_matrix_header(
-    int32_t **hh, const char *name, int data_type,
+    struct matlab_buffer *buffer, const char *name, int data_type,
     bool *squeeze, int data_length, int dimensions, ...);
 void place_matlab_value(
-    int32_t **hh, const char *name, int data_type, void *data);
+    struct matlab_buffer *buffer, const char *name, int data_type, void *data);
 void place_matlab_vector(
-    int32_t **hh, const char *name, int data_type,
+    struct matlab_buffer *buffer, const char *name, int data_type,
     void *data, int vector_length);
+
+bool write_matlab_buffer(FILE *output, struct matlab_buffer *buffer);
 
 
 /* Functions for reading matlab files. */
