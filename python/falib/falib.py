@@ -40,25 +40,30 @@ __all__ = [
     'Server']
 
 
-MASK_SIZE = 256         # Number of possible bits in a mask
-
-def normalise_mask(mask):
-    nmask = numpy.zeros(MASK_SIZE / 8, dtype=numpy.uint8)
-    for i in mask:
-        nmask[i // 8] |= 1 << (i % 8)
-    return nmask
-
 def format_mask(mask):
-    '''Converts a mask (a set of integers in the range 0 to 255) into a 64
-    character hexadecimal coded string suitable for passing to the server.'''
-    return ''.join(['%02X' % x for x in reversed(mask)])
+    '''Returns number of bits set in mask and a mask request suitable for
+    sending to the server.  The parameter mask should be a list of FA ids.'''
 
-def count_mask(mask):
-    n = 0
-    for i in range(MASK_SIZE):
-        if mask[i // 8] & (1 << (i % 8)):
-            n += 1
-    return n
+    # Normalise the mask by removing duplicates and sorting into order.
+    mask = sorted(list(set(mask)))
+    count = len(mask)
+
+    # Format mask pattern
+    ranges = []
+    first = mask[0]
+    last = mask[0]
+    for id in mask[1:] + [None]:
+        if id != last + 1:
+            # New id breaks range, complete the range and write it out.
+            if last == first:
+                ranges.append('%d' % last)
+            else:
+                ranges.append('%d-%d' % (first, last))
+            first = id
+        last = id
+
+    return count, ','.join(ranges)
+
 
 class connection:
     class EOF(Exception):
@@ -115,14 +120,13 @@ class subscription(connection):
 
     def __init__(self, mask, decimated=False, uncork=False, **kargs):
         connection.__init__(self, **kargs)
-        self.mask = normalise_mask(mask)
-        self.count = count_mask(self.mask)
+        self.count, format = format_mask(mask)
         self.decimated = decimated
 
         flags = ''
         if uncork: flags = flags + 'U'
         if decimated: flags = flags + 'D'
-        self.sock.send('SR%s%s\n' % (format_mask(self.mask), flags))
+        self.sock.send('S%s%s\n' % (format, flags))
         c = self.recv(1)
         if c != chr(0):
             raise self.Error((c + self.recv())[:-1])    # Discard trailing \n
@@ -162,9 +166,13 @@ class Server:
         self.server = server
         self.port = port
 
-        response = self.server_command('CFC\n').split('\n')
+        response = self.server_command('CFCK\n').split('\n')
         self.sample_frequency = float(response[0])
         self.decimation = int(response[1])
+        try:
+            self.fa_id_count = int(response[2])
+        except ValueError:
+            self.fa_id_count = 256      # If server responds with error message
 
     def server_command(self, command):
         return server_command(command, server = self.server, port = self.port)

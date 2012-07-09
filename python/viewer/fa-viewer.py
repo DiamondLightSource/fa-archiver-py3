@@ -102,7 +102,8 @@ class Viewer:
         ui.channel_group.addItems([l[0] for l in BPM_list])
         ui.show_curves.addItems(['Show X&Y', 'Show X', 'Show Y'])
 
-        ui.channel_id.setValidator(QtGui.QIntValidator(0, 255, ui))
+        ui.channel_id.setValidator(
+            QtGui.QIntValidator(0, server.fa_id_count - 1, ui))
 
         ui.position_xy = QtGui.QLabel('', ui.statusbar)
         ui.statusbar.addPermanentWidget(ui.position_xy)
