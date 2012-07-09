@@ -339,7 +339,8 @@ static bool do_dump_index(int file_fd, struct disk_header *header)
             dump_start = block_count;
         if (dump_end > block_count)
             dump_end = block_count;
-        struct data_index *last_block = NULL;
+        struct data_index *last_block =
+            &data_index[dump_start > 0 ? dump_start - 1 : block_count - 1];
         for (unsigned int i = dump_start; i < dump_end; i ++)
         {
             struct data_index *block = &data_index[i];
@@ -351,7 +352,7 @@ static bool do_dump_index(int file_fd, struct disk_header *header)
                 block->duration, block->id_zero);
             if (i == header->current_major_block)
                 printf(" <<<<<<<<<<<<<<<");
-            else if (last_block)
+            else
             {
                 uint64_t delta_t = block->timestamp - last_block->timestamp;
                 printf(" => %1"PRIu64".%06"PRIu64" / %u",
