@@ -807,7 +807,6 @@ static bool write_header(uint64_t frames_written)
     int field_count = count_data_bits(data_mask);
     place_matrix_header(&header, data_name,
         miINT32, squeeze,
-        FA_ENTRY_SIZE * field_count * mask_length * frames_written,
         4, 2, field_count, mask_length, frames_written);
 
     return write_matlab_buffer(output_file, &header);
@@ -858,8 +857,7 @@ static bool write_footer(unsigned int frames_written, time_t local_offset)
     place_matlab_value(&header, "timestamp", miDOUBLE, &timestamp);
     place_matlab_value(&header, "day", miDOUBLE, &day_zero);
     place_matrix_header(
-        &header, "t", miDOUBLE, NULL,
-        sizeof(double) * frames_written, 2, 1, frames_written);
+        &header, "t", miDOUBLE, NULL, 2, 1, frames_written);
     bool ok = write_matlab_buffer(output_file, &header);
 
     if (!subtract_day_zero)

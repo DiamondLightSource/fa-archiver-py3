@@ -61,7 +61,7 @@ struct matlab_buffer {
 void prepare_matlab_header(struct matlab_buffer *buffer);
 int place_matrix_header(
     struct matlab_buffer *buffer, const char *name, int data_type,
-    bool *squeeze, int data_length, int dimensions, ...);
+    bool *squeeze, int dimensions, ...);
 void place_matlab_value(
     struct matlab_buffer *buffer, const char *name, int data_type, void *data);
 void place_matlab_vector(

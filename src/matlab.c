@@ -135,7 +135,7 @@ static void write_matlab_string(
  * following data to ensure that the entire matrix is padded to 8 bytes. */
 int place_matrix_header(
     struct matlab_buffer *buffer, const char *name, int data_type,
-    bool *squeeze, int data_length, int dimensions, ...)
+    bool *squeeze, int dimensions, ...)
 {
     va_list dims;
     va_start(dims, dimensions);
@@ -155,9 +155,11 @@ int place_matrix_header(
     // Size of dimensions to be written here
     uint32_t *dim_size = ensure_buffer_uint32(buffer);
     int total_dims = 0;
+    size_t data_length = lookup_size(data_type);
     for (int i = 0; i < dimensions; i ++)
     {
         int size = va_arg(dims, int32_t);
+        data_length *= size;
         if (size == 1  &&  squeeze != NULL  &&  squeeze[i])
             /* Squeeze this dimension out by ignoring it altogether. */
             ;
@@ -192,8 +194,7 @@ void place_matlab_value(
     struct matlab_buffer *buffer, const char *name, int data_type, void *data)
 {
     size_t data_size = lookup_size(data_type);
-    int padding = place_matrix_header(
-        buffer, name, data_type, NULL, data_size, 1, 1);
+    int padding = place_matrix_header(buffer, name, data_type, NULL, 1, 1);
     memcpy(ensure_buffer(buffer, data_size + padding), data, data_size);
 }
 
@@ -204,7 +205,7 @@ void place_matlab_vector(
 {
     int data_length = lookup_size(data_type) * vector_length;
     int padding = place_matrix_header(
-        buffer, name, data_type, NULL, data_length, 2, 1, vector_length);
+        buffer, name, data_type, NULL, 2, 1, vector_length);
     memcpy(ensure_buffer(buffer, data_length + padding), data, data_length);
 }
 
