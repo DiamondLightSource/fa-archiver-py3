@@ -4,6 +4,10 @@ ifndef TOP
 $(error Do not call this make file directly)
 endif
 
+CC_NAME = $(shell $(CC) --version | sed 's/ .*//;q')
+CC_VERSION = $(shell $(CC) --version | sed -r 's/[^ ]* [^ ]* ([^ ]*) .*/\1/;q')
+
+
 PROGRAM_PREFIX = fa-
 
 SHELL = bash
@@ -27,8 +31,14 @@ CFLAGS += -Wredundant-decls
 CFLAGS += -Wmissing-prototypes
 CFLAGS += -Wmissing-declarations
 CFLAGS += -Wstrict-prototypes
-CFLAGS += -Wconversion
 CFLAGS += -Wcast-qual
+
+ifeq ($(CC_NAME)-$(CC_VERSION),cc-4.1.2)
+    # Suppress this flag for gcc 4.1.2 because it behaves stupidly (warnings
+    # about prototype changing width?!)
+else
+    CFLAGS += -Wconversion
+endif
 
 CFLAGS += -msse
 CFLAGS += -msse2
