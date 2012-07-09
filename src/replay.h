@@ -28,4 +28,5 @@
  */
 
 /* Sniffer interface for replay. */
-const struct sniffer_context *initialise_replay(const char *replay_filename);
+const struct sniffer_context *initialise_replay(
+    const char *replay_filename, unsigned int fa_entry_count);

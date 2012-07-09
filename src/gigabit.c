@@ -73,6 +73,8 @@ struct libera_payload {
 
 
 static int gigabit_socket;
+static int fa_frame_size;
+
 
 /* Receives and decodes a single Libera datagram from the gigabit ethernet
  * interface.  */
@@ -81,7 +83,7 @@ static bool read_datagram(struct fa_entry *row)
     COMPILE_ASSERT(LIBERA_BLOCK_SIZE == 16);
 
     /* As reading can be quite sparse, zero initialise the row. */
-    memset(row, 0, sizeof(struct fa_row));
+    memset(row, 0, fa_frame_size);
 
     /* Read a datagram from the socket. */
     struct libera_payload buffer[LIBERAS_PER_DATAGRAM];
@@ -110,8 +112,11 @@ static bool read_gigabit_block(
     struct fa_row *block, size_t block_size, uint64_t *timestamp)
 {
     bool ok = true;
-    for (unsigned int i = 0; ok  &&  i < block_size / FA_FRAME_SIZE; i ++)
-        ok = read_datagram(block[i].row);
+    for (unsigned int i = 0; ok  &&  i < block_size / fa_frame_size; i ++)
+    {
+        ok = read_datagram(block->row);
+        block = (void *) block + fa_frame_size;
+    }
     *timestamp = get_timestamp();
     return ok;
 }
@@ -159,7 +164,12 @@ static const struct sniffer_context sniffer_gigabit = {
 };
 
 
-const struct sniffer_context *initialise_gigabit(void)
+const struct sniffer_context *initialise_gigabit(unsigned int fa_entry_count)
 {
-    return open_gigabit_socket() ? &sniffer_gigabit : NULL;
+    fa_frame_size = fa_entry_count * FA_ENTRY_SIZE;
+    bool ok =
+        TEST_OK_(fa_entry_count >= LIBERAS_PER_DATAGRAM,
+            "FA capture count too small")  &&
+        open_gigabit_socket();
+    return ok ? &sniffer_gigabit : NULL;
 }

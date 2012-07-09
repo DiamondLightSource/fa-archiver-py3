@@ -49,7 +49,8 @@
 #include "replay.h"
 
 
-static int column_index[FA_ENTRY_COUNT];    // Converts FA id to data column
+static int *column_index;           // Converts FA id to data column
+static unsigned int fa_entry_count;
 
 static int replay_row_count;        // Total number of rows available for replay
 static char *replay_first_row;      // Pointer to first row of data
@@ -84,12 +85,12 @@ static bool read_replay_block(
     if (interrupted)
         return false;
 
-    int row_count = size / sizeof(struct fa_row);
+    int row_count = size / fa_entry_count / FA_ENTRY_SIZE;
     for (int i = 0; i < row_count; i ++)
     {
-        rows[i].row[0].x = replay_id0;
-        rows[i].row[0].y = replay_id0;
-        convert_row(&rows[i]);
+        rows->row[0].x = replay_id0;
+        rows->row[0].y = replay_id0;
+        convert_row(rows);
 
         replay_index += 1;
         if (replay_index < replay_row_count)
@@ -103,6 +104,8 @@ static bool read_replay_block(
             replay_index = 0;
             replay_id0 = replay_id0_start;
         }
+
+        rows = (void *) rows + fa_entry_count * FA_ENTRY_SIZE;
     }
 
     sleep_until(100000 * row_count);    // 100us = 100,000ns per row
@@ -119,7 +122,7 @@ static bool read_replay_block(
     static void convert_xy_##type(struct fa_row *row) \
     { \
         struct fa_entry *entry = &row->row[1]; \
-        for (int j = 1; j < FA_ENTRY_COUNT; j ++) \
+        for (unsigned int j = 1; j < fa_entry_count; j ++) \
         { \
             type *field = &((type *) replay_row)[2 * column_index[j]]; \
             entry->x = (int32_t) field[0]; \
@@ -171,7 +174,8 @@ static void prepare_data_array(
 
     /* Create a default column index by just cycling through the available
      * columns. */
-    for (int i = 1; i < FA_ENTRY_COUNT; i ++)
+    column_index = calloc(sizeof(int), fa_entry_count);
+    for (unsigned int i = 1; i < fa_entry_count; i ++)
         column_index[i] = i % *columns;
 
     /* By default replay id0 will start at zero. */
@@ -275,8 +279,11 @@ static const struct sniffer_context sniffer_replay = {
 };
 
 
-const struct sniffer_context *initialise_replay(const char *replay_filename)
+const struct sniffer_context *initialise_replay(
+    const char *replay_filename, unsigned int _fa_entry_count)
 {
+    fa_entry_count = _fa_entry_count;
+
     int file;
     struct region region;
     bool ok =

@@ -29,4 +29,4 @@
  */
 
 /* Sniffer interface for gigabit ethernet. */
-const struct sniffer_context *initialise_gigabit(void);
+const struct sniffer_context *initialise_gigabit(unsigned int fa_entry_count);

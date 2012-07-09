@@ -103,6 +103,7 @@ struct disk_header {
     uint32_t first_decimation_log2;  // Decimation factors, stored as shifts
     uint32_t second_decimation_log2;
     uint32_t input_block_size;       // Controls read size from sniffer device
+    uint32_t fa_entry_count;    // Number of FA samples in a single frame
 
     /* Description of high level data structure.  The data offsets are a
      * multiple of page size and the data sizes are rounded up to a multiple
@@ -192,7 +193,8 @@ bool initialise_header(
     uint32_t output_block_size,
     uint32_t first_decimation,
     uint32_t second_decimation,
-    double sample_frequency);
+    double sample_frequency,
+    uint32_t fa_entry_count);
 /* Reads the file size of the given file. */
 bool get_filesize(int disk_fd, uint64_t *file_size);
 /* Checks the given header for consistency. */

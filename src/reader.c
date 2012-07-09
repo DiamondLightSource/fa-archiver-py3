@@ -60,6 +60,7 @@
 /* Each connection opens its own file handle on the archive.  This is the
  * archive file. */
 static const char *archive_filename;
+static unsigned int fa_entry_count;         // Read from header at startup
 
 
 
@@ -204,7 +205,7 @@ static void release_buffer(struct write_buffer *buffer, size_t length)
 
 struct iter_mask {
     unsigned int count;
-    uint16_t index[FA_ENTRY_COUNT];
+    uint16_t index[MAX_FA_ENTRY_COUNT];
 };
 
 
@@ -216,7 +217,7 @@ static bool mask_to_archive(
     unsigned int ix = 0;
     unsigned int n = 0;
     bool ok = true;
-    for (unsigned int i = 0; ok  &&  i < FA_ENTRY_COUNT; i ++)
+    for (unsigned int i = 0; ok  &&  i < fa_entry_count; i ++)
     {
         if (test_mask_bit(mask, i))
         {
@@ -830,7 +831,7 @@ static bool parse_read_request(const char **string, struct read_parse *parse)
         parse_char(string, 'R')  &&
         parse_source(string, parse)  &&
         parse_char(string, 'M')  &&
-        parse_mask(string, &parse->read_mask)  &&
+        parse_mask(string, fa_entry_count, &parse->read_mask)  &&
         parse_time_or_seconds(string, &parse->start)  &&
         parse_end(string, &parse->end, &parse->samples)  &&
         parse_options(string, parse);
@@ -856,9 +857,10 @@ bool process_read(int scon, const char *client_name, const char *buf)
 
 bool initialise_reader(const char *archive)
 {
-    archive_filename = archive;
-
     const struct disk_header *header = get_header();
+
+    archive_filename = archive;
+    fa_entry_count = header->fa_entry_count;
 
     /* Initialise dynamic part of reader structures. */
     fa_reader.samples_per_fa_block  = header->major_sample_count;
@@ -871,8 +873,9 @@ bool initialise_reader(const char *archive)
     dd_reader.samples_per_fa_block  = header->dd_sample_count;
 
     /* Make the buffer size large enough for a complete FA major block for one
-     * BPM id, allocate 256 buffers to allow one user to capture a complete set
-     * of ids. */
-    initialise_buffer_pool(FA_ENTRY_SIZE * header->major_sample_count, 256);
+     * BPM id, allocate enough buffers to allow one user to capture a complete
+     * set of ids. */
+    initialise_buffer_pool(
+        FA_ENTRY_SIZE * header->major_sample_count, fa_entry_count);
     return true;
 }

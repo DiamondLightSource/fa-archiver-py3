@@ -85,9 +85,10 @@ bool initialise_header(
     uint32_t output_block_size,
     uint32_t first_decimation,
     uint32_t second_decimation,
-    double sample_frequency)
+    double sample_frequency,
+    uint32_t fa_entry_count)
 {
-    uint32_t archive_mask_count = count_mask_bits(archive_mask);
+    uint32_t archive_mask_count = count_mask_bits(archive_mask, fa_entry_count);
 
     /* Header signature. */
     memset(header, 0, sizeof(*header));
@@ -100,6 +101,7 @@ bool initialise_header(
     header->first_decimation_log2 = uint_log2(first_decimation);
     header->second_decimation_log2 = uint_log2(second_decimation);
     header->input_block_size = input_block_size;
+    header->fa_entry_count = fa_entry_count;
 
     /* Compute the fixed size parameters describing the data layout. */
     header->major_sample_count = output_block_size / FA_ENTRY_SIZE;
@@ -186,9 +188,12 @@ bool validate_header(struct disk_header *header, uint64_t file_size)
 {
     COMPILE_ASSERT(sizeof(struct disk_header) <= DISK_HEADER_SIZE);
 
-    uint32_t input_sample_count = header->input_block_size / FA_FRAME_SIZE;
+    size_t fa_frame_size = header->fa_entry_count * FA_ENTRY_SIZE;
+    uint32_t input_sample_count = header->input_block_size / fa_frame_size;
     uint32_t first_decimation  = 1 << header->first_decimation_log2;
     uint32_t second_decimation = 1 << header->second_decimation_log2;
+    unsigned int archive_mask_count =
+        count_mask_bits(&header->archive_mask, header->fa_entry_count);
     errno = 0;      // Suppresses invalid error report from TEST_OK_ failures
     return
         /* Basic header validation. */
@@ -196,15 +201,16 @@ bool validate_header(struct disk_header *header, uint64_t file_size)
 
         /* Data capture parameter validation. */
         TEST_OK_(
-            count_mask_bits(&header->archive_mask) ==
-                header->archive_mask_count,
+            archive_mask_count == header->archive_mask_count,
             "Inconsistent archive mask: %d != %"PRIu32,
-                count_mask_bits(&header->archive_mask),
-                header->archive_mask_count)  &&
+                archive_mask_count, header->archive_mask_count)  &&
         TEST_OK_(header->archive_mask_count > 0, "Empty capture mask")  &&
         TEST_OK_(header->total_data_size <= file_size,
             "Data size in header larger than file size: %"PRIu64" > %"PRIu64,
             header->total_data_size, file_size)  &&
+        test_power_of_2(header->fa_entry_count, "FA entry count")  &&
+        TEST_OK_(header->fa_entry_count <= MAX_FA_ENTRY_COUNT,
+            "FA entry count too large")  &&
 
         /* Data parameter validation. */
         TEST_OK_(
@@ -299,9 +305,9 @@ bool validate_header(struct disk_header *header, uint64_t file_size)
             header->major_sample_count > 1, "Output block size too small")  &&
         TEST_OK_(header->major_block_count > 1, "Data file too small")  &&
         TEST_OK_(
-            header->input_block_size % FA_FRAME_SIZE == 0,
+            header->input_block_size % fa_frame_size == 0,
             "Input block size doesn't match frame size: %"PRIu32", %d",
-                header->input_block_size, FA_FRAME_SIZE == 0)  &&
+                header->input_block_size, fa_frame_size == 0)  &&
         TEST_OK_(
             header->major_sample_count % input_sample_count == 0,
             "Input and major block sizes don't match: %"PRIu32", %d",
@@ -320,9 +326,10 @@ void print_header(FILE *out, struct disk_header *header)
     if (!validate_version(header))
         fprintf(out,
             "WARNING: Header validation failed, data below will be invalid\n");
-    format_raw_mask(&header->archive_mask, mask_string);
+    format_raw_mask(&header->archive_mask, header->fa_entry_count, mask_string);
     if (!format_mask(
-            &header->archive_mask, format_string, sizeof(format_string)))
+            &header->archive_mask, header->fa_entry_count,
+            format_string, sizeof(format_string)))
         sprintf(format_string, "...");
     double sample_frequency =
         header->major_sample_count * 1e6 / header->last_duration;
@@ -331,11 +338,13 @@ void print_header(FILE *out, struct disk_header *header)
     uint32_t first_decimation  = 1 << header->first_decimation_log2;
     uint32_t second_decimation = 1 << header->second_decimation_log2;
     double seconds = total_sample_count / sample_frequency;
+    size_t fa_frame_size = header->fa_entry_count * FA_ENTRY_SIZE;
     fprintf(out,
         "FA sniffer archive: %.7s, v%d.\n"
         "Archiving: %s\n    BPMS: %s\n"
         "Decimation %"PRIu32", %"PRIu32" => %"PRIu32", recording %u BPMs\n"
-        "Input block size = %"PRIu32" bytes, %zu frames\n"
+        "Input block size = %"PRIu32" bytes, %zu frames, "
+            "%"PRIu32" samples per frame\n"
         "Major block size = %"PRIu32" bytes, %"PRIu32" samples\n"
         "Total size = %"PRIu32" major blocks = %"PRIu64" samples"
             " = %"PRIu64" bytes\n"
@@ -349,7 +358,8 @@ void print_header(FILE *out, struct disk_header *header)
         mask_string, format_string,
         first_decimation, second_decimation,
             first_decimation * second_decimation, header->archive_mask_count,
-        header->input_block_size, header->input_block_size / FA_FRAME_SIZE,
+        header->input_block_size, header->input_block_size / fa_frame_size,
+            header->fa_entry_count,
         header->major_block_size, header->major_sample_count,
         header->major_block_count, total_sample_count, header->total_data_size,
         (int) seconds / 3600, ((int) seconds / 60) % 60, fmod(seconds, 60),

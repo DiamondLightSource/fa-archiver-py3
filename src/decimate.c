@@ -45,16 +45,17 @@
 #include "decimate.h"
 
 
-/* A couple of workspace declarations. */
+/* Workspace declarations. */
 struct fa_entry_int64  { int64_t x, y; };
 struct fa_entry_double { double  x, y; };
-struct fa_row_int64  { struct fa_entry_int64  row[FA_ENTRY_COUNT]; };
-struct fa_row_double { struct fa_entry_double row[FA_ENTRY_COUNT]; };
+struct fa_row_int64 { struct fa_entry_int64 row[0]; };
 
 
 /* Incoming buffer of FA blocks and associated reader. */
 static struct reader_state *reader;
 static size_t fa_block_size;
+static unsigned int fa_entry_count;
+static size_t sizeof_row_int64;
 
 /* Buffer of decimated blocks. */
 static struct buffer *decimation_buffer;
@@ -64,38 +65,48 @@ static bool running;
 static pthread_t decimate_id;
 
 
+
+/* Macros for indexing a pointers to arrays of fa_row and fa_row_int64
+ * structures. */
+#define INDEX_ROW(base, offset) \
+    ((struct fa_row *) ( \
+        (void *) (base) + (offset) * fa_entry_count * FA_ENTRY_SIZE))
+#define INDEX_ROW64(base, offset) \
+    ((struct fa_row_int64 *) ((void *) (base) + (offset) * sizeof_row_int64))
+
+
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /* CIC configuration. */
 
 
 /* CIC configuration settings read from configuration file. */
-static int decimation_factor;               // CIC decimation factor
-static struct uint_array comb_orders;       // Array of comb orders
+static unsigned int decimation_factor;          // CIC decimation factor
+static struct uint_array comb_orders;           // Array of comb orders
 static struct double_array compensation_filter; // Smoothes out overall response
-static int filter_decimation = 1;           // Extra decimation at FIR stage
-static int output_sample_count = 100;       // Samples per output block
-static int output_block_count = 50;         // Total number of buffered blocks
+static unsigned int filter_decimation = 1;      // Extra decimation at FIR stage
+static unsigned int output_sample_count = 100;  // Samples per output block
+static unsigned int output_block_count = 50;    // Number of buffered blocks
 
 /* Description of settings above to be read from configuration file. */
 static const struct config_entry config_table[] = {
-    CONFIG(decimation_factor,   parse_int),
+    CONFIG(decimation_factor,   parse_uint),
     CONFIG(comb_orders,         parse_uint_array),
     CONFIG(compensation_filter, parse_double_array),
-    CONFIG(filter_decimation,   parse_int, OPTIONAL),
-    CONFIG(output_sample_count, parse_int, OPTIONAL),
-    CONFIG(output_block_count,  parse_int, OPTIONAL),
+    CONFIG(filter_decimation,   parse_uint, OPTIONAL),
+    CONFIG(output_sample_count, parse_uint, OPTIONAL),
+    CONFIG(output_block_count,  parse_uint, OPTIONAL),
 };
 
 
 /* Workspace initialised from CIC configuration. */
-static int cic_order;
+static unsigned int cic_order;
 /* One accumulator for each order. */
 static struct fa_row_int64 *cic_accumulators;
 /* The comb histories are moderately complicated: for each number N[M] =
  * comb_orders.data[M-1] for M = 1..comb_orders.count we have an array of NxM
  * histories and an index cycling from 0 to M-1. */
 static struct fa_row_int64 **comb_histories;
-static int *comb_history_index;
+static unsigned int *comb_history_index;
 
 static struct fa_row_int64 *filter_buffer;
 static double filter_scaling;
@@ -120,16 +131,15 @@ static bool initialise_configuration(void)
         return false;
 
     /* One accumulator for each stage. */
-    cic_accumulators = calloc(cic_order, sizeof(struct fa_row_int64));
+    cic_accumulators = calloc(cic_order, sizeof_row_int64);
     /* Array of history buffers for variable length comb stage. */
     comb_histories = calloc(comb_orders.count, sizeof(struct fa_row_int64 *));
     for (unsigned int i = 0; i < comb_orders.count; i ++)
         comb_histories[i] = calloc(
-            comb_orders.data[i] * (i + 1), sizeof(struct fa_row_int64));
+            comb_orders.data[i] * (i + 1), sizeof_row_int64);
     comb_history_index = calloc(comb_orders.count, sizeof(int));
     /* History buffer for compensation filter. */
-    filter_buffer = calloc(
-        compensation_filter.count, sizeof(struct fa_row_int64));
+    filter_buffer = calloc(compensation_filter.count, sizeof_row_int64);
 
     /* Compute scaling factor for overall unit DC response and group delay for
      * the entire filter chain. */
@@ -157,16 +167,16 @@ static bool initialise_configuration(void)
 /* Data processing. */
 
 /* This counter tracks the decimation counter. */
-static int decimation_counter;
+static unsigned int decimation_counter;
 /* Tracks position in the compensation filter buffer. */
-static int filter_index;
+static unsigned int filter_index;
 /* Keeps count of output filter extra decimation. */
-static int output_counter;
+static unsigned int output_counter;
 
 
 /* Helper routine for cycling index pointers: advances and returns true iff the
  * index has cycled. */
-static bool advance_index(int *ix, int limit)
+static bool advance_index(unsigned int *ix, unsigned int limit)
 {
     *ix += 1;
     if (*ix >= limit)
@@ -180,27 +190,31 @@ static bool advance_index(int *ix, int limit)
 
 
 /* Helper macro for repeated pattern in accumulate().  Note that t0 is
- * untouched. */
+ * untouched.  Needs to be a macro because we call this twice, once with 32-bit
+ * row_in and the second time with 64-bit. */
 #define ACCUMULATE_ROW(accumulator, row_in) \
-    do for (int i = 1; i < FA_ENTRY_COUNT; i ++) \
+    do for (unsigned int i = 1; i < fa_entry_count; i ++) \
     { \
         (accumulator)->row[i].x += (row_in)->row[i].x; \
         (accumulator)->row[i].y += (row_in)->row[i].y; \
     } while(0)
+
 
 /* Accumulates a single update into the accumulator array for the integrating
  * part of the CIC filter, returns the last row. */
 static const struct fa_row_int64 *accumulate(const struct fa_row *row_in)
 {
     /* The first stage converts 32 bit in into 64 bit intermediate results. */
-    ACCUMULATE_ROW(&cic_accumulators[0], row_in);
-    struct fa_row_int64 *last_row = &cic_accumulators[0];
+    struct fa_row_int64 *accumulator = cic_accumulators;
+    ACCUMULATE_ROW(accumulator, row_in);
+    struct fa_row_int64 *last_row = accumulator;
 
     /* The remaining rows are all uniform. */
-    for (int stage = 1; stage < cic_order; stage ++)
+    for (unsigned int stage = 1; stage < cic_order; stage ++)
     {
-        ACCUMULATE_ROW(&cic_accumulators[stage], last_row);
-        last_row = &cic_accumulators[stage];
+        accumulator = INDEX_ROW64(accumulator, 1);
+        ACCUMULATE_ROW(accumulator, last_row);
+        last_row = accumulator;
     }
     return last_row;
 }
@@ -214,12 +228,12 @@ static void comb(
     {
         unsigned int N = comb_orders.data[order];
         struct fa_row_int64 *history =
-            &comb_histories[order][N * comb_history_index[order]];
+            INDEX_ROW64(comb_histories[order], N * comb_history_index[order]);
         advance_index(&comb_history_index[order], order + 1);
 
         for (unsigned int n = 0; n < N; n ++)
         {
-            for (int i = 1; i < FA_ENTRY_COUNT; i ++)
+            for (unsigned int i = 1; i < fa_entry_count; i ++)
             {
                 struct fa_entry_int64 in = row_in->row[i];
                 row_out->row[i].x = in.x - history->row[i].x;
@@ -233,7 +247,7 @@ static void comb(
              * Also, we arrange the histories so that this simple stepping
              * through works correctly. */
             row_in = row_out;
-            history ++;
+            history = INDEX_ROW64(history, 1);
         }
     }
 }
@@ -242,24 +256,27 @@ static void comb(
 /* Convolves compensation filter with the waiting output buffer. */
 static void filter_output(struct fa_row *row_out)
 {
-    struct fa_row_double accumulator;
-    memset(&accumulator, 0, sizeof(accumulator));
+    size_t sizeof_row_double = fa_entry_count * sizeof(struct fa_entry_double);
+    struct fa_entry_double *accumulator = alloca(sizeof_row_double);
+    memset(accumulator, 0, sizeof_row_double);
+
     for (unsigned int j = 0; j < compensation_filter.count; j ++)
     {
         double coeff = compensation_filter.data[j];
         struct fa_row_int64 *row =
-            &filter_buffer[(filter_index + j) % compensation_filter.count];
-        for (int i = 1; i < FA_ENTRY_COUNT; i ++)
+            INDEX_ROW64(filter_buffer,
+                (filter_index + j) % compensation_filter.count);
+        for (unsigned int i = 1; i < fa_entry_count; i ++)
         {
-            accumulator.row[i].x += coeff * row->row[i].x;
-            accumulator.row[i].y += coeff * row->row[i].y;
+            accumulator[i].x += coeff * row->row[i].x;
+            accumulator[i].y += coeff * row->row[i].y;
         }
     }
 
-    for (int i = 1; i < FA_ENTRY_COUNT; i ++)
+    for (unsigned int i = 1; i < fa_entry_count; i ++)
     {
-        row_out->row[i].x = (int) (filter_scaling * accumulator.row[i].x);
-        row_out->row[i].y = (int) (filter_scaling * accumulator.row[i].y);
+        row_out->row[i].x = (int) (filter_scaling * accumulator[i].x);
+        row_out->row[i].y = (int) (filter_scaling * accumulator[i].y);
     }
 }
 
@@ -272,7 +289,7 @@ static void update_t0(struct fa_row *row_out, const struct fa_entry *t0)
 
 
 static struct fa_row *block_out;
-static int out_pointer;
+static unsigned int out_pointer;
 
 
 /* Advance the output by one row or mark a gap in incoming data. */
@@ -294,21 +311,24 @@ static void advance_write_block(bool gap, uint64_t timestamp)
  * decimation factor, comb filter of each output sample. */
 static void decimate_block(const struct fa_row *block_in, uint64_t timestamp)
 {
-    int sample_count_in = fa_block_size / FA_FRAME_SIZE;
-    for (int in = 0; in < sample_count_in; in ++)
+    unsigned int sample_count_in =
+        fa_block_size / fa_entry_count / FA_ENTRY_SIZE;
+    for (unsigned int in = 0; in < sample_count_in; in ++)
     {
         const struct fa_entry *t0 = &block_in->row[0];
-        const struct fa_row_int64 *row = accumulate(block_in++);
+        const struct fa_row_int64 *row = accumulate(block_in);
+        block_in = INDEX_ROW(block_in, 1);
 
         if (advance_index(&decimation_counter, decimation_factor))
         {
-            comb(row, &filter_buffer[filter_index]);
+            comb(row, INDEX_ROW64(filter_buffer, filter_index));
             advance_index(&filter_index, compensation_filter.count);
 
             if (advance_index(&output_counter, filter_decimation))
             {
-                filter_output(&block_out[out_pointer]);
-                update_t0(&block_out[out_pointer], t0);
+                struct fa_row *row_out = INDEX_ROW(block_out, out_pointer);
+                filter_output(row_out);
+                update_t0(row_out, t0);
                 advance_write_block(false, timestamp);
             }
         }
@@ -348,16 +368,21 @@ int get_decimation_factor(void)
 
 
 bool initialise_decimation(
-    const char *config_file, struct buffer *fa_buffer, struct buffer **buffer)
+    const char *config_file, struct buffer *fa_buffer, struct buffer **buffer,
+    unsigned int _fa_entry_count)
 {
     fa_block_size = buffer_block_size(fa_buffer);
+    fa_entry_count = _fa_entry_count;
+    sizeof_row_int64  = sizeof(struct fa_entry_int64) * fa_entry_count;
+
     return
         config_parse_file(
             config_file, config_table, ARRAY_SIZE(config_table))  &&
         initialise_configuration()  &&
         DO_(reader = open_reader(fa_buffer, false))  &&
         create_buffer(&decimation_buffer,
-            output_sample_count * FA_FRAME_SIZE, output_block_count)  &&
+            output_sample_count * fa_entry_count * FA_ENTRY_SIZE,
+            output_block_count)  &&
         DO_(*buffer = decimation_buffer);
 }
 

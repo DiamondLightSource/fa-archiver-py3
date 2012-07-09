@@ -220,19 +220,22 @@ static bool initialise_signals(void)
 }
 
 
-static bool initialise_sniffer(struct buffer *fa_block_buffer)
+static bool initialise_sniffer(
+    struct buffer *fa_block_buffer, unsigned int fa_entry_count)
 {
     const struct sniffer_context *sniffer_context = NULL;
     switch (sniffer_source)
     {
         case SNIFFER_DEVICE:
-            sniffer_context = initialise_sniffer_device(fa_sniffer_device);
+            sniffer_context =
+                initialise_sniffer_device(fa_sniffer_device, fa_entry_count);
             break;
         case SNIFFER_REPLAY:
-            sniffer_context = initialise_replay(fa_sniffer_device);
+            sniffer_context =
+                initialise_replay(fa_sniffer_device, fa_entry_count);
             break;
         case SNIFFER_GIGABIT:
-            sniffer_context = initialise_gigabit();
+            sniffer_context = initialise_gigabit(fa_entry_count);
             break;
     }
     if (sniffer_context)
@@ -306,17 +309,19 @@ static void run_archiver(void)
 
 int main(int argc, char **argv)
 {
-    uint32_t input_block_size;
+    uint32_t input_block_size, fa_entry_count;
     struct buffer *fa_block_buffer;
     struct buffer *decimated_buffer = NULL;
     bool ok =
         process_args(argc, argv)  &&
-        initialise_disk_writer(output_filename, &input_block_size)  &&
+        initialise_disk_writer(
+            output_filename, &input_block_size, &fa_entry_count)  &&
         create_buffer(&fa_block_buffer, input_block_size, buffer_blocks)  &&
         IF_(decimation_config,
             initialise_decimation(
-                decimation_config, fa_block_buffer, &decimated_buffer))  &&
-        initialise_sniffer(fa_block_buffer)  &&
+                decimation_config, fa_block_buffer, &decimated_buffer,
+                fa_entry_count))  &&
+        initialise_sniffer(fa_block_buffer, fa_entry_count)  &&
         initialise_server(
             fa_block_buffer, decimated_buffer, server_socket,
             extra_commands, reuseaddr)  &&

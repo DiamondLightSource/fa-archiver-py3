@@ -163,7 +163,7 @@ static void transpose_column(
     for (unsigned int i = input_frame_count; i > 0; i--)
     {
         *output ++ = *input;
-        input += FA_ENTRY_COUNT;
+        input += header->fa_entry_count;
     }
 }
 
@@ -176,7 +176,7 @@ static void transpose_block(const void *read_block)
     /* For the moment forget about being too clever about the impact of
      * transposing data on the cache.  We copy one column at a time. */
     unsigned int written = 0;
-    for (unsigned int id = 0; id < FA_ENTRY_COUNT; id ++)
+    for (unsigned int id = 0; id < header->fa_entry_count; id ++)
     {
         if (test_mask_bit(&header->archive_mask, id))
         {
@@ -383,7 +383,7 @@ static void decimate_column_one(
     for (unsigned int i = 0; i < 1U << N_log2; i ++)
     {
         accum_xy(&accum, input);
-        input += FA_ENTRY_COUNT;
+        input += header->fa_entry_count;
     }
     compute_result(&accum, N_log2, output);
 
@@ -398,7 +398,7 @@ static void decimate_column(
     {
         decimate_column_one(
             input, output, double_accums, header->first_decimation_log2);
-        input += FA_ENTRY_COUNT << header->first_decimation_log2;
+        input += header->fa_entry_count << header->first_decimation_log2;
         output += 1;
     }
 }
@@ -406,7 +406,7 @@ static void decimate_column(
 static void decimate_block(const void *read_block)
 {
     unsigned int written = 0;
-    for (unsigned int id = 0; id < FA_ENTRY_COUNT; id ++)
+    for (unsigned int id = 0; id < header->fa_entry_count; id ++)
     {
         if (test_mask_bit(&header->archive_mask, id))
         {
@@ -457,7 +457,8 @@ static void reset_double_decimation(void)
 
 static void initialise_double_decimation(void)
 {
-    output_id_count = count_mask_bits(&header->archive_mask);
+    output_id_count =
+        count_mask_bits(&header->archive_mask, header->fa_entry_count);
     double_accumulators = calloc(output_id_count, sizeof(struct fa_accum));
     reset_double_decimation();
 }
@@ -794,7 +795,8 @@ void initialise_transform(
     header = header_;
     data_index = data_index_;
     dd_area = dd_area_;
-    input_frame_count = header->input_block_size / FA_FRAME_SIZE;
+    input_frame_count =
+        header->input_block_size / header->fa_entry_count / FA_ENTRY_SIZE;
     input_decimation_count = input_frame_count >> header->first_decimation_log2;
 
     initialise_double_decimation();

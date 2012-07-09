@@ -90,9 +90,10 @@ static bool subtract_day_zero = false;
 
 /* Archiver parameters read from archiver during initialisation. */
 static double sample_frequency;
-static int first_decimation;
-static int second_decimation;
-static int major_version, minor_version;
+static unsigned int first_decimation;
+static unsigned int second_decimation;
+static unsigned int major_version, minor_version;
+static unsigned int fa_entry_count = 256;
 
 static FILE *output_file;
 
@@ -148,9 +149,9 @@ static bool read_response(FILE *stream, char *buf, size_t buflen)
 static bool parse_version(const char **string)
 {
     return
-        parse_int(string, &major_version)  &&
+        parse_uint(string, &major_version)  &&
         parse_char(string, '.')  &&
-        parse_int(string, &minor_version);
+        parse_uint(string, &minor_version);
 }
 
 
@@ -161,11 +162,13 @@ static bool parse_archive_parameters(const char **string)
     return
         parse_double(string, &sample_frequency)  &&
         parse_char(string, '\n')  &&
-        parse_int(string, &first_decimation)  &&
+        parse_uint(string, &first_decimation)  &&
         parse_char(string, '\n')  &&
-        parse_int(string, &second_decimation)  &&
+        parse_uint(string, &second_decimation)  &&
         parse_char(string, '\n')  &&
         parse_version(string)  &&
+        parse_char(string, '\n')  &&
+        parse_uint(string, &fa_entry_count)  &&
         parse_char(string, '\n');
 }
 
@@ -177,7 +180,7 @@ static bool read_archive_parameters(void)
     char buffer[64];
     return
         connect_server(&stream)  &&
-        TEST_OK(fprintf(stream, "CFdDV\n") > 0)  &&
+        TEST_OK(fprintf(stream, "CFdDVK\n") > 0)  &&
         FINALLY(
             read_response(stream, buffer, sizeof(buffer)),
             // Finally, whether read_response succeeds
@@ -471,11 +474,12 @@ static bool parse_args(int argc, char **argv)
         parse_opts(&argc, &argv)  &&
         TEST_OK_(argc == 1  ||  argc == 2,
             "Wrong number of arguments.  Try `capture -h` for help.")  &&
-        DO_PARSE("capture mask", parse_mask, argv[0], &capture_mask)  &&
         /* Note that we have to interrogate the archive parameters after parsing
-         * the server settings, but before we parse the sample count, because
-         * this uses the decimation settings we read. */
+         * the server settings, but before we parse the sample count or capture
+         * mask, because these use the settings we read. */
         read_archive_parameters()  &&
+        DO_PARSE("capture mask",
+            parse_mask, argv[0], fa_entry_count, &capture_mask)  &&
         IF_(argc == 2,
             DO_PARSE("sample count", parse_samples, argv[1], &sample_count));
 }
@@ -550,7 +554,7 @@ static void format_options(char *options)
 static bool request_data(FILE *stream)
 {
     char raw_mask[RAW_MASK_BYTES+1];
-    format_raw_mask(&capture_mask, raw_mask);
+    format_raw_mask(&capture_mask, fa_entry_count, raw_mask);
     if (continuous_capture)
         return TEST_OK(fprintf(stream,
             "SR%s%s\n", raw_mask, matlab_format ? "TEZ" : "") > 0);
@@ -652,7 +656,7 @@ static bool capture_data(FILE *stream, unsigned int *frames_written)
     /* Size of line of data. */
     size_t line_size =
         count_data_bits(data_mask) *
-        count_mask_bits(&capture_mask) * FA_ENTRY_SIZE;
+        count_mask_bits(&capture_mask, fa_entry_count) * FA_ENTRY_SIZE;
 
     /* If matlab_format is set we need to read timestamp frames interleaved
      * in the data stream.  These two variables keep track of this. */
@@ -790,7 +794,7 @@ static bool write_header(uint64_t frames_written)
         place_matlab_vector(&header, "id0", miINT32, id_zero, gap_count + 1);
 
     /* Write out the index array tying data back to original BPM ids. */
-    uint8_t mask_ids[FA_ENTRY_COUNT];
+    uint8_t mask_ids[fa_entry_count];
     int mask_length = compute_mask_ids(mask_ids, &capture_mask);
     place_matlab_vector(&header, "ids", miUINT8, mask_ids, mask_length);
 

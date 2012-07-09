@@ -73,6 +73,7 @@ static uint32_t second_decimation = 256;
 static double sample_frequency = 10072.4;
 static bool dry_run = false;
 static bool quiet_allocate = false;
+static uint32_t fa_entry_count = 256;
 
 /* Options for read only operation. */
 static bool read_only = false;
@@ -99,6 +100,7 @@ static void usage(void)
 "The following options can be given:\n"
 "   -s:  Specify size of file.  The file will be resized to the given size\n"
 "        all disk blocks allocated.  Optional if the file already exists.\n"
+"   -N:  Specify number of FA entries in a single block, default is 256.\n"
 "   -I:  Specify input block size for reads from FA sniffer device.  The\n"
 "        default value is %"PRIu32" bytes.\n"
 "   -O:  Specify block size for IO transfers to disk.  This should match\n"
@@ -136,7 +138,7 @@ static bool process_opts(int *argc, char ***argv)
     bool ok = true;
     while (ok)
     {
-        switch (getopt(*argc, *argv, "+hs:I:O:d:D:f:nq"))
+        switch (getopt(*argc, *argv, "+hs:N:I:O:d:D:f:nq"))
         {
             case 'h':
                 usage();
@@ -144,6 +146,10 @@ static bool process_opts(int *argc, char ***argv)
             case 's':
                 ok = DO_PARSE("file size", parse_size64, optarg, &file_size);
                 file_size_given = true;
+                break;
+            case 'N':
+                ok = DO_PARSE("FA entry count",
+                    parse_uint32, optarg, &fa_entry_count);
                 break;
             case 'I':
                 ok = DO_PARSE("input block size",
@@ -228,7 +234,8 @@ static bool process_args(int argc, char **argv)
         return
             process_opts(&argc, &argv)  &&
             TEST_OK_(argc == 2, "Wrong number of arguments")  &&
-            DO_PARSE("capture mask", parse_mask, argv[0], &archive_mask)  &&
+            DO_PARSE("capture mask",
+                parse_mask, argv[0], fa_entry_count, &archive_mask)  &&
             DO_(file_name = argv[1]);
 }
 
@@ -259,7 +266,8 @@ static bool prepare_new_header(struct disk_header *header)
         initialise_header(header,
             &archive_mask, file_size,
             input_block_size, output_block_size,
-            first_decimation, second_decimation, sample_frequency)  &&
+            first_decimation, second_decimation, sample_frequency,
+            fa_entry_count)  &&
         DO_(print_header(stdout, header));
 }
 

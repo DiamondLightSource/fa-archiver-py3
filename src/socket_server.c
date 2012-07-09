@@ -329,6 +329,7 @@ static bool report_clients(int scon)
  *  V   Returns protocol identification string
  *  M   Returns configured capture mask
  *  C   Returns live decimation factor if available
+ *  K   Returns FA sample count
  *  S   Returns detailed sniffer status.  The numbers returned are:
  *          hardware link status        1 => ok, 2, 3 => link fault
  *          link partner                or 1023 if no connection
@@ -372,7 +373,8 @@ static bool process_command(int scon, const char *client_name, const char *buf)
             case 'M':
             {
                 char string[RAW_MASK_BYTES + 1];
-                format_raw_mask(&get_header()->archive_mask, string);
+                format_raw_mask(
+                    &header->archive_mask, header->fa_entry_count, string);
                 ok = write_string(scon, "%s\n", string);
                 break;
             }
@@ -396,6 +398,10 @@ static bool process_command(int scon, const char *client_name, const char *buf)
 
             case 'I':
                 ok = report_clients(scon);
+                break;
+
+            case 'K':
+                ok = write_string(scon, "%u\n", header->fa_entry_count);
                 break;
 
             default:
@@ -458,11 +464,12 @@ static bool parse_options(const char **string, struct subscribe_parse *parse)
  *
  * If both T and Z are specified then the timestamp is sent first before T0. */
 static bool parse_subscription(
-    const char **string, struct subscribe_parse *parse)
+    const char **string, unsigned int fa_entry_count,
+    struct subscribe_parse *parse)
 {
     return
         parse_char(string, 'S')  &&
-        parse_mask(string, &parse->mask)  &&
+        parse_mask(string, fa_entry_count, &parse->mask)  &&
         parse_options(string, parse);
 }
 
@@ -518,11 +525,13 @@ static bool send_extended_timestamp(
 
 static bool send_subscription(
     int scon, struct reader_state *reader, uint64_t timestamp,
-    struct subscribe_parse *parse, const void **block)
+    struct subscribe_parse *parse, unsigned int fa_entry_count,
+    const void **block)
 {
     /* The transmitted block optionally begins with the timestamp and T0 values,
      * in that order, if requested. */
-    size_t block_size = reader_block_size(reader) / FA_FRAME_SIZE;
+    size_t block_size =
+        reader_block_size(reader) / fa_entry_count / FA_ENTRY_SIZE;
     bool ok =
         IF_(parse->send_timestamp == SEND_BASIC,
             TEST_write(scon, &timestamp, sizeof(uint64_t)))  &&
@@ -538,7 +547,8 @@ static bool send_subscription(
         ok = FINALLY(
             IF_(parse->send_timestamp == SEND_EXTENDED,
                 send_extended_timestamp(scon, block_size, timestamp))  &&
-            write_frames(scon, &parse->mask, *block, block_size),
+            write_frames(
+                scon, &parse->mask, fa_entry_count, *block, block_size),
 
             // Always do this, even if write_frames fails.
             TEST_OK_(release_read_block(reader),
@@ -559,11 +569,14 @@ static bool send_subscription(
 static bool process_subscribe(
     int scon, const char *client_name, const char *buf)
 {
+    unsigned int fa_entry_count = get_header()->fa_entry_count;
+
     push_error_handling();
 
     /* Parse the incoming request. */
     struct subscribe_parse parse;
-    if (!DO_PARSE("subscription", parse_subscription, buf, &parse))
+    if (!DO_PARSE("subscription",
+            parse_subscription, buf, fa_entry_count, &parse))
         return report_socket_error(scon, client_name, false);
 
     /* See if we can start the subscription, report the final status to the
@@ -576,7 +589,8 @@ static bool process_subscribe(
 
     /* Send the requested subscription if all is well. */
     if (start_ok  &&  ok)
-        ok = send_subscription(scon, reader, timestamp, &parse, &block);
+        ok = send_subscription(
+            scon, reader, timestamp, &parse, fa_entry_count, &block);
 
     /* Clean up resources.  Rather important to get this right, as this can
      * happen many times. */
