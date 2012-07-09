@@ -1,7 +1,6 @@
 DOCUMENT = fa-archiver
 
 FIGURES += fa-zoomer.png
-FIGURES += fa_nw.png
 FIGURES += fofb.png
 FIGURES += WEPMN004f6.png
 FIGURES += spectrogram-3-2.png
@@ -46,7 +45,7 @@ clean:
 	rm -f $(CLEAN) $(CONVERTED)
 
 clean-all: clean
-	rm -f *.pdf *.ps
+	rm -f $(DOCUMENT).pdf $(CONVERTED) *.ps
 
 
 .PHONY: default clean clean-all

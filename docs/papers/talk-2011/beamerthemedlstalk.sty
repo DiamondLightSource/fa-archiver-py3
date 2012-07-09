@@ -1,0 +1,70 @@
+%%%%
+%%%% Subversion info - do not touch these lines
+%%%% $Author: kdf51254 $
+%%%% $Revision: 4181 $
+%%%% $Date: 2009-12-07 14:41:37 +0000 (Mon, 07 Dec 2009) $
+%%%% $URL: https://trac.diamond.ac.uk/subversion/sysadmin/cfengine/branches/testing/files/dlsarticle/dlsarticle.cls $
+%%%%
+
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{beamerthemedlstalk}[2010/04/07 Diamond Light Source talk class]
+
+\newif\ifdark
+\newif\iflight
+
+\DeclareOption{dark}{\darktrue}
+\DeclareOption{light}{\lighttrue}
+\ProcessOptions
+\DeclareOption*{\PassOptionsToClass{\CurrentOption}{beamer}}
+\ProcessOptions
+
+\usetheme{default}
+\setbeamertemplate{headline}{}
+\setbeamersize{text margin left=0.5cm}
+
+\RequirePackage[english]{babel}
+\RequirePackage[latin1]{inputenc}
+\RequirePackage{times}
+\RequirePackage[T1]{fontenc}
+
+\ifdark
+        \usecolortheme[RGB={255,255,0}]{structure}
+        \setbeamercolor{normal text}{fg=white}
+        \setbeamertemplate{footline}{\color{yellow}{\thepage}}
+        \usebackgroundtemplate{\includegraphics[width=\paperwidth]{DLSslide_dark.pdf}}
+        \makeatletter
+        \def\mynavigationsymbol{
+                \begin{pgfpicture}{0pt}{-1.5pt}{20pt}{5.5pt}
+                \pgfuseobject{beamerframenavstrong}
+                \usebeamercolor[fg]{navigation symbols dimmed}
+                \pgfuseobject{beamerframenavlight}
+                \end{pgfpicture}\kern-20pt
+                \hyperlinkframeendprev{\beamer@linkspace{5pt}}
+                \hyperlinkframestart{\beamer@linkspace{1pt}}
+                \Acrobatmenu{Find}{\beamer@linkspace{5pt}}
+                \hyperlinkframeend{\beamer@linkspace{4pt}}
+                \hyperlinkframestartnext{\beamer@linkspace{5pt}}}
+        \makeatother
+        \setbeamertemplate{navigation symbols}{\color{yellow}{\mynavigationsymbol}}
+%\fi
+%\iflight
+\else
+        \usecolortheme[RGB={0,0,255}]{structure}
+        \setbeamercolor{normal text}{fg=black}
+        \setbeamertemplate{footline}{\color{blue}{\thepage}}
+        \usebackgroundtemplate{\includegraphics[width=\paperwidth]{DLSslide_light.pdf}}
+        \makeatletter
+        \def\mynavigationsymbol{
+                \begin{pgfpicture}{0pt}{-1.5pt}{20pt}{5.5pt}
+                \pgfuseobject{beamerframenavstrong}
+                \usebeamercolor[fg]{navigation symbols dimmed}
+                \pgfuseobject{beamerframenavlight}
+                \end{pgfpicture}\kern-20pt
+                \hyperlinkframeendprev{\beamer@linkspace{5pt}}
+                \hyperlinkframestart{\beamer@linkspace{1pt}}
+                \Acrobatmenu{Find}{\beamer@linkspace{5pt}}
+                \hyperlinkframeend{\beamer@linkspace{4pt}}
+                \hyperlinkframestartnext{\beamer@linkspace{5pt}}}
+        \makeatother
+        \setbeamertemplate{navigation symbols}{\color{blue}{\mynavigationsymbol}}
+\fi
