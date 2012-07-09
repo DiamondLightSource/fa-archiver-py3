@@ -39,6 +39,7 @@ struct sniffer_context
 
 const struct sniffer_context *initialise_sniffer_device(
     const char *device_name, unsigned int fa_entry_count);
+const struct sniffer_context *initialise_empty_sniffer(void);
 
 struct buffer;
 void configure_sniffer(

@@ -229,6 +229,34 @@ const struct sniffer_context *initialise_sniffer_device(
 
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+/* Empty sniffer device, never delivers data, useful for read-only archiver. */
+
+static bool reset_empty_sniffer(void) { return true; }
+static bool read_empty_sniffer(
+    struct fa_row *block, size_t block_size, uint64_t *timestamp)
+{
+    return false;
+}
+static bool status_empty_sniffer(struct fa_status *status)
+{
+    return FAIL_("No status for empty sniffer");
+}
+static bool interrupt_empty_sniffer(void) { return true; }
+
+static const struct sniffer_context empty_sniffer = {
+    .reset = reset_empty_sniffer,
+    .read = read_empty_sniffer,
+    .status = status_empty_sniffer,
+    .interrupt = interrupt_empty_sniffer,
+};
+
+const struct sniffer_context *initialise_empty_sniffer(void)
+{
+    return &empty_sniffer;
+}
+
+
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 
 static pthread_t sniffer_id;

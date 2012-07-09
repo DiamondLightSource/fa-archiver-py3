@@ -90,8 +90,13 @@ static int server_socket = 8888;
 /* Decimation configuration file. */
 static const char *decimation_config = NULL;
 /* Selects data source. */
-static enum { SNIFFER_DEVICE, SNIFFER_REPLAY, SNIFFER_GIGABIT }
-    sniffer_source = SNIFFER_DEVICE;
+static enum sniffer_source {
+    SNIFFER_UNSET,          // Default unset value
+    SNIFFER_DEVICE,         // Standard sniffer device /dev/fa_sniffer0 etc
+    SNIFFER_REPLAY,         // Replay sniffer data from file
+    SNIFFER_GIGABIT,        // Gigabit ethernet (Libera grouping) data source
+    SNIFFER_NONE,           // No data source
+} sniffer_source = SNIFFER_UNSET;
 /* If set enables extra socket server commands for debug control. */
 static bool extra_commands = false;
 /* Enables logging of routine events and incoming commands. */
@@ -121,7 +126,17 @@ static void usage(void)
 "    -X   Enable extra commands (debug only)\n"
 "    -R   Set SO_REUSEADDR on listening socket, debug use only\n"
 "    -G   Use gigabit ethernet as data source\n"
+"    -N   Run without data source, archive effectively read-only\n"
         , argv0, buffer_blocks);
+}
+
+
+static bool set_sniffer_source(enum sniffer_source source)
+{
+    return
+        TEST_OK_(sniffer_source == SNIFFER_UNSET,
+            "Data source already specified")  &&
+        DO_(sniffer_source = source);
 }
 
 
@@ -131,21 +146,23 @@ static bool process_options(int *argc, char ***argv)
     bool ok = true;
     while (ok)
     {
-        switch (getopt(*argc, *argv, "+hc:d:rb:qtDp:s:F:XRG"))
+        switch (getopt(*argc, *argv, "+hc:d:rb:qtDp:s:F:XRGN"))
         {
             case 'h':   usage();                                    exit(0);
             case 'c':   decimation_config = optarg;                 break;
-            case 'd':   fa_sniffer_device = optarg;                 break;
             case 'r':   boost_priority = true;                      break;
             case 'q':   verbose = false;                            break;
             case 't':   timestamp_logging(true);                    break;
             case 'D':   daemon_mode = true;                         break;
             case 'p':   pid_filename = optarg;                      break;
-            case 'F':   fa_sniffer_device = optarg;
-                        sniffer_source = SNIFFER_REPLAY;            break;
             case 'X':   extra_commands = true;                      break;
             case 'R':   reuseaddr = true;                           break;
-            case 'G':   sniffer_source = SNIFFER_GIGABIT;           break;
+            case 'd':   fa_sniffer_device = optarg;
+                        ok = set_sniffer_source(SNIFFER_DEVICE);    break;
+            case 'F':   fa_sniffer_device = optarg;
+                        ok = set_sniffer_source(SNIFFER_REPLAY);    break;
+            case 'G':   ok = set_sniffer_source(SNIFFER_GIGABIT);   break;
+            case 'N':   ok = set_sniffer_source(SNIFFER_NONE);      break;
             case 'b':
                 ok = DO_PARSE("buffer blocks",
                     parse_uint, optarg, &buffer_blocks);
@@ -226,6 +243,7 @@ static bool initialise_sniffer(
     const struct sniffer_context *sniffer_context = NULL;
     switch (sniffer_source)
     {
+        case SNIFFER_UNSET:
         case SNIFFER_DEVICE:
             sniffer_context =
                 initialise_sniffer_device(fa_sniffer_device, fa_entry_count);
@@ -236,6 +254,9 @@ static bool initialise_sniffer(
             break;
         case SNIFFER_GIGABIT:
             sniffer_context = initialise_gigabit(fa_entry_count);
+            break;
+        case SNIFFER_NONE:
+            sniffer_context = initialise_empty_sniffer();
             break;
     }
     if (sniffer_context)
