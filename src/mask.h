@@ -30,7 +30,7 @@
 /* Bit mask of BPM ids, array of bits. */
 struct filter_mask
 {
-    uint32_t mask[MAX_FA_ENTRY_COUNT/32];
+    uint8_t mask[MAX_FA_ENTRY_COUNT/8];
 };
 
 static inline void copy_mask(
@@ -41,13 +41,13 @@ static inline void copy_mask(
 
 static inline void set_mask_bit(struct filter_mask *mask, unsigned int bit)
 {
-    mask->mask[bit >> 5] |= 1 << (bit & 0x1f);
+    mask->mask[bit >> 3] |= 1 << (bit & 7);
 }
 
 static inline bool test_mask_bit(
     const struct filter_mask *mask, unsigned int bit)
 {
-    return !!(mask->mask[bit >> 5] & (1 << (bit & 0x1f)));
+    return !!(mask->mask[bit >> 3] & (1 << (bit & 7)));
 }
 
 /* Returns number of bits set in mask. */
@@ -58,9 +58,8 @@ unsigned int count_mask_bits(
 #define RAW_MASK_BYTES  (MAX_FA_ENTRY_COUNT / 4)
 
 /* Formats string represetation of mask into buffer, which must be at least
- * RAW_MASK_BYTES+1 bytes long.  Returns RAW_MASK_BYTES, number of characters
- * written. */
-int format_raw_mask(
+ * RAW_MASK_BYTES+1 bytes long.  Returns number of characters written. */
+unsigned int format_raw_mask(
     const struct filter_mask *mask, unsigned int fa_entry_count, char *buffer);
 
 /* Attempts to parse string as a mask specification, consisting of a sequence
