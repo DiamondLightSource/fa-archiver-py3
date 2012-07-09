@@ -155,8 +155,8 @@ static bool read_sniffer_device(
         ssize_t rx = read(fa_sniffer, buffer, length);
         if (rx <= 0)
             return false;
-        length -= rx;
-        buffer += rx;
+        length -= (size_t) rx;
+        buffer += (size_t) rx;
     }
 
     if (ioctl_version >= IOCTL_TIMESTAMP_VERSION)

@@ -38,4 +38,4 @@ bool start_decimation(void);
 void terminate_decimation(void);
 
 /* Returns decimation factor, or 0 if decimation not available. */
-int get_decimation_factor(void);
+unsigned int get_decimation_factor(void);

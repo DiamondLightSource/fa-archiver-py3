@@ -73,7 +73,7 @@ struct libera_payload {
 
 
 static int gigabit_socket;
-static int fa_frame_size;
+static size_t fa_frame_size;
 
 
 /* Receives and decodes a single Libera datagram from the gigabit ethernet
@@ -97,7 +97,7 @@ static bool read_datagram(struct fa_entry *row)
         return false;
 
     /* Decode the data */
-    for (unsigned int i = 0; i < bytes_rx / LIBERA_BLOCK_SIZE; i ++)
+    for (unsigned int i = 0; i < (size_t) bytes_rx / LIBERA_BLOCK_SIZE; i ++)
     {
         struct libera_payload *payload = &buffer[i];
         int id = (payload->status >> 2) & 63;

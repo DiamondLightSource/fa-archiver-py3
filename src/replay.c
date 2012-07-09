@@ -49,14 +49,14 @@
 #include "replay.h"
 
 
-static int *column_index;           // Converts FA id to data column
+static unsigned int *column_index;  // Converts FA id to data column
 static unsigned int fa_entry_count;
 
-static int replay_row_count;        // Total number of rows available for replay
+static unsigned int replay_row_count; // Number of rows available for replay
 static char *replay_first_row;      // Pointer to first row of data
-static int replay_index;            // Count of row currently being read
+static unsigned int replay_index;   // Count of row currently being read
 static void *replay_row;            // Pointer to row being read
-static int replay_row_size;         // Length of an individual row
+static unsigned int replay_row_size; // Length of an individual row
 static int32_t replay_id0_start;    // Reset id0 to this at start of cycle
 static int32_t replay_id0;          // Current value of id0
 static void (*convert_row)(struct fa_row *row); // Converts data to fa_entry
@@ -67,9 +67,9 @@ static struct timespec next_sleep;  // Used for uniform sleep intervals
 
 /* Advances target by requested number of nanoseconds (will silently go wrong
  * if duration >= 1s) and waits for it to come around. */
-static void sleep_until(int duration)
+static void sleep_until(unsigned int duration)
 {
-    next_sleep.tv_nsec += duration;
+    next_sleep.tv_nsec += (long) duration;
     if (next_sleep.tv_nsec >= 1000000000)
     {
         next_sleep.tv_nsec -= 1000000000;
@@ -85,8 +85,8 @@ static bool read_replay_block(
     if (interrupted)
         return false;
 
-    int row_count = size / fa_entry_count / FA_ENTRY_SIZE;
-    for (int i = 0; i < row_count; i ++)
+    size_t row_count = size / fa_entry_count / FA_ENTRY_SIZE;
+    for (size_t i = 0; i < row_count; i ++)
     {
         rows->row[0].x = replay_id0;
         rows->row[0].y = replay_id0;
@@ -108,7 +108,8 @@ static bool read_replay_block(
         rows = (void *) rows + fa_entry_count * FA_ENTRY_SIZE;
     }
 
-    sleep_until(100000 * row_count);    // 100us = 100,000ns per row
+    // 100us = 100,000ns per row
+    sleep_until((unsigned int) (100000 * row_count));
     *timestamp = get_timestamp();
     return true;
 }
@@ -162,7 +163,7 @@ static bool convert_datatype(int data_type, size_t *data_size)
 /* Prepares data array for replay.  The data has either two or three dimensions,
  * indexed as data[xy, fa_id, time]. */
 static void prepare_data_array(
-    const struct matlab_matrix *data, size_t data_size, int *columns)
+    const struct matlab_matrix *data, size_t data_size, unsigned int *columns)
 {
     *columns = data->dim_count > 2 ? data->dims[1] : 1;
 
@@ -170,7 +171,7 @@ static void prepare_data_array(
     replay_first_row = data->real.start;
     replay_index = 0;
     replay_row = replay_first_row;
-    replay_row_size = *columns * 2 * data_size;
+    replay_row_size = *columns * 2 * (unsigned int) data_size;
 
     /* Create a default column index by just cycling through the available
      * columns. */
@@ -185,11 +186,12 @@ static void prepare_data_array(
 
 /* If an ids array has been given use this to ensure the correct FA ids are
  * replayed in the correct columns. */
-static void prepare_index_array(const struct matlab_matrix *ids, int columns)
+static void prepare_index_array(
+    const struct matlab_matrix *ids, unsigned int columns)
 {
     /* Use ids to replace column entries. */
     uint8_t *id_array = (uint8_t *) ids->real.start;
-    for (int i = 0; i < columns; i ++)
+    for (unsigned int i = 0; i < columns; i ++)
         if (id_array[i] < fa_entry_count)
             column_index[id_array[i]] = i;
 }
@@ -204,7 +206,7 @@ static void prepare_id0(const struct matlab_matrix *id0)
 /* Validation of matrix.  Must be non empty, real and the right shape. */
 static bool check_dimensions(
     const char *name, const struct matlab_matrix *matrix,
-    int max_dims, int cols)
+    unsigned int max_dims, unsigned int cols)
 {
     return
         TEST_OK_(
@@ -224,7 +226,7 @@ static bool prepare_replay_data(struct region *region)
     bool found_data, found_ids, found_id0;
     struct matlab_matrix data, ids, id0;
     size_t data_size;
-    int columns;
+    unsigned int columns;
     bool ok =
         /* Prepare and validate the data area. */
         find_matrix_by_name(region, "data", &found_data, &data)  &&

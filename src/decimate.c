@@ -268,8 +268,8 @@ static void filter_output(struct fa_row *row_out)
                 (filter_index + j) % compensation_filter.count);
         for (unsigned int i = 1; i < fa_entry_count; i ++)
         {
-            accumulator[i].x += coeff * row->row[i].x;
-            accumulator[i].y += coeff * row->row[i].y;
+            accumulator[i].x += coeff * (double) row->row[i].x;
+            accumulator[i].y += coeff * (double) row->row[i].y;
         }
     }
 
@@ -283,8 +283,8 @@ static void filter_output(struct fa_row *row_out)
 
 static void update_t0(struct fa_row *row_out, const struct fa_entry *t0)
 {
-    row_out->row[0].x = t0->x - group_delay;
-    row_out->row[0].y = t0->y - group_delay;
+    row_out->row[0].x = t0->x - (int) group_delay;
+    row_out->row[0].y = t0->y - (int) group_delay;
 }
 
 
@@ -311,8 +311,8 @@ static void advance_write_block(bool gap, uint64_t timestamp)
  * decimation factor, comb filter of each output sample. */
 static void decimate_block(const struct fa_row *block_in, uint64_t timestamp)
 {
-    unsigned int sample_count_in =
-        fa_block_size / fa_entry_count / FA_ENTRY_SIZE;
+    unsigned int sample_count_in = (unsigned int) (
+        fa_block_size / fa_entry_count / FA_ENTRY_SIZE);
     for (unsigned int in = 0; in < sample_count_in; in ++)
     {
         const struct fa_entry *t0 = &block_in->row[0];
@@ -361,7 +361,7 @@ static void *decimation_thread(void *context)
 }
 
 
-int get_decimation_factor(void)
+unsigned int get_decimation_factor(void)
 {
     return decimation_factor * filter_decimation;
 }

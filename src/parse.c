@@ -81,7 +81,7 @@ static bool check_number(const char *start, const char *end)
     { \
         errno = 0; \
         const char *start = *string; \
-        *result = convert(start, (char **) string, ##extra); \
+        *result = (type) convert(start, (char **) string, ##extra); \
         return check_number(start, *string); \
     }
 
@@ -145,8 +145,8 @@ bool parse_nanoseconds(const char **string, long *nsec)
          * fraction -- so need to count number of digits parsed and fixup
          * afterwards! */
         char *end;
-        *nsec = strtoul(*string, &end, 10);
-        int digits = end - *string;
+        *nsec = (long) strtoul(*string, &end, 10);
+        ssize_t digits = end - *string;
         *string = end;
         ok = TEST_OK_(digits <= 9, "Too many digits for ns");
         for ( ; ok  &&  digits < 9; digits ++)

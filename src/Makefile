@@ -27,6 +27,7 @@ CFLAGS += -Wredundant-decls
 CFLAGS += -Wmissing-prototypes
 CFLAGS += -Wmissing-declarations
 CFLAGS += -Wstrict-prototypes
+CFLAGS += -Wconversion
 
 CFLAGS += -msse
 CFLAGS += -msse2

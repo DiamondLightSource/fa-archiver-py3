@@ -122,7 +122,8 @@ static bool connect_server(FILE **stream)
             hostent = gethostbyname(server_name),
             "Unable to resolve server \"%s\"", server_name)  &&
         DO_(memcpy(
-            &s_in.sin_addr.s_addr, hostent->h_addr, hostent->h_length))  &&
+            &s_in.sin_addr.s_addr, hostent->h_addr,
+            (size_t) hostent->h_length))  &&
         TEST_IO(sock = socket(AF_INET, SOCK_STREAM, 0))  &&
         TEST_IO_(
             connect(sock, (struct sockaddr *) &s_in, sizeof(s_in)),
@@ -314,13 +315,15 @@ static bool parse_today(const char **string, struct timespec *ts)
 }
 
 
+#define COMPARE(x, y) ((x) < (y) ? -1 : (x) == (y) ? 0 : 1)
+
 /* Returns +ve number if ts1 > ts2, -ve if ts1 < ts2, 0 if ts1 == ts2. */
 static int compare_ts(struct timespec *ts1, struct timespec *ts2)
 {
     if (ts1->tv_sec == ts2->tv_sec)
-        return ts1->tv_nsec - ts2->tv_nsec;
+        return COMPARE(ts1->tv_nsec, ts2->tv_nsec);
     else
-        return ts1->tv_sec - ts2->tv_sec;
+        return COMPARE(ts1->tv_sec, ts2->tv_sec);
 }
 
 
@@ -448,13 +451,13 @@ static bool parse_samples(const char **string, uint64_t *result)
     bool ok = parse_uint64(string, result);
     if (ok)
     {
-        double duration = *result;      // In case it's a duration after all
+        double duration = (double) *result; // In case it's a duration after all
         bool seconds = **string == '.';
         if (seconds)
         {
             long nsec;
             ok = parse_nanoseconds(string, &nsec)  &&  parse_char(string, 's');
-            duration += 1e-9 * nsec;
+            duration += 1e-9 * (double) nsec;
         }
         else
             seconds = read_char(string, 's');
@@ -500,7 +503,9 @@ static bool validate_args(void)
         TEST_OK_(!end_specified  ||  compare_ts(&start, &end) < 0,
             "End time isn't after start")  &&
         TEST_OK_(start_specified  ||  data_format == DATA_FA,
-            "Decimated data must be historical");
+            "Decimated data must be historical")  &&
+        TEST_OK_(!matlab_format  ||  sample_count <= UINT32_MAX,
+            "Too many samples for matlab format capture");
 }
 
 
@@ -587,7 +592,7 @@ static bool request_data(FILE *stream)
 static bool check_response(FILE *stream)
 {
     char response[1024];
-    int rx = fread(response, 1, 1, stream);
+    size_t rx = fread(response, 1, 1, stream);
     if (rx != 1)
         return FAIL_("Unexpected server disconnect");
     else if (*response == '\0')
@@ -603,18 +608,18 @@ static bool check_response(FILE *stream)
 
 
 /* Show progress of capture on stderr. */
-static void update_progress(unsigned int frames_written, size_t frame_size)
+static void update_progress(uint64_t frames_written, size_t frame_size)
 {
     const char *progress = "|/-\\";
     static uint64_t last_update = 0;
-    uint64_t bytes_written = (uint64_t) frame_size * frames_written;
+    uint64_t bytes_written = frame_size * frames_written;
     if (bytes_written >= last_update + PROGRESS_INTERVAL)
     {
-        fprintf(stderr, "%c %9d",
+        fprintf(stderr, "%c %9"PRIu64,
             progress[(bytes_written / PROGRESS_INTERVAL) % 4], frames_written);
         if (sample_count > 0)
             fprintf(stderr, " (%5.2f%%)",
-                100.0 * (double) frames_written / sample_count);
+                100.0 * (double) frames_written / (double) sample_count);
         fprintf(stderr, "\r");
         fflush(stderr);
         last_update = bytes_written;
@@ -651,7 +656,7 @@ static struct extended_timestamp *get_timestamp_block(void)
 
 /* This routine reads data from stream and writes out complete frames until
  * either the sample count is reached or the read is interrupted. */
-static bool capture_data(FILE *stream, unsigned int *frames_written)
+static bool capture_data(FILE *stream, uint64_t *frames_written)
 {
     /* Size of line of data. */
     size_t line_size =
@@ -661,7 +666,7 @@ static bool capture_data(FILE *stream, unsigned int *frames_written)
     /* If matlab_format is set we need to read timestamp frames interleaved
      * in the data stream.  These two variables keep track of this. */
     unsigned int timestamp_offset = timestamp_header.offset;
-    unsigned int lines_to_timestamp = 0;
+    size_t lines_to_timestamp = 0;
 
     /* Track state and number of frames written. */
     *frames_written = 0;
@@ -677,8 +682,7 @@ static bool capture_data(FILE *stream, unsigned int *frames_written)
                 break;      // End of input
 
             timestamps_count += 1;
-            lines_to_timestamp =
-                timestamp_header.block_size - timestamp_offset;
+            lines_to_timestamp = timestamp_header.block_size - timestamp_offset;
             timestamp_offset = 0;
         }
 
@@ -690,7 +694,7 @@ static bool capture_data(FILE *stream, unsigned int *frames_written)
             lines_to_read = lines_to_timestamp;
         if (sample_count > 0  &&
                 lines_to_read > sample_count - *frames_written)
-            lines_to_read = sample_count - *frames_written;
+            lines_to_read = (size_t) (sample_count - *frames_written);
 
         /* Read lines of data. */
         char buffer[BUFFER_SIZE];
@@ -718,11 +722,11 @@ static bool capture_data(FILE *stream, unsigned int *frames_written)
 /* Coordination of raw data capture. */
 static bool capture_raw_data(FILE *stream)
 {
-    unsigned int frames_written;
+    uint64_t frames_written;
     return
         capture_data(stream, &frames_written)  &&
         TEST_OK_(continuous_capture || frames_written == sample_count,
-            "Only captured %u of %"PRIu64" frames",
+            "Only captured %"PRIu64" of %"PRIu64" frames",
             frames_written, sample_count);
 }
 
@@ -773,7 +777,7 @@ static bool read_gap_list(FILE *stream, time_t local_offset)
 
 /* Writes complete matlab header including size of captured data and auxilliary
  * data.  May be called twice if data size changes. */
-static bool write_header(uint64_t frames_written)
+static bool write_header(uint32_t frames_written)
 {
     bool squeeze[4] = {
         false,                                      // X, Y
@@ -794,9 +798,10 @@ static bool write_header(uint64_t frames_written)
         place_matlab_vector(&header, "id0", miINT32, id_zero, gap_count + 1);
 
     /* Write out the index array tying data back to original BPM ids. */
-    uint8_t mask_ids[fa_entry_count];
-    int mask_length = compute_mask_ids(mask_ids, &capture_mask);
-    place_matlab_vector(&header, "ids", miUINT8, mask_ids, mask_length);
+    uint16_t mask_ids[fa_entry_count];
+    unsigned int mask_length =
+        compute_mask_ids(mask_ids, &capture_mask, fa_entry_count);
+    place_matlab_vector(&header, "ids", miUINT16, mask_ids, mask_length);
 
     /* Write out the gap list data. */
     if (!continuous_capture)
@@ -808,7 +813,7 @@ static bool write_header(uint64_t frames_written)
     }
 
     /* Finally write out the matrix mat_header for the fa data. */
-    int field_count = count_data_bits(data_mask);
+    unsigned int field_count = count_data_bits(data_mask);
     place_matrix_header(&header, data_name,
         miINT32, squeeze,
         4, 2, field_count, mask_length, frames_written);
@@ -820,7 +825,7 @@ static bool write_header(uint64_t frames_written)
 
 /* Computes a block of timestamps starting at the given offset. */
 static void compute_timestamps(
-    struct extended_timestamp *timestamps, unsigned int offset,
+    struct extended_timestamp *timestamps, size_t offset,
     double day_zero, time_t local_offset, double *buffer, size_t count)
 {
     unsigned int block_size = timestamp_header.block_size;
@@ -832,7 +837,8 @@ static void compute_timestamps(
 
     double increment = conversion * timestamps->duration / block_size;
     double timestamp =
-        conversion * timestamps->timestamp + matlab_epoch + offset * increment;
+        conversion * (double) timestamps->timestamp +
+        matlab_epoch + (double) offset * increment;
 
     /* This way of filling the buffer is brisk and the accumulated increment
      * error with double precision is negligible (count is at most 8192). */
@@ -851,7 +857,7 @@ static bool write_footer(unsigned int frames_written, time_t local_offset)
 
     /* Compute the timestamps from the arrays of timestamps we've read. */
     struct extended_timestamp *timestamps = timestamps_array;
-    unsigned int offset = timestamp_header.offset;
+    size_t offset = timestamp_header.offset;
 
     double timestamp;
     compute_timestamps(timestamps, offset, 0, local_offset, &timestamp, 1);
@@ -872,7 +878,7 @@ static bool write_footer(unsigned int frames_written, time_t local_offset)
     size_t buffer_size = BUFFER_SIZE / sizeof(double);
     double buffer[buffer_size];
 
-    for (unsigned int i = 0; ok  &&  i < frames_written; )
+    for (size_t i = 0; ok  &&  i < frames_written; )
     {
         /* We need to do timestamp conversion in reasonable sized blocks for
          * speed.  Figure out how many will fit into the current block. */
@@ -903,7 +909,7 @@ static bool write_footer(unsigned int frames_written, time_t local_offset)
 /* Coordination of matlab data capture. */
 static bool capture_matlab_data(FILE *stream)
 {
-    unsigned int frames_written;
+    uint64_t frames_written;
     time_t local_offset = offset_matlab_times ? local_time_offset() : 0;
     return
         IF_ELSE(continuous_capture,
@@ -911,9 +917,9 @@ static bool capture_matlab_data(FILE *stream)
             read_gap_list(stream, local_offset))  &&
         TEST_OK(READ_ITEM(stream, timestamp_header))  &&
 
-        write_header(sample_count)  &&
+        write_header((uint32_t) sample_count)  &&
         capture_data(stream, &frames_written)  &&
-        write_footer(frames_written, local_offset)  &&
+        write_footer((uint32_t) frames_written, local_offset)  &&
 
         IF_(frames_written != sample_count,
             /* For an incomplete capture, probably an interrupted continuous
@@ -921,7 +927,7 @@ static bool capture_matlab_data(FILE *stream)
              * capture count. */
             TEST_IO_(fseek(output_file, 0, SEEK_SET),
                 "Cannot update matlab file, file not seekable")  &&
-            write_header(frames_written));
+            write_header((uint32_t) frames_written));
 }
 
 

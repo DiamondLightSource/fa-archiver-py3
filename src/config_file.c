@@ -58,9 +58,9 @@ static bool parse_array(
      * enough for this; we'll then resize back down when we're done.  There
      * can't be more than one element every two characters as separators are
      * mandatory in this parser. */
-    int initial_count = (strlen(*string) + 1) / 2;
+    unsigned int initial_count = (unsigned int) (strlen(*string) + 1) / 2;
     char *data = malloc(type_size * initial_count);
-    int count = 0;
+    unsigned int count = 0;
     bool ok = true;
     bool whitespace = true;     // Did we see whitespace before this?
     while (ok  &&  **string != 0)
@@ -116,7 +116,7 @@ static bool parse_name(const char **string, char *name, size_t length)
 
 static bool lookup_name(
     const char *name,
-    const struct config_entry *config_table, size_t config_size, int *ix)
+    const struct config_entry *config_table, size_t config_size, size_t *ix)
 {
     for (size_t i = 0; i < config_size; i ++)
         if (strcmp(name, config_table[i].name) == 0)
@@ -148,7 +148,7 @@ static bool do_parse_line(
      * The optional whitespace which our parser doesn't support makes the parse
      * a lot more long winded than it otherwise ought to be. */
     char name[NAME_LENGTH];
-    int ix;
+    size_t ix = 0;
     bool ok =
         parse_name(&string, name, NAME_LENGTH)  &&
         DO_(skip_whitespace(&string))  &&
@@ -182,7 +182,7 @@ static bool read_one_line(
     int line_number, size_t *length_read, bool *eof)
 {
     errno = 0;
-    *eof = fgets(line_buffer, line_length, input) == NULL;
+    *eof = fgets(line_buffer, (int) line_length, input) == NULL;
     if (*eof)
     {
         *length_read = 0;

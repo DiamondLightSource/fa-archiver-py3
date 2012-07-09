@@ -95,23 +95,23 @@ bool initialise_disk_writer(
         DO_(*input_block_size = header->input_block_size;
             *fa_entry_count   = header->fa_entry_count)  &&
         TEST_IO(
-            data_index = mmap(NULL, header->index_data_size,
+            data_index = mmap(NULL, (size_t) header->index_data_size,
                 PROT_READ | PROT_WRITE, MAP_SHARED, disk_fd,
-                header->index_data_start))  &&
+                (off_t) header->index_data_start))  &&
         TEST_IO(
-            dd_data = mmap(NULL, header->dd_data_size,
+            dd_data = mmap(NULL, (size_t) header->dd_data_size,
                 PROT_READ | PROT_WRITE, MAP_SHARED, disk_fd,
-                header->dd_data_start))  &&
+                (off_t) header->dd_data_start))  &&
         DO_(initialise_transform(header, data_index, dd_data));
 }
 
 static void close_disk(void)
 {
-    ASSERT_IO(msync(dd_data, header->dd_data_size, MS_ASYNC));
-    ASSERT_IO(msync(data_index, header->index_data_size, MS_ASYNC));
+    ASSERT_IO(msync(dd_data, (size_t) header->dd_data_size, MS_ASYNC));
+    ASSERT_IO(msync(data_index, (size_t) header->index_data_size, MS_ASYNC));
     ASSERT_IO(msync(header, DISK_HEADER_SIZE, MS_ASYNC));
-    ASSERT_IO(munmap(dd_data, header->dd_data_size));
-    ASSERT_IO(munmap(data_index, header->index_data_size));
+    ASSERT_IO(munmap(dd_data, (size_t) header->dd_data_size));
+    ASSERT_IO(munmap(data_index, (size_t) header->index_data_size));
     ASSERT_IO(munmap(header, DISK_HEADER_SIZE));
     ASSERT_IO(close(disk_fd));
 }
@@ -142,8 +142,8 @@ static bool do_write(int file, void *buffer, size_t length)
         ssize_t tx;
         if (!TEST_OK(tx = write(file, buffer, length)))
             return false;
-        length -= tx;
-        buffer += tx;
+        length -= (size_t) tx;
+        buffer += (size_t) tx;
     }
     return true;
 }

@@ -52,13 +52,13 @@
 
 static size_t round_to_page(size_t block_size)
 {
-    size_t page_size = sysconf(_SC_PAGESIZE);
+    size_t page_size = (size_t) sysconf(_SC_PAGESIZE);
     return page_size * ((block_size + page_size - 1) / page_size);
 }
 
 static bool page_aligned(uint64_t offset, const char *description)
 {
-    size_t page_size = sysconf(_SC_PAGESIZE);
+    size_t page_size = (size_t) sysconf(_SC_PAGESIZE);
     return TEST_OK_(offset % page_size == 0,
         "Bad page alignment for %s at %"PRIu64, description, offset);
 }
@@ -107,10 +107,10 @@ bool initialise_header(
     header->major_sample_count = output_block_size / FA_ENTRY_SIZE;
     header->d_sample_count = header->major_sample_count / first_decimation;
     header->dd_sample_count = header->d_sample_count / second_decimation;
-    header->major_block_size =
+    header->major_block_size = (uint32_t) (
         archive_mask_count * (
             header->major_sample_count * FA_ENTRY_SIZE +
-            header->d_sample_count * sizeof(struct decimated_data));
+            header->d_sample_count * sizeof(struct decimated_data)));
 
     /* Computing the total number of samples (we count in major blocks) is a
      * little tricky, as we have to fit everything into file_size including
@@ -119,24 +119,25 @@ bool initialise_header(
      * page size, so simple division won't quite do the trick. */
     uint64_t data_size = file_size - DISK_HEADER_SIZE;
     uint32_t index_block_size = sizeof(struct data_index);
-    uint32_t dd_block_size =
+    uint32_t dd_block_size = (uint32_t) (
         header->dd_sample_count * archive_mask_count *
-        sizeof(struct decimated_data);
+        sizeof(struct decimated_data));
     /* Start with a simple estimate by division. */
     uint32_t major_block_count =
-        data_size / (
-            index_block_size + dd_block_size + header->major_block_size);
+        (uint32_t) (data_size / (
+            index_block_size + dd_block_size + header->major_block_size));
     uint32_t index_data_size =
-        round_to_page(major_block_count * index_block_size);
+        (uint32_t) round_to_page(major_block_count * index_block_size);
     uint64_t dd_data_size =
-        round_to_page((uint64_t) major_block_count * dd_block_size);
+        round_to_page((size_t) major_block_count * dd_block_size);
     /* Now incrementally reduce the major block count until we're good.  In
      * fact, this is only going to happen once at most. */
     while (index_data_size + dd_data_size +
            major_block_count * header->major_block_size > data_size)
     {
         major_block_count -= 1;
-        index_data_size = round_to_page(major_block_count * index_block_size);
+        index_data_size =
+            (uint32_t) round_to_page(major_block_count * index_block_size);
         dd_data_size = round_to_page(major_block_count * dd_block_size);
     }
 
@@ -162,7 +163,7 @@ bool initialise_header(
     return
         test_power_of_2(first_decimation, "First decimation")  &&
         test_power_of_2(second_decimation, "Second decimation")  &&
-        TEST_OK_(output_block_size % sysconf(_SC_PAGESIZE) == 0,
+        TEST_OK_(output_block_size % (size_t) sysconf(_SC_PAGESIZE) == 0,
             "Output block size must be a multiple of page size")  &&
         TEST_OK_(
             output_block_size % FA_ENTRY_SIZE == 0,
@@ -189,9 +190,10 @@ bool validate_header(struct disk_header *header, uint64_t file_size)
     COMPILE_ASSERT(sizeof(struct disk_header) <= DISK_HEADER_SIZE);
 
     size_t fa_frame_size = header->fa_entry_count * FA_ENTRY_SIZE;
-    uint32_t input_sample_count = header->input_block_size / fa_frame_size;
-    uint32_t first_decimation  = 1 << header->first_decimation_log2;
-    uint32_t second_decimation = 1 << header->second_decimation_log2;
+    uint32_t input_sample_count =
+        (uint32_t) (header->input_block_size / fa_frame_size);
+    uint32_t first_decimation  = 1U << header->first_decimation_log2;
+    uint32_t second_decimation = 1U << header->second_decimation_log2;
     unsigned int archive_mask_count =
         count_mask_bits(&header->archive_mask, header->fa_entry_count);
     errno = 0;      // Suppresses invalid error report from TEST_OK_ failures
@@ -335,9 +337,9 @@ void print_header(FILE *out, struct disk_header *header)
         header->major_sample_count * 1e6 / header->last_duration;
     uint64_t total_sample_count =
         (uint64_t) header->major_block_count * header->major_sample_count;
-    uint32_t first_decimation  = 1 << header->first_decimation_log2;
-    uint32_t second_decimation = 1 << header->second_decimation_log2;
-    double seconds = total_sample_count / sample_frequency;
+    uint32_t first_decimation  = 1U << header->first_decimation_log2;
+    uint32_t second_decimation = 1U << header->second_decimation_log2;
+    double seconds = (double) total_sample_count / sample_frequency;
     size_t fa_frame_size = header->fa_entry_count * FA_ENTRY_SIZE;
     fprintf(out,
         "FA sniffer archive: %.7s, v%d.\n"
@@ -392,7 +394,7 @@ bool get_filesize(int disk_fd, uint64_t *file_size)
         struct stat st;
         return
             TEST_IO(fstat(disk_fd, &st))  &&
-            DO_(*file_size = st.st_size)  &&
+            DO_(*file_size = (uint64_t) st.st_size)  &&
             TEST_OK_(*file_size > 0,
                 "Zero file size.  Maybe stat failed?");
     }

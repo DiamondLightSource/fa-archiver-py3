@@ -380,7 +380,7 @@ static bool process_command(int scon, const char *client_name, const char *buf)
             }
 
             case 'C':
-                ok = write_string(scon, "%d\n", get_decimation_factor());
+                ok = write_string(scon, "%u\n", get_decimation_factor());
                 break;
 
             case 'S':
@@ -498,7 +498,7 @@ bool report_socket_error(int scon, const char *client_name, bool ok)
 static bool send_extended_header(int scon, size_t block_size)
 {
     struct extended_timestamp_header header = {
-        .block_size = block_size,
+        .block_size = (uint32_t) block_size,
         .offset = 0 };
     return TEST_write(scon, &header, sizeof(header));
 }
@@ -511,12 +511,12 @@ static bool send_extended_timestamp(
      * timestamps -- just don't have the value to deliver!  Actually, it's not a
      * great match to the data anyway, but that's another problem... */
     const struct disk_header *header = get_header();
-    uint32_t duration =
+    size_t duration =
         header->last_duration / (header->major_sample_count / block_size);
 
     struct extended_timestamp extended_timestamp = {
         .timestamp = timestamp - duration,  // timestamp is after *last* point
-        .duration = duration };
+        .duration = (uint32_t) duration };
     return TEST_write_(
         scon, &extended_timestamp, sizeof(extended_timestamp),
         "Unable to write timestamp");
@@ -530,8 +530,8 @@ static bool send_subscription(
 {
     /* The transmitted block optionally begins with the timestamp and T0 values,
      * in that order, if requested. */
-    size_t block_size =
-        reader_block_size(reader) / fa_entry_count / FA_ENTRY_SIZE;
+    unsigned int block_size = (unsigned int) (
+        reader_block_size(reader) / fa_entry_count / FA_ENTRY_SIZE);
     bool ok =
         IF_(parse->send_timestamp == SEND_BASIC,
             TEST_write(scon, &timestamp, sizeof(uint64_t)))  &&
@@ -645,14 +645,14 @@ static bool read_line(int sock, struct client_info *client)
         TEST_IO_(rx = read(sock, buf, buflen), "Socket read failed")  &&
         TEST_OK_(rx > 0, "End of file on input"))
     {
-        char *newline = memchr(buf, '\n', rx);
+        char *newline = memchr(buf, '\n', (size_t) rx);
         if (newline)
         {
             *newline = '\0';
             return true;
         }
 
-        buflen -= rx;
+        buflen -= (size_t) rx;
         buf += rx;
     }
     /* On failure report what we managed to read before failing. */
@@ -676,7 +676,7 @@ static bool dispatch_command(
 
 static void *process_connection(void *context)
 {
-    int scon = (intptr_t) context;
+    int scon = (int) (intptr_t) context;
     struct client_info *client = add_client();
 
     /* Retrieve client address so we can log all messages associated with this

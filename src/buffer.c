@@ -330,7 +330,7 @@ size_t reader_block_size(struct reader_state *reader)
 
 uint64_t ts_to_microseconds(const struct timespec *ts)
 {
-    return 1000000 * (uint64_t) ts->tv_sec + ts->tv_nsec / 1000;
+    return 1000000 * (uint64_t) ts->tv_sec + (uint64_t) ts->tv_nsec / 1000;
 }
 
 uint64_t get_timestamp(void)

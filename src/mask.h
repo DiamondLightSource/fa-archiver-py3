@@ -41,7 +41,7 @@ static inline void copy_mask(
 
 static inline void set_mask_bit(struct filter_mask *mask, unsigned int bit)
 {
-    mask->mask[bit >> 3] |= 1 << (bit & 7);
+    mask->mask[bit >> 3] |= (uint8_t) (1 << (bit & 7));
 }
 
 static inline bool test_mask_bit(
@@ -90,4 +90,4 @@ int copy_frame(
  * false if writing fails. */
 bool write_frames(
     int file, const struct filter_mask *mask, unsigned int fa_entry_count,
-    const void *frame, int count);
+    const void *frame, unsigned int count);

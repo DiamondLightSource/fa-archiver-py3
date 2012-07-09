@@ -94,7 +94,7 @@ static bool parse_raw_mask(
     for (unsigned int i = count; i > 0; )
     {
         i -= 1;
-        unsigned char ch = *(*string)++;
+        unsigned int ch = (unsigned char) *(*string)++;
         unsigned int nibble;
         if ('0' <= ch  &&  ch <= '9')
             nibble = ch - '0';
@@ -102,7 +102,8 @@ static bool parse_raw_mask(
             nibble = ch - 'A' + 10;
         else
             return FAIL_("Unexpected character in mask");
-        mask->mask[i / 2] |= nibble << (4 * (i % 2));   // 2 nibbles per byte
+        // 2 nibbles per byte
+        mask->mask[i / 2] |= (uint8_t) (nibble << (4 * (i % 2)));
     }
     return true;
 }
@@ -155,7 +156,7 @@ static bool write_string(char **string, size_t *length, const char *value)
         return false;
 }
 
-static bool write_int(char **string, size_t *length, int value)
+static bool write_uint(char **string, size_t *length, unsigned int value)
 {
     char buffer[24];
     sprintf(buffer, "%d", value);
@@ -163,14 +164,15 @@ static bool write_int(char **string, size_t *length, int value)
 }
 
 static bool write_range(
-    char **string, size_t *length, int start, int end, bool first)
+    char **string, size_t *length,
+    unsigned int start, unsigned int end, bool first)
 {
     return
         IF_(!first, write_string(string, length, ","))  &&
-        write_int(string, length, start)  &&
+        write_uint(string, length, start)  &&
         IF_(end > start,
             write_string(string, length, "-")  &&
-            write_int(string, length, end));
+            write_uint(string, length, end));
 }
 
 bool format_mask(
@@ -180,7 +182,7 @@ bool format_mask(
     bool ok = true;
     bool in_range = false;
     bool first = true;
-    int range_start = 0;
+    unsigned int range_start = 0;
     *string = '\0';
     for (unsigned int id = 0; ok  &&  id < fa_entry_count; id ++)
     {
@@ -233,9 +235,10 @@ int copy_frame(
 
 bool write_frames(
     int file, const struct filter_mask *mask, unsigned int fa_entry_count,
-    const void *frame, int count)
+    const void *frame, unsigned int count)
 {
-    int out_frame_size = count_mask_bits(mask, fa_entry_count) * FA_ENTRY_SIZE;
+    size_t out_frame_size =
+        count_mask_bits(mask, fa_entry_count) * FA_ENTRY_SIZE;
     while (count > 0)
     {
         char buffer[WRITE_BUFFER_SIZE];
@@ -251,12 +254,12 @@ bool write_frames(
         size_t written = 0;
         while (buffered > 0)
         {
-            size_t wr;
+            ssize_t wr;
             if (!TEST_IO_(wr = write(file, buffer + written, buffered),
                     "Unable to write frame"))
                 return false;
-            written += wr;
-            buffered -= wr;
+            written  += (size_t) wr;
+            buffered -= (size_t) wr;
         }
     }
     return true;

@@ -76,10 +76,11 @@ static size_t lookup_size(int format)
 }
 
 
-int compute_mask_ids(uint8_t *array, struct filter_mask *mask)
+unsigned int compute_mask_ids(
+    uint16_t *array, struct filter_mask *mask, unsigned int max_bit_count)
 {
-    int count = 0;
-    for (int bit = 0; bit < 256; bit ++)
+    unsigned int count = 0;
+    for (uint16_t bit = 0; bit < max_bit_count; bit ++)
         if (test_mask_bit(mask, bit))
         {
             *array++ = bit;
@@ -125,17 +126,17 @@ static void write_matlab_string(
 {
     size_t l = strlen(string);
     write_buffer_uint32(buffer, miINT8);
-    write_buffer_uint32(buffer, l);
+    write_buffer_uint32(buffer, (uint32_t) l);
     /* Need to pad string size to multiple of 8. */
-    memcpy(ensure_buffer(buffer, (l + 7) & ~7), string, l);
+    memcpy(ensure_buffer(buffer, (l + 7) & ~7U), string, l);
 }
 
 
 /* Returns the number of bytes of padding required after data_length bytes of
  * following data to ensure that the entire matrix is padded to 8 bytes. */
-int place_matrix_header(
+unsigned int place_matrix_header(
     struct matlab_buffer *buffer, const char *name, int data_type,
-    bool *squeeze, int dimensions, ...)
+    bool *squeeze, unsigned int dimensions, ...)
 {
     va_list dims;
     va_start(dims, dimensions);
@@ -154,11 +155,11 @@ int place_matrix_header(
     write_buffer_uint32(buffer, miINT32);
     // Size of dimensions to be written here
     uint32_t *dim_size = ensure_buffer_uint32(buffer);
-    int total_dims = 0;
+    uint32_t total_dims = 0;
     size_t data_length = lookup_size(data_type);
-    for (int i = 0; i < dimensions; i ++)
+    for (unsigned int i = 0; i < dimensions; i ++)
     {
-        int size = va_arg(dims, int32_t);
+        unsigned int size = va_arg(dims, unsigned int);
         data_length *= size;
         if (size == 1  &&  squeeze != NULL  &&  squeeze[i])
             /* Squeeze this dimension out by ignoring it altogether. */
@@ -169,7 +170,7 @@ int place_matrix_header(
             total_dims += 1;
         }
     }
-    *dim_size = total_dims * sizeof(int32_t);
+    *dim_size = total_dims * (uint32_t) sizeof(int32_t);
     if (total_dims & 1)
         write_buffer_uint32(buffer, 0);         // Padding if required
 
@@ -177,14 +178,15 @@ int place_matrix_header(
     write_matlab_string(buffer, name);
 
     // Data header: data follows directly after.
-    write_buffer_uint32(buffer, data_type);
-    write_buffer_uint32(buffer, data_length);
+    write_buffer_uint32(buffer, (uint32_t) data_type);
+    write_buffer_uint32(buffer, (uint32_t) data_length);
 
     /* Total size of matrix element goes from just after l to the end of the
      * data that's about to be written plus padding to multiple of 8 bytes. */
-    int padding = (8 - data_length) & 7;
-    *l = ensure_buffer(buffer, 0) - (void *) l - sizeof(int32_t) +
-        data_length + padding;
+    unsigned int padding = (8 - data_length) & 7;
+    *l = (uint32_t) (
+        (size_t) (ensure_buffer(buffer, 0) - (void *) l) -
+        sizeof(int32_t) + data_length + padding);
 
     return padding;
 }
@@ -194,17 +196,18 @@ void place_matlab_value(
     struct matlab_buffer *buffer, const char *name, int data_type, void *data)
 {
     size_t data_size = lookup_size(data_type);
-    int padding = place_matrix_header(buffer, name, data_type, NULL, 1, 1);
+    unsigned int padding =
+        place_matrix_header(buffer, name, data_type, NULL, 1, 1);
     memcpy(ensure_buffer(buffer, data_size + padding), data, data_size);
 }
 
 
 void place_matlab_vector(
     struct matlab_buffer *buffer, const char *name, int data_type,
-    void *data, int vector_length)
+    void *data, unsigned int vector_length)
 {
-    int data_length = lookup_size(data_type) * vector_length;
-    int padding = place_matrix_header(
+    size_t data_length = lookup_size(data_type) * vector_length;
+    unsigned int padding = place_matrix_header(
         buffer, name, data_type, NULL, 2, 1, vector_length);
     memcpy(ensure_buffer(buffer, data_length + padding), data, data_length);
 }
@@ -233,7 +236,8 @@ unsigned int count_data_bits(unsigned int mask)
 
 double matlab_timestamp(uint64_t timestamp, time_t local_offset)
 {
-    return MATLAB_EPOCH + (1e-6 * timestamp + local_offset) / SECS_PER_DAY;
+    return MATLAB_EPOCH +
+        (1e-6 * (double) timestamp + (double) local_offset) / SECS_PER_DAY;
 }
 
 
@@ -255,20 +259,21 @@ bool map_matlab_file(int file, struct region *region)
         TEST_IO(fstat(file, &st))  &&
         TEST_OK_(st.st_size > 128, "Matlab file too small")  &&
         TEST_IO(
-            base = mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, file, 0))  &&
+            base = mmap(
+                NULL, (size_t) st.st_size, PROT_READ, MAP_SHARED, file, 0))  &&
         TEST_OK_(
             *((uint32_t *)(base + 124)) == MATLAB_HEADER_MARK,
             "Invalid matlab header")  &&
         DO_(
             region->start = base;
-            region->size = st.st_size;
+            region->size = (size_t) st.st_size;
             region->ptr = base + 128);
 }
 
 
 bool read_data_element(struct region *region, struct region *result, int *type)
 {
-    size_t space = region->size - (region->ptr - region->start);
+    size_t space = region->size - (size_t) (region->ptr - region->start);
     if (space < 8)
         return FAIL_("Region too small for any more data");
     else
@@ -290,7 +295,7 @@ bool read_data_element(struct region *region, struct region *result, int *type)
         else
         {
             /* Normal format. */
-            *type = tag;
+            *type = (int) tag;
             unsigned int size = elements[1];
             result->size = size;
             result->start = region->ptr + 8;
@@ -301,7 +306,7 @@ bool read_data_element(struct region *region, struct region *result, int *type)
                  * might not be sufficient if compressed and uncompressed data
                  * is mixed in the same file ... but in this case the padding
                  * rule is unclear anyway. */
-                size = (size + 7) & ~7;
+                size = (size + 7) & ~7U;
             region->ptr += 8 + size;
             return TEST_OK_(
                 size <= space - 8, "Data element larger than region");
@@ -314,7 +319,7 @@ static bool validate_matrix_dimensions(const struct matlab_matrix *matrix)
 {
     size_t size = lookup_size(matrix->data_type);
     bool ok = true;
-    for (int i = 0; ok  &&  i < matrix->dim_count; i ++)
+    for (unsigned int i = 0; ok  &&  i < matrix->dim_count; i ++)
     {
         ok = TEST_OK_(matrix->dims[i] > 0, "Negative dimension!");
         size *= matrix->dims[i];
@@ -344,8 +349,8 @@ bool read_matlab_matrix(
         read_data_element(&input, &field, &type)  &&
         TEST_OK_(type == miINT32, "Expected dimensions array")  &&
         DO_(
-            matrix->dim_count = field.size / 4;
-            matrix->dims = (int32_t *) field.start)  &&
+            matrix->dim_count = (unsigned int) field.size / 4;
+            matrix->dims = field.start)  &&
 
         /* The array name. */
         read_data_element(&input, &field, &type)  &&

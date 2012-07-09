@@ -41,6 +41,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <time.h>
+#include <limits.h>
 
 #include "error.h"
 #include "fa_sniffer.h"
@@ -81,7 +82,7 @@ static bool do_validate = true;
 static bool dump_header = true;
 static bool dump_index = false;
 static unsigned int dump_start = 0;
-static unsigned int dump_end = -1;
+static unsigned int dump_end = UINT_MAX;
 static bool do_lock = true;
 static bool convert_timestamps = false;
 
@@ -249,7 +250,7 @@ static bool process_args(int argc, char **argv)
 
 /* Resets the index area to zeros, even if the rest of the file is untouched.
  * This is necessary for a consistent freshly initialised database. */
-static bool reset_index(int file_fd, int index_data_size)
+static bool reset_index(int file_fd, size_t index_data_size)
 {
     void *data_index;
     bool ok =
@@ -271,7 +272,7 @@ static bool prepare_new_header(struct disk_header *header)
         DO_(print_header(stdout, header));
 }
 
-static bool write_new_header(int file_fd, int *written)
+static bool write_new_header(int file_fd, size_t *written)
 {
     struct disk_header *header;
     bool ok =
@@ -287,7 +288,7 @@ static bool write_new_header(int file_fd, int *written)
 }
 
 
-static void show_progress(int n, int final_n)
+static void show_progress(unsigned int n, unsigned int final_n)
 {
     const char *progress = "|/-\\";
     if (n % PROGRESS_INTERVAL == 0)
@@ -301,23 +302,23 @@ static void show_progress(int n, int final_n)
 
 
 /* Verbose and slower near equivalent to posix_fallocate(). */
-static bool fill_zeros(int file_fd, int written)
+static bool fill_zeros(int file_fd, size_t written)
 {
     uint32_t block_size = 512*K;
     void *zeros = valloc(block_size);
     memset(zeros, 0, block_size);
 
     uint64_t size_left = file_size - written;
-    int final_n = size_left / block_size;
+    unsigned int final_n = (unsigned int) (size_left / block_size);
     bool ok = true;
-    for (int n = 0; ok  &&  size_left >= block_size;
+    for (unsigned int n = 0; ok  &&  size_left >= block_size;
          size_left -= block_size, n += 1)
     {
         ok = TEST_write(file_fd, zeros, block_size);
         show_progress(n, final_n);
     }
     if (ok  &&  size_left > 0)
-        ok = TEST_write(file_fd, zeros, size_left);
+        ok = TEST_write(file_fd, zeros, (size_t) size_left);
     printf("\n");
     return ok;
 }
@@ -337,12 +338,13 @@ static bool do_dump_index(int file_fd, struct disk_header *header)
 {
     /* Dumping the index isn't altogether straightforward -- we need to map it
      * into memory first! */
-    struct data_index *data_index;
+    struct data_index *data_index = NULL;
     bool ok =
         IF_(do_lock, lock_archive(file_fd))  &&
         TEST_IO(
             data_index = mmap(NULL, header->index_data_size,
-                PROT_READ, MAP_SHARED, file_fd, header->index_data_start));
+                PROT_READ, MAP_SHARED, file_fd,
+                (off64_t) header->index_data_start));
     if (ok)
     {
         unsigned int block_count = header->major_block_count;
@@ -357,7 +359,7 @@ static bool do_dump_index(int file_fd, struct disk_header *header)
             struct data_index *block = &data_index[i];
             printf("%6u: ", i);
             if (convert_timestamps)
-                print_timestamp(block->timestamp / 1000000);
+                print_timestamp((time_t) (block->timestamp / 1000000));
             printf("%10"PRIu64".%06"PRIu64" / %7u / %9u",
                 block->timestamp / 1000000, block->timestamp % 1000000,
                 block->duration, block->id_zero);
@@ -416,7 +418,7 @@ int main(int argc, char **argv)
         int open_flags =
             (file_size_given ? O_CREAT | O_TRUNC : 0) |
             (quiet_allocate ? 0 : O_DIRECT) | O_WRONLY;
-        int written;
+        size_t written;
         ok =
             TEST_IO_(file_fd = open(file_name, open_flags, 0664),
                 "Unable to write to file \"%s\"", file_name)  &&
@@ -429,7 +431,8 @@ int main(int argc, char **argv)
                     /* posix_fallocate is marginally faster but shows no sign of
                      * progress. */
                     TEST_0(posix_fallocate(
-                        file_fd, written, file_size - written)),
+                        file_fd, (off64_t) written,
+                        (off64_t) (file_size - written))),
                     /* If we use full_zeros we can show progress to the user. */
                     fill_zeros(file_fd, written)))  &&
             TEST_IO(close(file_fd));

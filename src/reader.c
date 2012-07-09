@@ -223,7 +223,7 @@ static bool mask_to_archive(
         {
             ok = TEST_OK_(test_mask_bit(&header->archive_mask, i),
                 "BPM %d not in archive", i);
-            iter->index[n] = ix;
+            iter->index[n] = (uint16_t) ix;
             n += 1;
         }
         if (test_mask_bit(&header->archive_mask, i))
@@ -267,7 +267,7 @@ struct reader {
 /* Helper routine to calculate the ceiling of a/b. */
 static unsigned int round_up(uint64_t a, unsigned int b)
 {
-    return (a + b - 1) / b;
+    return (unsigned int) ((a + b - 1) / b);
 }
 
 
@@ -483,9 +483,10 @@ static bool transfer_data(
 
             /* Enough lines to fill the write buffer, so long as we don't write
              * more than requested and we don't exhaust the read blocks. */
-            unsigned int line_count = buf_length / line_size_out;
+            unsigned int line_count =
+                (unsigned int) (buf_length / line_size_out);
             if (count < line_count)
-                line_count = count;
+                line_count = (unsigned int) count;
             if (offset + line_count > samples_read)
                 line_count = samples_read - offset;
 
@@ -596,10 +597,10 @@ static bool read_fa_block(
 {
     const struct disk_header *header = get_header();
     size_t fa_block_size = FA_ENTRY_SIZE * header->major_sample_count;
-    off64_t offset =
+    off64_t offset = (off64_t) (
         header->major_data_start +
         (uint64_t) header->major_block_size * major_block +
-        fa_block_size * id;
+        fa_block_size * id);
     return
         DO_(request_read())  &&
         TEST_IO(lseek(archive, offset, SEEK_SET))  &&
@@ -613,11 +614,11 @@ static bool read_d_block(
     size_t fa_block_size = FA_ENTRY_SIZE * header->major_sample_count;
     size_t d_block_size =
         sizeof(struct decimated_data) * header->d_sample_count;
-    off64_t offset =
+    off64_t offset = (off64_t) (
         header->major_data_start +
         (uint64_t) header->major_block_size * major_block +
         header->archive_mask_count * fa_block_size +
-        d_block_size * id;
+        d_block_size * id);
     return
         DO_(request_read())  &&
         TEST_IO(lseek(archive, offset, SEEK_SET))  &&

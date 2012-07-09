@@ -139,7 +139,7 @@ void start_logging(const char *ident)
 static void print_timestamp(struct timespec *timestamp)
 {
     /* Convert ns into microseconds, the extra ns detail is a bit much. */
-    int usec = (timestamp->tv_nsec + 500) / 1000;
+    long usec = (timestamp->tv_nsec + 500) / 1000;
     if (usec >= 1000000)
     {
         usec -= 1000000;
@@ -150,7 +150,7 @@ static void print_timestamp(struct timespec *timestamp)
     struct tm tm;
     localtime_r(&timestamp->tv_sec, &tm);
 
-    fprintf(stderr, "%04d-%02d-%02d %02d:%02d:%02d.%06d: ",
+    fprintf(stderr, "%04d-%02d-%02d %02d:%02d:%02d.%06ld: ",
         1900 + tm.tm_year, tm.tm_mon + 1, tm.tm_mday,
         tm.tm_hour, tm.tm_min, tm.tm_sec, usec);
 }
@@ -263,7 +263,7 @@ void dump_binary(FILE *out, const void *buffer, size_t length)
     for (size_t a = 0; a < length; a += 16)
     {
         fprintf(out, "%08zx: ", a);
-        for (int i = 0; i < 16; i ++)
+        for (unsigned int i = 0; i < 16; i ++)
         {
             if (a + i < length)
                 fprintf(out, " %02x", dump[a+i]);
@@ -274,7 +274,7 @@ void dump_binary(FILE *out, const void *buffer, size_t length)
         }
 
         fprintf(out, "  ");
-        for (int i = 0; i < 16; i ++)
+        for (unsigned int i = 0; i < 16; i ++)
         {
             uint8_t c = dump[a+i];
             if (a + i < length)

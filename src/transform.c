@@ -127,7 +127,7 @@ static void reset_block(void)
 /* Writes the currently written major block to disk at the current offset. */
 static void write_major_block(void)
 {
-    off64_t offset = header->major_data_start +
+    off64_t offset = (off64_t) header->major_data_start +
         (off64_t) header->current_major_block * header->major_block_size;
     schedule_write(offset, buffers[current_buffer], header->major_block_size);
 
@@ -276,7 +276,7 @@ static void accum128_128(uint128_t *acc, const uint128_t *val)
 
 static uint64_t sr128(uint128_t *acc, unsigned int shift)
 {
-    return *acc >> shift;
+    return (uint64_t) (*acc >> shift);
 }
 
 #endif
@@ -295,12 +295,12 @@ static uint64_t sr128(uint128_t *acc, unsigned int shift)
  * bits, N maybe up to 16 bits, and so we need around 80 bits for the sum, hence
  * the use of 128 bits for the accumulator. */
 
-static int32_t compute_std(uint128_t *acc, int64_t sum, int shift)
+static int32_t compute_std(uint128_t *acc, int64_t sum, unsigned int shift)
 {
     /* It's sufficiently accurate and actually faster to change over to floating
      * point arithmetic at this point. */
-    double mean = sum / (double) (1 << shift);
-    double var = sr128(acc, shift) - mean * mean;
+    double mean = (double) sum / (double) (1 << shift);
+    double var  = (double) sr128(acc, shift) - mean * mean;
     /* Note that rounding errors still allow var in the range -1..0, so need to
      * truncate these to zero. */
     return var > 0 ? (int32_t) sqrt(var) : 0;
@@ -333,8 +333,8 @@ static void accum_xy(struct fa_accum *acc, const struct fa_entry *input)
     if (acc->maxy < y)   acc->maxy = y;
     acc->sumx += x;
     acc->sumy += y;
-    accum128_64(&acc->sum_sq_x, (int64_t) x * x);
-    accum128_64(&acc->sum_sq_y, (int64_t) y * y);
+    accum128_64(&acc->sum_sq_x, (uint64_t) ((int64_t) x * x));
+    accum128_64(&acc->sum_sq_y, (uint64_t) ((int64_t) y * y));
 }
 
 static void accum_accum(struct fa_accum *result, const struct fa_accum *input)
@@ -469,7 +469,7 @@ static void initialise_double_decimation(void)
 /* Index maintenance. */
 
 /* Number of timestamps we expect to see in a single major block. */
-static unsigned int timestamp_count;
+static int timestamp_count;
 /* Array of timestamps for timestamp estimation, stored relative to the first
  * timestamp. */
 static uint64_t first_timestamp;
@@ -486,7 +486,7 @@ static void index_minor_block(const void *block, uint64_t timestamp)
         first_timestamp = timestamp;
         /* For the very first index record the first id 0 field. */
         data_index[header->current_major_block].id_zero =
-            ((struct fa_entry *) block)[0].x;
+            (uint32_t) ((struct fa_entry *) block)[0].x;
     }
 
     timestamp_array[timestamp_index] = (int) (timestamp - first_timestamp);
@@ -501,7 +501,7 @@ static void advance_index(void)
      * the beginning of the segment. */
     int64_t sum_x = 0;
     int64_t sum_xt = 0;
-    for (unsigned int i = 0; i < timestamp_count; i ++)
+    for (int i = 0; i < timestamp_count; i ++)
     {
         int t = 2*i - timestamp_count + 1;
         int64_t x = timestamp_array[i];
@@ -513,8 +513,8 @@ static void advance_index(void)
      *      SUM_{i=1..N} i   = N(N+1)/2
      *      SUM_{i=1..N} i*i = N(N+1)(2N+1)/6
      * we get sum_t2 = N(N*N-1)/3 . */
-    uint64_t sum_t2 =
-        ((uint64_t) timestamp_count * timestamp_count - 1) *
+    int64_t sum_t2 =
+        ((int64_t) timestamp_count * timestamp_count - 1) *
         timestamp_count / 3;
 
     struct data_index *ix = &data_index[header->current_major_block];
@@ -523,7 +523,8 @@ static void advance_index(void)
     ix->duration = (uint32_t) (2 * timestamp_count * sum_xt / sum_t2);
     /* Starting timestamp is computed at t=-timestamp_count-1 from centre. */
     ix->timestamp = first_timestamp +
-        sum_x / timestamp_count - (timestamp_count + 1) * sum_xt / sum_t2;
+        (uint64_t) (
+            sum_x / timestamp_count - (timestamp_count + 1) * sum_xt / sum_t2);
 
     /* For the last duration we run an IIR to smooth out the bumps in our
      * timestamp calculations.  This gives us another digit or so. */
@@ -547,8 +548,8 @@ static void reset_index(void)
 
 static void initialise_index(void)
 {
-    timestamp_count = header->major_sample_count / input_frame_count;
-    timestamp_array = malloc(sizeof(int) * timestamp_count);
+    timestamp_count = (int) (header->major_sample_count / input_frame_count);
+    timestamp_array = malloc(sizeof(int) * (size_t) timestamp_count);
     timestamp_index = 0;
 }
 
@@ -623,7 +624,8 @@ static void timestamp_to_block(
     else if (timestamp - block_start < duration)
         /* The normal case, return the offset of the selected timestamp into the
          * current block. */
-        *offset = (timestamp - block_start) * block_size / duration;
+        *offset = (unsigned int) (
+            (timestamp - block_start) * block_size / duration);
     else if (skip_gap)
     {
         /* Timestamp falls off this block but precedes the next.  This will be
@@ -721,7 +723,7 @@ bool find_gap(bool check_id0, unsigned int *start, unsigned int *blocks)
             *start = 0;
 
         ix = &data_index[*start];
-        int64_t delta_t = ix->timestamp - timestamp;
+        int64_t delta_t = (int64_t) (ix->timestamp - timestamp);
         if ((check_id0  &&  ix->id_zero != id_zero)  ||
             delta_t < -MAX_DELTA_T  ||  MAX_DELTA_T < delta_t)
             return true;
@@ -765,7 +767,7 @@ void process_block(const void *block, uint64_t timestamp)
         transpose_block(block);
         decimate_block(block);
         bool must_write = advance_block();
-        unsigned int decimation = 1 << (
+        unsigned int decimation = 1U << (
             header->first_decimation_log2 + header->second_decimation_log2);
         if ((fa_offset & (decimation - 1)) == 0)
             double_decimate_block();
