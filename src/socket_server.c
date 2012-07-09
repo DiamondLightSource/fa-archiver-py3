@@ -178,14 +178,19 @@ static bool process_error(int scon, const char *client_name, const char *buf)
 }
 
 
-/* Sets socket receive timeout.  Used so we don't have threads hanging waiting
- * for users to complete sending their commands.  (Also so I can remember how to
- * do this!)  See socket(7) for documentatino of SO_RCVTIMEO option. */
-static bool set_socket_timeout(int sock, int secs, int usecs)
+/* Sets socket receive and transmit timeouts.  Used so we don't have threads
+ * hanging waiting for users to complete sending their commands and to receive
+ * their data.  (Also so I can remember how to do this!)  See socket(7) for
+ * documentatino of SO_RCVTIMEO option. */
+static bool set_socket_timeout(int sock, int rx_secs, int tx_secs)
 {
-    struct timeval timeout = { .tv_sec = secs, .tv_usec = usecs };
-    return TEST_IO(setsockopt(
-        sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)));
+    struct timeval rx_timeout = { .tv_sec = rx_secs, .tv_usec = 0 };
+    struct timeval tx_timeout = { .tv_sec = tx_secs, .tv_usec = 0 };
+    return
+        TEST_IO(setsockopt(
+            sock, SOL_SOCKET, SO_RCVTIMEO, &rx_timeout, sizeof(rx_timeout)))  &&
+        TEST_IO(setsockopt(
+            sock, SOL_SOCKET, SO_SNDTIMEO, &tx_timeout, sizeof(tx_timeout)));
 }
 
 /* Using cork should be harmless and should increase write efficiency. */
@@ -670,7 +675,7 @@ static void *process_connection(void *context)
     push_error_handling();
     bool ok = FINALLY(
         set_socket_cork(scon, true)  &&
-        set_socket_timeout(scon, 1, 0)  &&      // 1 second rx timeout
+        set_socket_timeout(scon, 1, 10)  &&
         read_line(scon, client)  &&
         dispatch_command(scon, client->name, client->buf),
 
