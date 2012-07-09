@@ -486,7 +486,7 @@ static void index_minor_block(const void *block, uint64_t timestamp)
         first_timestamp = timestamp;
         /* For the very first index record the first id 0 field. */
         data_index[header->current_major_block].id_zero =
-            (uint32_t) ((struct fa_entry *) block)[0].x;
+            (uint32_t) ((const struct fa_entry *) block)[0].x;
     }
 
     timestamp_array[timestamp_index] = (int) (timestamp - first_timestamp);

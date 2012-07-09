@@ -68,9 +68,9 @@ static pthread_t decimate_id;
 
 /* Macros for indexing a pointers to arrays of fa_row and fa_row_int64
  * structures. */
-#define INDEX_ROW(base, offset) \
-    ((struct fa_row *) ( \
-        (void *) (base) + (offset) * fa_entry_count * FA_ENTRY_SIZE))
+#define INDEX_ROW(const, base, offset) \
+    ((const struct fa_row *) ( \
+        (const void *) (base) + (offset) * fa_entry_count * FA_ENTRY_SIZE))
 #define INDEX_ROW64(base, offset) \
     ((struct fa_row_int64 *) ((void *) (base) + (offset) * sizeof_row_int64))
 
@@ -317,7 +317,7 @@ static void decimate_block(const struct fa_row *block_in, uint64_t timestamp)
     {
         const struct fa_entry *t0 = &block_in->row[0];
         const struct fa_row_int64 *row = accumulate(block_in);
-        block_in = INDEX_ROW(block_in, 1);
+        block_in = INDEX_ROW(const, block_in, 1);
 
         if (advance_index(&decimation_counter, decimation_factor))
         {
@@ -326,7 +326,7 @@ static void decimate_block(const struct fa_row *block_in, uint64_t timestamp)
 
             if (advance_index(&output_counter, filter_decimation))
             {
-                struct fa_row *row_out = INDEX_ROW(block_out, out_pointer);
+                struct fa_row *row_out = INDEX_ROW(, block_out, out_pointer);
                 filter_output(row_out);
                 update_t0(row_out, t0);
                 advance_write_block(false, timestamp);

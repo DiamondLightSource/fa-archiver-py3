@@ -85,8 +85,8 @@ static inline void list_del(struct list_head *entry)
 /* Casts a member of a structure out to the containing structure. */
 #define container_of(ptr, type, member) \
     ( { \
-        const typeof(((type *)0)->member) *__mptr = (ptr); \
-        (type *)((void *)__mptr - offsetof(type, member)); \
+        typeof(((type *)0)->member) *__mptr = (ptr); \
+        (type *)((void *) __mptr - offsetof(type, member)); \
     } )
 
 

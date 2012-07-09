@@ -215,6 +215,17 @@ void panic_error(const char *filename, int line)
  * definition anywhere. */
 #define ARRAY_SIZE(a)   (sizeof(a)/sizeof((a)[0]))
 
+/* An agressive cast for use when the compiler needs special reassurance. */
+#define REINTERPRET_CAST(type, value) \
+    ( { \
+        COMPILE_ASSERT(sizeof(type) == sizeof(typeof(value))); \
+        union { \
+            typeof(value) __value; \
+            type __cast; \
+        } __union = { .__value = (value) }; \
+        __union.__cast; \
+    } )
+
 
 /* For ignoring return values even when warn_unused_result is in force. */
 #define IGNORE(e)       do if(e) {} while (0)
