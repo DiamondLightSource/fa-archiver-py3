@@ -50,20 +50,20 @@
 #include "disk.h"
 
 
-static uint32_t round_to_page(uint32_t block_size)
+static size_t round_to_page(size_t block_size)
 {
-    uint32_t page_size = sysconf(_SC_PAGESIZE);
+    size_t page_size = sysconf(_SC_PAGESIZE);
     return page_size * ((block_size + page_size - 1) / page_size);
 }
 
 static bool page_aligned(uint64_t offset, const char *description)
 {
-    uint32_t page_size = sysconf(_SC_PAGESIZE);
+    size_t page_size = sysconf(_SC_PAGESIZE);
     return TEST_OK_(offset % page_size == 0,
         "Bad page alignment for %s at %"PRIu64, description, offset);
 }
 
-static bool test_power_of_2(uint32_t value, const char *name)
+static bool test_power_of_2(size_t value, const char *name)
 {
     return TEST_OK_((value & -value) == value, "%s must be a power of 2", name);
 }
@@ -126,7 +126,8 @@ bool initialise_header(
             index_block_size + dd_block_size + header->major_block_size);
     uint32_t index_data_size =
         round_to_page(major_block_count * index_block_size);
-    uint32_t dd_data_size = round_to_page(major_block_count * dd_block_size);
+    uint64_t dd_data_size =
+        round_to_page((uint64_t) major_block_count * dd_block_size);
     /* Now incrementally reduce the major block count until we're good.  In
      * fact, this is only going to happen once at most. */
     while (index_data_size + dd_data_size +
@@ -244,7 +245,7 @@ bool validate_header(struct disk_header *header, uint64_t file_size)
         TEST_OK_(
             header->dd_total_count * header->archive_mask_count *
                 sizeof(struct decimated_data) <= header->dd_data_size,
-            "DD area too small: %"PRIu32" * %"PRIu32" * %zd > %"PRIu32,
+            "DD area too small: %"PRIu32" * %"PRIu32" * %zd > %"PRIu64,
                 header->dd_total_count, header->archive_mask_count,
                 sizeof(struct decimated_data), header->dd_data_size)  &&
 
@@ -269,7 +270,7 @@ bool validate_header(struct disk_header *header, uint64_t file_size)
         TEST_OK_(
             header->major_data_start >=
             header->dd_data_start + header->dd_data_size,
-            "Unexpected major data start: %"PRIu64" < %"PRIu64" + %"PRIu32,
+            "Unexpected major data start: %"PRIu64" < %"PRIu64" + %"PRIu64,
                 header->major_data_start,
                 header->dd_data_start, header->dd_data_size)  &&
         TEST_OK_(
@@ -340,7 +341,7 @@ void print_header(FILE *out, struct disk_header *header)
             " = %"PRIu64" bytes\n"
         "    Duration: %d hours, %d minutes, %.1f seconds (f_s = %.2f)\n"
         "Index data from %"PRIu64" for %"PRIu32" bytes\n"
-        "DD data starts %"PRIu64" for %"PRIu32" bytes, %"PRIu32" samples,"
+        "DD data starts %"PRIu64" for %"PRIu64" bytes, %"PRIu32" samples,"
             " %"PRIu32" per block\n"
         "FA+D data from %"PRIu64", %"PRIu32" decimated samples per block\n"
         "Last duration: %"PRIu32" us, or %lg Hz.  Current index: %"PRIu32"\n",

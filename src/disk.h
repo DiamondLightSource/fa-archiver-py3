@@ -111,7 +111,7 @@ struct disk_header {
     uint64_t dd_data_start;     // Start of double decimated data
     uint64_t major_data_start;  // Start of major data area
     uint32_t index_data_size;   // Size of index block
-    uint32_t dd_data_size;      // Size of double decimated data area
+    uint64_t dd_data_size;      // Size of double decimated data area
     uint64_t total_data_size;   // Size of complete file, for check
     uint32_t dd_total_count;    // Total number of DD samples
 
@@ -145,7 +145,7 @@ struct data_index {
 
 
 #define DISK_SIGNATURE      "FASNIFF"
-#define DISK_VERSION        3
+#define DISK_VERSION        4
 
 
 /* Two helper routines for converting sample number (within a major block) and
