@@ -128,10 +128,11 @@ static bool open_gigabit_socket(void)
 }
 
 
-static void reset_gigabit(void)
+static bool reset_gigabit(void)
 {
-    close(gigabit_socket);         // Close the connection
-    open_gigabit_socket();
+    return
+        TEST_IO(close(gigabit_socket))  &&         // Close the connection
+        open_gigabit_socket();
 }
 
 

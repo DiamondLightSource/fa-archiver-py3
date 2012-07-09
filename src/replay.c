@@ -247,9 +247,10 @@ static bool prepare_replay_data(struct region *region)
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /* Dummy sniffer using replay data. */
 
-static void reset_replay(void)
+static bool reset_replay(void)
 {
     interrupted = false;
+    return true;
 }
 
 static bool read_replay_status(struct fa_status *status)

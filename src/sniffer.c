@@ -116,7 +116,7 @@ static void *sniffer_thread(void *context)
         /* Pause before retrying.  Ideally should poll sniffer card for
          * active network here. */
         sleep(1);
-        sniffer_context->reset();
+        IGNORE(sniffer_context->reset());
     }
     return NULL;
 }
@@ -141,17 +141,16 @@ static int fa_sniffer;
 static bool ioctl_ok;
 
 
-static void reset_sniffer_device(void)
+static bool reset_sniffer_device(void)
 {
     if (ioctl_ok)
         /* If possible use the restart command to restart the sniffer. */
-        TEST_IO(ioctl(fa_sniffer, FASNIF_IOCTL_RESTART));
+        return TEST_IO(ioctl(fa_sniffer, FASNIF_IOCTL_RESTART));
     else
-    {
-        /* Backwards compatible code: close and reopen the device. */
-        TEST_IO(close(fa_sniffer));
-        TEST_IO(fa_sniffer = open(fa_sniffer_device, O_RDONLY));
-    }
+        return
+            /* Backwards compatible code: close and reopen the device. */
+            TEST_IO(close(fa_sniffer))  &&
+            TEST_IO(fa_sniffer = open(fa_sniffer_device, O_RDONLY));
 }
 
 static bool read_sniffer_device(struct fa_row *rows, size_t length)

@@ -31,7 +31,7 @@
  * alternate versions of the sniffer. */
 struct sniffer_context
 {
-    void (*reset)(void);
+    bool (*reset)(void);
     bool (*read)(struct fa_row *block, size_t block_size);
     bool (*status)(struct fa_status *status);
     bool (*interrupt)(void);
