@@ -76,6 +76,7 @@ static bool quiet_allocate = false;
 
 /* Options for read only operation. */
 static bool read_only = false;
+static bool do_validate = true;
 static bool dump_header = true;
 static bool dump_index = false;
 static unsigned int dump_start = 0;
@@ -114,6 +115,7 @@ static void usage(void)
 "\n"
 "If instead -H is given then the file header will be printed.  This can be\n"
 "followed by the following options:\n"
+"   -f   Bypass header validation and display even if appears invalid\n"
 "   -d   Dump index.  This can generate a lot of data, or -s/-e can be used\n"
 "   -s:  Offset of first index block to dump\n"
 "   -e:  Offset of last index block to dump\n"
@@ -185,9 +187,10 @@ static bool process_H_opts(int *argc, char ***argv)
     bool ok = true;
     while (ok)
     {
-        switch (getopt(*argc, *argv, "+Hdnuts:e:"))
+        switch (getopt(*argc, *argv, "+Hfdnuts:e:"))
         {
             case 'H':   break;      // Expected this one, ignore
+            case 'f':   do_validate = false;                        break;
             case 'd':   dump_index = true;                          break;
             case 'n':   dump_header = false;                        break;
             case 'u':   do_lock = false;                            break;
@@ -382,6 +385,9 @@ int main(int argc, char **argv)
             TEST_IO_(file_fd = open(file_name, O_RDONLY),
                 "Unable to read file \"%s\"", file_name)  &&
             TEST_read(file_fd, &header, sizeof(header))  &&
+            IF_(do_validate,
+                get_filesize(file_fd, &file_size)  &&
+                validate_header(&header, file_size))  &&
             IF_(dump_header, DO_(print_header(stdout, &header)))  &&
             IF_(dump_index, do_dump_index(file_fd, &header));
     }

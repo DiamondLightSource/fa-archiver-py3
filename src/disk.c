@@ -168,6 +168,19 @@ bool initialise_header(
 }
 
 
+static bool validate_version(struct disk_header *header)
+{
+    return
+        TEST_OK_(
+            strncmp(header->signature, DISK_SIGNATURE,
+                sizeof(header->signature)) == 0,
+            "Invalid header signature")  &&
+        TEST_OK_(header->version == DISK_VERSION,
+            "Invalid header version %u, expected %u",
+            header->version, DISK_VERSION);
+}
+
+
 bool validate_header(struct disk_header *header, uint64_t file_size)
 {
     COMPILE_ASSERT(sizeof(struct disk_header) <= DISK_HEADER_SIZE);
@@ -178,12 +191,7 @@ bool validate_header(struct disk_header *header, uint64_t file_size)
     errno = 0;      // Suppresses invalid error report from TEST_OK_ failures
     return
         /* Basic header validation. */
-        TEST_OK_(
-            strncmp(header->signature, DISK_SIGNATURE,
-                sizeof(header->signature)) == 0,
-            "Invalid header signature")  &&
-        TEST_OK_(header->version == DISK_VERSION,
-            "Invalid header version %u", header->version)  &&
+        validate_version(header)  &&
 
         /* Data capture parameter validation. */
         TEST_OK_(
@@ -308,6 +316,9 @@ void print_header(FILE *out, struct disk_header *header)
 {
     char mask_string[RAW_MASK_BYTES+1];
     char format_string[256];
+    if (!validate_version(header))
+        fprintf(out,
+            "WARNING: Header validation failed, data below will be invalid\n");
     format_raw_mask(&header->archive_mask, mask_string);
     if (!format_mask(
             &header->archive_mask, format_string, sizeof(format_string)))

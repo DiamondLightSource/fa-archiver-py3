@@ -140,7 +140,7 @@ bool parse_mask(const char **string, struct filter_mask *mask)
 static bool write_string(char **string, size_t *length, const char *value)
 {
     size_t value_len = strlen(value);
-    if (TEST_OK_(value_len < *length, "Mask too long to format"))
+    if (TEST_OK_(value_len + 1 < *length, "Mask too long to format"))
     {
         memcpy(*string, value, value_len + 1);
         *string += value_len;
@@ -175,6 +175,7 @@ bool format_mask(struct filter_mask *mask, char *string, size_t length)
     bool in_range = false;
     bool first = true;
     int range_start = 0;
+    *string = '\0';
     for (int id = 0; ok  &&  id < FA_ENTRY_COUNT; id ++)
     {
         bool set = test_mask_bit(mask, id);
