@@ -355,7 +355,7 @@ void print_header(FILE *out, struct disk_header *header)
 bool lock_archive(int disk_fd)
 {
     return TEST_IO_(flock(disk_fd, LOCK_EX | LOCK_NB),
-        "Unable to lock archive for writing: already running?");
+        "Unable to lock archive for access: already running?");
 }
 
 

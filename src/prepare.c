@@ -40,6 +40,7 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <time.h>
 
 #include "error.h"
 #include "fa_sniffer.h"
@@ -79,6 +80,8 @@ static bool dump_header = true;
 static bool dump_index = false;
 static unsigned int dump_start = 0;
 static unsigned int dump_end = -1;
+static bool do_lock = true;
+static bool convert_timestamps = false;
 
 
 static void usage(void)
@@ -115,6 +118,9 @@ static void usage(void)
 "   -s:  Offset of first index block to dump\n"
 "   -e:  Offset of last index block to dump\n"
 "   -n   Don't actually dump the header\n"
+"   -u   Don't lock the archive while dumping index.  Allows dumping of live\n"
+"        archive but can produce inconsistent results over write boundary.\n"
+"   -t   Show timestamps in human readable form.\n"
         , argv0, argv0,
         input_block_size, output_block_size,
         first_decimation, second_decimation,
@@ -179,11 +185,13 @@ static bool process_H_opts(int *argc, char ***argv)
     bool ok = true;
     while (ok)
     {
-        switch (getopt(*argc, *argv, "+Hdns:e:"))
+        switch (getopt(*argc, *argv, "+Hdnuts:e:"))
         {
             case 'H':   break;      // Expected this one, ignore
-            case 'd':   dump_index = true;      break;
-            case 'n':   dump_header = false;    break;
+            case 'd':   dump_index = true;                          break;
+            case 'n':   dump_header = false;                        break;
+            case 'u':   do_lock = false;                            break;
+            case 't':   convert_timestamps = true;                  break;
             case 's':
                 ok = DO_PARSE("start block", parse_uint, optarg, &dump_start);
                 break;
@@ -211,12 +219,12 @@ static bool process_args(int argc, char **argv)
     if (read_only)
         return
             process_H_opts(&argc, &argv)  &&
-            TEST_OK_(argc == 1, "Try -h for usage")  &&
+            TEST_OK_(argc == 1, "Wrong number of arguments")  &&
             DO_(file_name = argv[0]);
     else
         return
             process_opts(&argc, &argv)  &&
-            TEST_OK_(argc == 2, "Try -h for usage")  &&
+            TEST_OK_(argc == 2, "Wrong number of arguments")  &&
             DO_PARSE("capture mask", parse_mask, argv[0], &archive_mask)  &&
             DO_(file_name = argv[1]);
 }
@@ -304,13 +312,23 @@ static bool fill_zeros(int file_fd, int written)
 }
 
 
+static void print_timestamp(time_t timestamp)
+{
+    struct tm tm;
+    gmtime_r(&timestamp, &tm);
+    printf("%04d-%02d-%02d %02d:%02d:%02d ",
+        1900 + tm.tm_year, tm.tm_mon + 1, tm.tm_mday,
+        tm.tm_hour, tm.tm_min, tm.tm_sec);
+}
+
+
 static bool do_dump_index(int file_fd, struct disk_header *header)
 {
     /* Dumping the index isn't altogether straightforward -- we need to map it
      * into memory first! */
     struct data_index *data_index;
     bool ok =
-        lock_archive(file_fd)  &&
+        IF_(do_lock, lock_archive(file_fd))  &&
         TEST_IO(
             data_index = mmap(NULL, header->index_data_size,
                 PROT_READ, MAP_SHARED, file_fd, header->index_data_start));
@@ -325,8 +343,11 @@ static bool do_dump_index(int file_fd, struct disk_header *header)
         for (unsigned int i = dump_start; i < dump_end; i ++)
         {
             struct data_index *block = &data_index[i];
-            printf("%6u: %10"PRIu64".%06"PRIu64" / %7u / %9u",
-                i, block->timestamp / 1000000, block->timestamp % 1000000,
+            printf("%6u: ", i);
+            if (convert_timestamps)
+                print_timestamp(block->timestamp / 1000000);
+            printf("%10"PRIu64".%06"PRIu64" / %7u / %9u",
+                block->timestamp / 1000000, block->timestamp % 1000000,
                 block->duration, block->id_zero);
             if (i == header->current_major_block)
                 printf(" <<<<<<<<<<<<<<<");
