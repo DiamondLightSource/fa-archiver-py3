@@ -41,7 +41,7 @@ struct fa_row { struct fa_entry row[FA_ENTRY_COUNT]; };
 
 /* ioctl definitions. */
 
-#define FASNIF_IOCTL_VERSION        1
+#define FASNIF_IOCTL_VERSION        2
 
 /* Returns ioctl interface version number.  Just a sanity check. */
 #define FASNIF_IOCTL_GET_VERSION    _IO('C', 0)
@@ -59,7 +59,16 @@ struct fa_status {
     uint32_t frame_errors;          // Hardware counts of communication errors
     uint32_t soft_errors;           //  accumulated since hardware initialised
     uint32_t hard_errors;
-    bool running;                   // True if connection currently active
-    bool overrun;                   // True if a buffer overrun occurred
-};
-#define FASNIF_IOCTL_GET_STATUS   _IOR('R', 1, struct fa_status)
+    uint8_t running;                // True if connection currently active
+    uint8_t overrun;                // True if a buffer overrun occurred
+} __attribute__((packed));
+#define FASNIF_IOCTL_GET_STATUS     _IOR('R', 1, struct fa_status)
+
+/* Retrieve timestamp associated with last read.  If reside is non zero then the
+ * true timestamp of the last point must be computed by projecting backwards
+ * using an estimate of sample interval not provided by this driver.  */
+struct fa_timestamp {
+    uint64_t timestamp;             // Block completion timestamp
+    uint32_t residue;               // Residue of block not read
+} __attribute__((packed));
+#define FASNIF_IOCTL_GET_TIMESTAMP  _IOR('R', 2, struct fa_timestamp)

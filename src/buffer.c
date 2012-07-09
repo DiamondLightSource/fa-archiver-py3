@@ -333,6 +333,13 @@ uint64_t ts_to_microseconds(const struct timespec *ts)
     return 1000000 * (uint64_t) ts->tv_sec + ts->tv_nsec / 1000;
 }
 
+uint64_t get_timestamp(void)
+{
+    struct timespec ts;
+    IGNORE(TEST_IO(clock_gettime(CLOCK_REALTIME, &ts)));
+    return ts_to_microseconds(&ts);
+}
+
 
 bool create_buffer(
     struct buffer **buffer, size_t block_size, size_t block_count)

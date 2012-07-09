@@ -55,6 +55,8 @@ struct reader_state;
 
 /* All buffered times are represented in microseconds in the Unix epoch. */
 uint64_t ts_to_microseconds(const struct timespec *ts);
+/* Helper routine for getting current timestamp. */
+uint64_t get_timestamp(void);
 
 
 /* Prepares central memory buffer. */

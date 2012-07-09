@@ -43,6 +43,7 @@
 
 #include "fa_sniffer.h"
 #include "sniffer.h"
+#include "buffer.h"
 
 #include "gigabit.h"
 
@@ -105,11 +106,13 @@ static bool read_datagram(struct fa_entry *row)
 }
 
 
-static bool read_gigabit_block(struct fa_row *block, size_t block_size)
+static bool read_gigabit_block(
+    struct fa_row *block, size_t block_size, uint64_t *timestamp)
 {
     bool ok = true;
     for (unsigned int i = 0; ok  &&  i < block_size / FA_FRAME_SIZE; i ++)
         ok = read_datagram(block[i].row);
+    *timestamp = get_timestamp();
     return ok;
 }
 

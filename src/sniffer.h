@@ -32,7 +32,7 @@
 struct sniffer_context
 {
     bool (*reset)(void);
-    bool (*read)(struct fa_row *block, size_t block_size);
+    bool (*read)(struct fa_row *block, size_t block_size, uint64_t *timestamp);
     bool (*status)(struct fa_status *status);
     bool (*interrupt)(void);
 };

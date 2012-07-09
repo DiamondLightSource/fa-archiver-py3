@@ -44,6 +44,7 @@
 #include "mask.h"
 #include "matlab.h"
 #include "sniffer.h"
+#include "buffer.h"
 
 #include "replay.h"
 
@@ -77,7 +78,8 @@ static void sleep_until(int duration)
         CLOCK_MONOTONIC, TIMER_ABSTIME, &next_sleep, NULL)));
 }
 
-static bool read_replay_block(struct fa_row *rows, size_t size)
+static bool read_replay_block(
+    struct fa_row *rows, size_t size, uint64_t *timestamp)
 {
     if (interrupted)
         return false;
@@ -104,6 +106,7 @@ static bool read_replay_block(struct fa_row *rows, size_t size)
     }
 
     sleep_until(100000 * row_count);    // 100us = 100,000ns per row
+    *timestamp = get_timestamp();
     return true;
 }
 
