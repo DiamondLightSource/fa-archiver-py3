@@ -94,7 +94,7 @@ static bool parse_raw_mask(
     for (unsigned int i = count; i > 0; )
     {
         i -= 1;
-        unsigned int ch = (unsigned char) *(*string)++;
+        unsigned int ch = *(*string)++;
         unsigned int nibble;
         if ('0' <= ch  &&  ch <= '9')
             nibble = ch - '0';

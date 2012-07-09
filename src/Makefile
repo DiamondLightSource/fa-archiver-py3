@@ -44,6 +44,7 @@ CFLAGS += -msse
 CFLAGS += -msse2
 CFLAGS += -mfpmath=sse
 CFLAGS += -ffast-math
+CFLAGS += -funsigned-char
 
 CPPFLAGS += -I$(DEVICE_DIR)
 CPPFLAGS += -D_GNU_SOURCE
