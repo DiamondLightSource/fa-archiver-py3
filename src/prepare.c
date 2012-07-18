@@ -68,7 +68,7 @@ static bool file_size_given = false;
 static uint64_t file_size;
 static struct filter_mask archive_mask;
 static uint32_t input_block_size = 512 * K;
-static uint32_t output_block_size = 512 * K;
+static uint32_t major_sample_count = 65536;
 static uint32_t first_decimation = 64;
 static uint32_t second_decimation = 256;
 static double sample_frequency = 10072.4;
@@ -104,8 +104,8 @@ static void usage(void)
 "   -N:  Specify number of FA entries in a single block, default is 256.\n"
 "   -I:  Specify input block size for reads from FA sniffer device.  The\n"
 "        default value is %"PRIu32" bytes.\n"
-"   -O:  Specify block size for IO transfers to disk.  This should match\n"
-"        the disk's IO block size.  The default value is %"PRIu32".\n"
+"   -M:  Specify number of samples in a single capture to disk.  The default\n"
+"        value is %"PRIu32".\n"
 "   -d:  Specify first decimation factor.  The default value is %"PRIu32".\n"
 "   -D:  Specify second decimation factor.  The default value is %"PRIu32".\n"
 "   -f:  Specify nominal sample frequency.  The default is %.1gHz\n"
@@ -127,7 +127,7 @@ static void usage(void)
 "        archive but can produce inconsistent results over write boundary.\n"
 "   -t   Show timestamps in human readable form.\n"
         , argv0, argv0,
-        input_block_size, output_block_size,
+        input_block_size, major_sample_count,
         first_decimation, second_decimation,
         sample_frequency);
 }
@@ -139,7 +139,7 @@ static bool process_opts(int *argc, char ***argv)
     bool ok = true;
     while (ok)
     {
-        switch (getopt(*argc, *argv, "+hs:N:I:O:d:D:f:nq"))
+        switch (getopt(*argc, *argv, "+hs:N:I:M:d:D:f:nq"))
         {
             case 'h':
                 usage();
@@ -156,9 +156,9 @@ static bool process_opts(int *argc, char ***argv)
                 ok = DO_PARSE("input block size",
                     parse_size32, optarg, &input_block_size);
                 break;
-            case 'O':
-                ok = DO_PARSE("output block size",
-                    parse_size32, optarg, &output_block_size);
+            case 'M':
+                ok = DO_PARSE("major sample count",
+                    parse_uint32, optarg, &major_sample_count);
                 break;
             case 'd':
                 ok = DO_PARSE("first decimation",
@@ -266,7 +266,7 @@ static bool prepare_new_header(struct disk_header *header)
     return
         initialise_header(header,
             &archive_mask, file_size,
-            input_block_size, output_block_size,
+            input_block_size, major_sample_count,
             first_decimation, second_decimation, sample_frequency,
             fa_entry_count)  &&
         DO_(print_header(stdout, header));

@@ -56,9 +56,10 @@ Options
     Specify input block size for reads from FA sniffer device.  The default
     value is 524288 bytes.
 
--O block-size
-    Specify block size for IO transfers to disk.  This should match the disk's
-    IO block size.  The default value is 524288.
+-M major-sample-count
+    Specify number of samples in a single IO transfer to disk.  This should be
+    comfortably larger than the product of the two decimation factors and must
+    be a power of 2.  The default value 65536 allows for 6.5 seconds per block.
 
 -d decimation
     Specify first decimation factor.  The default value is 64, must be a power

@@ -82,7 +82,7 @@ bool initialise_header(
     struct filter_mask *archive_mask,
     uint64_t file_size,
     uint32_t input_block_size,
-    uint32_t output_block_size,
+    uint32_t major_sample_count,
     uint32_t first_decimation,
     uint32_t second_decimation,
     double sample_frequency,
@@ -104,7 +104,7 @@ bool initialise_header(
     header->fa_entry_count = fa_entry_count;
 
     /* Compute the fixed size parameters describing the data layout. */
-    header->major_sample_count = output_block_size / FA_ENTRY_SIZE;
+    header->major_sample_count = major_sample_count;
     header->d_sample_count = header->major_sample_count / first_decimation;
     header->dd_sample_count = header->d_sample_count / second_decimation;
     header->major_block_size = (uint32_t) (
@@ -163,11 +163,9 @@ bool initialise_header(
     return
         test_power_of_2(first_decimation, "First decimation")  &&
         test_power_of_2(second_decimation, "Second decimation")  &&
-        TEST_OK_(output_block_size % (size_t) sysconf(_SC_PAGESIZE) == 0,
-            "Output block size must be a multiple of page size")  &&
-        TEST_OK_(
-            output_block_size % FA_ENTRY_SIZE == 0,
-            "Output block size must be a multiple of FA entry size")  &&
+        test_power_of_2(major_sample_count, "Major sample count")  &&
+        TEST_OK_(major_sample_count >= first_decimation * second_decimation,
+            "Major sample count must be no smaller than decimation count")  &&
         validate_header(header, file_size);
 }
 

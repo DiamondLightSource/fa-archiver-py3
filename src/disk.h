@@ -178,9 +178,9 @@ static inline size_t d_data_offset(
  *      Determines the capture size from the FA sniffer device.  Strictly
  *      speaking this doesn't determine the disk layout, but needs to be in a
  *      certain relationship with the disk layout.
- *  output_block_size
- *      This determines the block size for a single column of data from a single
- *      BPM, and thus determines the size of a major block.
+ *  major_sample_count
+ *      Determines the number of samples written to disk in a single unit and
+ *      thus the size of a major block.
  *  first_decimation
  *  second_decimation
  *      Data decimation factors.  These determine the data reduction factors for
@@ -192,7 +192,7 @@ bool initialise_header(
     struct filter_mask *archive_mask,
     uint64_t disk_size,
     uint32_t input_block_size,
-    uint32_t output_block_size,
+    uint32_t major_sample_count,
     uint32_t first_decimation,
     uint32_t second_decimation,
     double sample_frequency,
