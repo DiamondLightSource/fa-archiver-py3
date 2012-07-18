@@ -580,7 +580,7 @@ static bool request_data(FILE *stream)
         char options[64];
         format_options(options);
         // Send R<source> M<mask> S<start> <end> <options>
-        return TEST_OK(fprintf(stream, "R%sMR%sS%ld.%09ld%s%s\n",
+        return TEST_OK(fprintf(stream, "R%sM%sS%ld.%09ld%s%s\n",
             format, raw_mask, start.tv_sec, start.tv_nsec,
             end_str, options) > 0);
     }
