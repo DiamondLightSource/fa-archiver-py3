@@ -1,0 +1,24 @@
+\begin{tikzpicture}
+
+\input{disk.tikz}
+
+
+\node [anchor=west] at (disk.text east) {4\,K bytes};
+\node [anchor=west] at (disk.two east) {1.6\,M bytes};
+\node [anchor=west] at (disk.three east) {6.4\,G bytes};
+\node [anchor=west] at (disk.four east) {27\,T bytes};
+
+
+\node [inner sep=0] (text corner) at ($(disk.three split east)+(25mm,0)$) {};
+\node [
+    fit=(disk.north east) (text corner),
+   % fit=(header size) (index size) (dd size),
+    inner sep=0, right delimiter=\},
+    label={[xshift=3mm]right:Memory mapped}] {};
+\node [fit=(text corner) (disk.south east),
+    inner sep=0, right delimiter=\},
+    label={[xshift=3mm]right:On disk}] {};
+
+\end{tikzpicture}
+
+% vim: filetype=tex:

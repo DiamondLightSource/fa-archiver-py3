@@ -1,0 +1,492 @@
+\documentclass{beamer}
+% \documentclass[notes]{beamer}
+
+\usepackage{graphicx}       % Extended support for \includegraphics
+\usepackage{tikz}           % Powerful drawing package, part of pgf
+\usepackage{url}            % \url command for decent line breaks in urls
+\usepackage{array}          % Improved array support
+\usepackage{textcomp}       % Extra symbols
+
+% Enable this for summary printout
+% \usepackage{pgfpages}\pgfpagesuselayout{4 on 1}[
+%     a4paper, landscape, border shrink=2mm]
+
+
+\usetikzlibrary{matrix}             % Grid placement
+\usetikzlibrary{positioning}        % Anchor placement support
+\usetikzlibrary{calc}               % Coordinate calculations
+\usetikzlibrary{shapes.geometric}   % cylinder
+\usetikzlibrary{shapes.symbols}     % cloud
+\usetikzlibrary{shapes.arrows}      % arrow shapes
+\usetikzlibrary{shapes.multipart}
+\usetikzlibrary{fit}                % Fitting outline to shape
+\usetikzlibrary{shadows}
+\usetikzlibrary{arrows}
+\usetikzlibrary{chains}
+
+% Common TikZ definitions
+\tikzset{
+    % This seems a reasonably comfortable arrow shape
+    >=stealth,
+%
+    % Used for creating an exact fit to an existing list of objects
+    tight fit/.style={fit=#1, inner sep=0, line width=0},
+%
+    % Draws a reasonably sensible looking disk icon
+    disk icon/.style={
+        draw, thick, cylinder, shape border rotate=90,
+        minimum width=1cm, minimum height=.75cm},
+%
+    % A moderate highlighting fill
+    background fill/.style={fill=black!15},
+    % A gentle highlighing fill
+    highlight fill/.style={fill=green!60!blue!20},
+    % A rather darker fill for shadows
+    shadow fill/.style={fill=gray}}
+
+% It's handy to have a foreground and background layer available.
+\pgfdeclarelayer{background}
+\pgfdeclarelayer{foreground}
+\pgfsetlayers{background,main,foreground}
+
+
+\usetheme{dlstalk}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{items}[circle]
+
+\hyphenpenalty 4000 \sloppy
+
+% \title{A new Fast Data Logger and Viewer at Diamond:\\the FA Archiver}
+\title[The FA Archiver]{A Fast Acquisition Archiver}
+\author{Michael Abbott}
+\date{Controls Group Technical Seminars\\ 25th July 2012}
+
+
+
+
+\begin{document}
+
+\begin{frame}\frametitle{Forthcoming Controls Seminars}
+
+\begin{tikzpicture}
+\node [fill=yellow] {
+\begin{tabular*}{\textwidth}{lll}
+\multicolumn{3}{c}{No talks in August as it is holiday season} \\
+05/09/12 & \multicolumn{2}{l}{No talk as user meeting using all rooms} \\
+19/09/12 & IU & An Introduction to PCIe \\
+03/10/12 & NR & Astronomical Instruments I Have Known \\
+17/10/12 & JT & UML \\
+31/10/12 & IG & pyEPICS \\
+14/11/12 & DH & EPICS 4 \\
+28/11/12 & LH & Position Compare \& QXAFS \\
+12/12/12 \\
+23/01/13 & IG & The Science of Brewing \\[1ex]
+xx/xx/13 & TC & OpenCV \\[1ex]
+xx/xx/xx & SG & The Controls for the ColdDiag Experiment \\[1ex]
+\end{tabular*}
+};
+\end{tikzpicture}
+
+\begin{small}
+\color{red}
+Volunteers to present future seminars from December 2012 are required.
+
+\color{blue}
+Please contact James O'Hea or Mark Heron with a proposed topic.
+\end{small}
+\end{frame}
+
+
+\begin{frame}
+\titlepage
+\end{frame}
+
+% Place date discreetely on every slide.
+\setbeamertemplate{footline}{\hspace*{\fill}\insertdate}
+
+
+\begin{frame}\frametitle{The Fast Acquisition Archiver}
+
+The FA archiver captures $X,Y$ position data from a network of electron beam
+position monitors (EBPMs) and other sources at 10\,kHz, maintains a rolling
+historical record and rebroadcasts the complete data stream to all interested
+parties.
+
+\begin{itemize}
+
+\item Up to 512 $X,Y$ position updates every 100\,\textmu s, sustained data
+rate of 40\,MB/s.
+
+\item Current we archive the last 2\textonehalf{} days of orbit position, with
+the new 30TB archiver we'll have a fortnight of archive available.
+
+\item Any number of clients (limited by network connection to archive server)
+can read the archive and subscribe to the rebroadcast live data stream.
+
+\end{itemize}
+\end{frame}
+
+
+
+\begin{frame}\frametitle{The Fast Acquisition Archiver}
+\begin{center}
+\input{context.tikz}
+\end{center}
+\end{frame}
+
+
+
+\begin{frame}\frametitle{Getting Fast BPM Data}
+
+The archiver connects to the Diamond Communication Controller (CC) fast orbit
+feedback network.
+
+\begin{itemize}
+
+\item All storage ring EBPMs are connected to CC network.
+
+\item Network is based on synchronous broadcast via store and forward: every
+100\,\textmu s, every node has complete position information.
+
+\item Easy to add new nodes, both as listeners and contributors.
+
+\item FA archiver ``piggy backs'' on existing feedback infrastructure.
+
+\end{itemize}
+
+\end{frame}
+
+
+
+\begin{frame}\frametitle{Communication Controller Network Topology}
+\includegraphics[width=\linewidth]{fofb}
+\end{frame}
+
+
+
+\begin{frame}\frametitle{Hardware Requirements for FA Archiver}
+\begin{itemize}
+
+\item Need FPGA with Rocket I/O and Isa's Diamond Communication Controller FPGA
+image to connect to CC network.
+
+\item FA Archiver uses Xilinx PCI express FPGA development board to connect to
+CC network.
+
+\vspace{2pt}
+Unfortunately this board is large and abnormally tall, so won't fit in all PCs.
+
+\item Archiver works well on relatively low spec hardware; we're currently using
+a dual core Dell R200 1U server, but will be upgrading in the August shutdown.
+
+\end{itemize}
+\end{frame}
+
+
+\begin{frame}\frametitle{Xilinx ML555 Development Board}
+\includegraphics[width=\linewidth]{ml555}
+\end{frame}
+
+
+
+
+\begin{frame}\frametitle{FA Archiver in Context}
+\begin{center}
+\input{WEPMN004f1.tikz}
+\end{center}
+\end{frame}
+
+
+
+\begin{frame}\frametitle{Data Sources and Sinks}
+Data Sources:
+\begin{itemize}
+\item Libera Electron Beam Position Monitors (174)
+\item X-Ray Beam Position Monitors (28)
+\item RF cavity monitors (2)
+\item Accelerometer (1)
+\end{itemize}
+\vskip1ex
+Data Sinks:
+\begin{itemize}
+\item \texttt{fa-viewer} for live data
+\item \texttt{fa\_zoomer} for viewing historical data
+\item \texttt{matlab} and \texttt{fa\_load} for analysing historical data
+\item Spectrum analyser
+\item Other tools to be added over time \dots
+\end{itemize}
+\end{frame}
+
+
+
+\begin{frame}\frametitle{FA Archiver Architecture}
+
+\begin{itemize}
+
+\item Very regular data feed: fixed size updates at fixed intervals.
+Makes archiver design much simpler than an EPICS archiver.
+
+\item The historical archive is fixed length, determined by disk size.  Old data
+is discarded as new data arrives.
+
+\item Data is reordered for fast read access before storage to disk.
+
+\item File system overhead is avoided by storing archiver database on raw block
+device!
+
+\item Overview data (decimated by binning) also stored.
+
+\item Archive indexed by timestamp of arrival of CC data.
+
+\end{itemize}
+\end{frame}
+
+
+
+\begin{frame}\frametitle{FA Archiver Architecture}
+\input{WEPMN004f2.tikz}
+\end{frame}
+
+
+\begin{frame}\frametitle{Archive Index}
+Structure of index can be extremely simple.
+\begin{itemize}
+\item FA data is gathered into blocks of 65536 samples or around 6.5 seconds
+each.
+\item The timestamp of the first sample in each block is stored, together with
+its duration and a communication controller timestamp, referred to as ``id0''.
+\item Search for offset of block with desired timestamp by binary search of
+index --- very fast as index is small.  {\scriptsize(16 probes)}
+\item All timestamps internally stored as 64-bit counts of microseconds in the
+Unix (UTC) epoch --- we're good for \textonehalf{} million years!
+\item Index operates as a circular buffer: new data overwrites old.
+\end{itemize}
+\end{frame}
+
+
+\begin{frame}\frametitle{Data Transformation}
+\begin{itemize}
+\item Data arrives interleaved (N = 256 or 512):
+\[
+\begin{matrix}
+xy_{0,t}   & xy_{1, t}   & \cdots & xy_{N-1,t} \\
+xy_{0,t+1} & xy_{1, t+1} & \cdots & xy_{N-1,t+1} \\
+\vdots & \vdots & \cdots & \vdots
+\end{matrix}
+\]
+\item Desperately inefficient to access in this sequence
+\item Data for each ID gathered into long blocks for writing:
+\[
+\begin{matrix}
+xy_{0,t} & \cdots & xy_{0,t+T-1} \\
+xy_{1,t} & \cdots & xy_{1,t+T-1} \\
+\vdots & \vdots & \vdots \\
+xy_{N-1,t} & \cdots & xy_{N-1,t+T-1} \\
+xy_{0,t+T} & \cdots & xy_{0,t+2T-1} \\
+\vdots & \vdots & \vdots \\
+\end{matrix}
+\qquad T = 65536
+\]
+\item This transposing is essential for performance
+\end{itemize}
+
+% Highlights above, found by stabs in the dark!  Alas, the background layer
+% still seems to come after ordinary text, so we need to use opacity instead.
+\begin{tikzpicture}[overlay]
+\path [fill=black, opacity=0.1]
+    (current page.north west) ++(30mm,-25mm) [fill] rectangle ++(60mm,5mm);
+\path [fill=black, opacity=0.1]
+    (current page.north west) ++(22mm,-73mm) [fill] rectangle ++(18mm,22mm);
+\path [fill=green!60!blue, opacity=0.2]
+    (current page.north west) ++(22mm,-56mm) [fill] rectangle ++(50mm,5mm);
+\end{tikzpicture}
+\end{frame}
+
+
+\begin{frame}\frametitle{Decimated Archive Data}
+To help with reviewing beam movement over hours or days, the archived data is
+also stored in decimated format.
+\begin{itemize}
+\item Two degrees of decimation: $\div 128$ (approx 80\,Hz) and $\div 16384$
+(approx 1\textonehalf{} seconds per sample): ``single'' and ``double'' decimated
+data.
+\item Archived decimation is by binning; for each bin the archiver stores: mean,
+minimum, maximum and standard deviation:
+\[
+\overline{x}, \lfloor x\rfloor, \lceil x\rceil, \sigma_x
+\qquad\text{and}\qquad
+\overline{y}, \lfloor y\rfloor, \lceil y\rceil, \sigma_y
+\quad.
+\]
+\item A fortnight of data for one data source can be previewed with a 750,000
+point waveform, rather than 12,000,000,000 points!
+\end{itemize}
+\end{frame}
+
+
+\begin{frame}\frametitle{Binned Archive Data}
+\begin{center}
+\includegraphics[width=.9\linewidth]{binning}
+\end{center}
+\end{frame}
+
+
+\begin{frame}\frametitle{Archive Database Layout}
+\input{database.tikz}
+\end{frame}
+
+
+\begin{frame}\frametitle{Archive Database Layout: Header}
+\input{header.tikz}
+\end{frame}
+
+
+\begin{frame}\frametitle{Archive Database Layout: Index}
+\input{index.tikz}
+\end{frame}
+
+
+\begin{frame}\frametitle{Archive Database Layout: Double Decimated Data}
+\input{dd_data.tikz}
+\end{frame}
+
+
+\begin{frame}\frametitle{Archive Database Layout: FA Data}
+\input{fa_data.tikz}
+\end{frame}
+
+
+
+\begin{frame}\frametitle{Archiver Services}
+
+The FA archiver provides the following data over TCP/IP to any connecting
+machine:
+
+\begin{itemize}
+
+\item Subscription to any subset of the complete CC data stream.
+\note{If the client doesn't take data rapidly enough it will be disconnected by
+the server.}
+
+\item Subscription to any subset of the complete CC data stream decimated by
+filtering by a factor of 10.
+
+\item Access to any part of the historical archive, both full and decimated,
+indexed by timestamp.
+
+\end{itemize}
+\end{frame}
+
+
+
+\begin{frame}\frametitle{Filtered Decimated Data}
+\begin{itemize}
+\item The entire FA data stream is decimated by filtering by a factor of 10 down
+to 1\,kHz
+\item This is independent of binned archive decimated data
+\item Designed to assist whole orbit analysis, reduces data rate
+\item Filtering performed by ``Compensated Cascaded Integrater Comb'' (CIC).
+Fast to implement with very good spectral behaviour: effectively flat to
+400\,Hz.
+\end{itemize}
+\begin{center}
+\input{cic.tikz}
+\end{center}
+\end{frame}
+
+
+\begin{frame}\frametitle{Filtered Decimated Data}
+\begin{center}
+\includegraphics[width=0.8\linewidth]{filter}
+\end{center}
+\end{frame}
+
+
+
+\begin{frame}\frametitle{Spectrum Analysis Tool}
+\begin{center}
+\input{analyser.tikz}
+\end{center}
+\end{frame}
+
+
+\begin{frame}\frametitle{Spectrum Analysis Tool: EDM Screen}
+\begin{center}
+\includegraphics[height=80mm]{spectrum}
+\end{center}
+\end{frame}
+
+
+\begin{frame}\frametitle{Spectrogram at one EBPM for a Week}
+\includegraphics[width=\linewidth]{spectrogram-3-2}
+\end{frame}
+
+
+
+\begin{frame}\frametitle{FA Zoomer Matlab Interface}
+\includegraphics[width=\linewidth]{fa-zoomer}
+\end{frame}
+
+
+\begin{frame}\frametitle{FA Viewer}
+\begin{center}
+\includegraphics[width=.85\linewidth]{WEPMN004f6}
+\end{center}
+\end{frame}
+
+
+\begin{frame}\frametitle{Allan Variance from the Archive}
+\begin{itemize}
+\item Allan Variance developed for assessing stability of oscillators and clocks
+\item Generally useful for assessing stability in general over many orders of
+magnitude in time
+\item Also called ``two sample variance'', difference of adjacent averages
+($\tau$ = sample duration):
+\begin{gather*}
+\sigma_y^2(\tau) =
+    \frac12\langle(\overline{y}_{i+1} - \overline{y}_i)^2\rangle \\[1ex]
+\overline{y}_i = \frac1\tau \int_0^\tau y(i\tau + t) \, dt
+\end{gather*}
+\item Can use FA archive to cover dynamic range 10\,kHz to around
+1\,\textmu{}Hz (ten orders of magnitude).
+\end{itemize}
+\end{frame}
+
+
+\begin{frame}\frametitle{Example Application of Allan Variance}
+\includegraphics[width=\linewidth]{allan}
+\end{frame}
+
+
+\begin{frame}\frametitle{Lessons Learned}
+\begin{itemize}
+\item Buffer sizes matter:
+    \begin{itemize}
+    \item 512\,K seems a sweet spot for disk access
+    \item perhaps 64\,K for network access?
+    \end{itemize}
+\item Modern processors can do floating point \emph{very} fast
+\item Integer to floating point conversion is \emph{sloooow}!
+\item \texttt{valgrind} can find very elusive bugs
+\end{itemize}
+\end{frame}
+
+
+\begin{frame}\frametitle{Lessons for a New EPICS Archiver?}
+\begin{itemize}
+\item Write patterns and read patterns are very different: archiver should
+optimise for readers by gathering data together over time for each PV.
+\item Important to avoid scattered disk access for performance
+\item Aggregated decimation (mean/min/max/variance) is very helpful for data
+overview.
+\end{itemize}
+I suggest a novel EPICS archiver architecture which captures complete history of
+\emph{all} PVs (within reason) over a limited history, and then decimates and
+aggregates for long term history, possibly on a constant 1 minute tick.
+\end{frame}
+
+
+% How to skip a block of (valid) code:
+\iffalse \fi
+
+\end{document}

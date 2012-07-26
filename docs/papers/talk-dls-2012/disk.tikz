@@ -1,0 +1,20 @@
+% Common database layout
+
+\path % [draw, thick]
+    (-40mm,-45mm) rectangle (80mm,35mm) {};
+
+\node [
+    rectangle split, rectangle split parts=4, draw, thick,
+    minimum width=30mm, anchor=west,
+    label={above:/dev/sdb}] (disk) at (-40mm,0)
+    {
+        Header
+    \nodepart{two}
+        Index\rule[-2mm]{0pt}{7mm}
+    \nodepart{three}
+        DD Data\rule[-3mm]{0pt}{9mm}
+    \nodepart{four}
+        F and D Data\rule[-20mm]{0pt}{0pt}
+    };
+
+% vim: filetype=tex:

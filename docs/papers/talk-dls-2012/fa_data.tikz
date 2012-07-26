@@ -1,0 +1,51 @@
+\begin{tikzpicture}
+
+\input{disk.tikz}
+
+\begin{pgfonlayer}{background}
+\path [highlight fill] (disk.three split west) rectangle (disk.south east);
+\end{pgfonlayer}
+
+\begin{pgfonlayer}{foreground}
+\draw [very thick] (0,20mm)
+    coordinate (a) {} rectangle (60mm,-30mm)
+    coordinate (b) {} node[fit=(a) (b), inner sep=0] (fa data) {};
+\end{pgfonlayer}
+
+\node [text width=60mm, align=center]
+    at (30mm,28mm) {\smash{65536 FA samples}\\1024 D samples\\6.5 seconds};
+\path [thick]
+    (0,30mm) [draw] -- (0,-40mm)
+    (60mm,30mm) [draw] -- (60mm,-40mm);
+\draw [thick] (0,-10mm) -- (60mm,-10mm) coordinate (sep) {};
+\node [fit=(fa data.north east) (sep), right delimiter=\}, inner sep=0,
+    label={[align=left, xshift=3mm]right:FA\\data}] {};
+\node [fit=(fa data.south east) (sep), right delimiter=\}, inner sep=0,
+    label={[align=left, xshift=3mm]right:D\\data}] {};
+
+\path
+    (fa data.north east) ++(3mm,0)
+    [draw, thick, <-] -- ++(0, 10mm)
+    node [pos=0.5, align=left, anchor=west] {block\\index};
+
+\fill [background fill]
+    (0,0) rectangle ++(60mm,8mm)
+    node [pos=0.5, black] {FA data (512\,k bytes)};
+\path
+    (fa data.north west) ++(-3mm,0)
+    [draw, thick, ->] -- ++(0,-16mm)
+    node [pos=0.5, rotate=90, anchor=south] {FA id};
+
+\fill [background fill]
+    (0,-23mm) rectangle ++(60mm,2mm)
+    node [pos=0.5, black] {D data (32\,k bytes)};
+\path
+    (0,-10mm) ++(-3mm,0)
+    [draw, thick, ->] -- ++(0,-11mm)
+    node [pos=0.5, rotate=90, anchor=south] {FA id};
+
+
+
+\end{tikzpicture}
+
+% vim: filetype=tex:

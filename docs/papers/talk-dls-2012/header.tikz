@@ -1,0 +1,27 @@
+\begin{tikzpicture}
+
+\input{disk.tikz}
+
+\begin{pgfonlayer}{background}
+\path [highlight fill] (disk.north west) rectangle (disk.text split east);
+\end{pgfonlayer}
+
+\node [anchor=west, text width=80mm] {
+Miscellaneous parameters:
+
+\begin{itemize}
+\item Archive signature and version
+\item List of CC/FA ids to be archived to disk
+\item Decimation factors
+\item Block sizes and offsets
+\item Current position in archive
+\end{itemize}
+
+Initialised by \texttt{fa-prepare} tool, updated by \texttt{fa-archiver} during
+operation.
+};
+
+
+\end{tikzpicture}
+
+% vim: filetype=tex:

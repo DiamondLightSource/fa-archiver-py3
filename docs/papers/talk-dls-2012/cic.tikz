@@ -1,0 +1,18 @@
+\begin{tikzpicture} [start chain, node distance=5mm, thick, ->]
+
+\node [on chain, join] {};
+\node [on chain, join, draw] (I) {$\frac1{1-z^{-1}}$};
+\node [on chain, join, draw, circle] (R) {$\scriptstyle\div R$};
+\node [on chain, join, draw] (D) {$\scriptstyle1-z^{-M}$};
+\node [on chain, join] {};
+
+\node [anchor=west] at (I.north east) {$\scriptstyle N$};
+\node [anchor=west] at (D.north east) {$\scriptstyle N$};
+
+\node [anchor=north, yshift=-3mm] at (R.south)
+    {$H(z) = \left(\frac{1-z^{-RM}}{1-z^{-1}}\right)^N
+        = \left(\sum\limits_{k=0}^{RM-1}z^{-k}\right)^N$};
+
+\end{tikzpicture}
+
+% vim: filetype=tex:

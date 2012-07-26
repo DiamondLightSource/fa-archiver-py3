@@ -1,0 +1,33 @@
+\begin{tikzpicture}
+
+\input{disk.tikz}
+
+\begin{pgfonlayer}{background}
+\path [highlight fill] (disk.two split west) rectangle (disk.three split east);
+\path [background fill] (0,-15mm) rectangle (60mm,-5mm);
+\end{pgfonlayer}
+
+\node [anchor=west, inner sep=0, text width=85mm] at +(-10mm,22mm)
+{
+\begin{itemize}
+\item One entry for every 16384 samples
+\item Data for each FA id stored together
+\item Scattered writes, sequential reads, managed by OS paging layer
+\end{itemize}
+};
+
+
+\draw [help lines, yshift=5mm]
+    (0,-40mm) grid[draw, xstep=15mm, ystep=10mm] ++(60mm,40mm);
+\path [draw, thick]
+    (0,5mm) rectangle ++(60mm,-40mm);
+\draw [thick, ->] (7mm,0) -- +(15mm,0)
+    node [pos=0.5, align=center] {block\\index};
+\node [align=center] at (22mm,-10mm) {DD\\data};
+\draw [thick, ->] (67mm,0) -- +(0,-10mm)
+    node [pos=0.5, align=center, rotate=90] {FA id\\index};
+
+
+\end{tikzpicture}
+
+% vim: filetype=tex:

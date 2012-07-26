@@ -1,0 +1,40 @@
+\begin{tikzpicture}
+
+\input{disk.tikz}
+
+\node [anchor=west] at +(0,30mm)
+    {Timestamps of each archive block};
+
+
+\path [draw, thick]
+    (60mm,-25mm) rectangle ++(-60mm,50mm)
+    rectangle ++(60mm,-15mm)
+    node [pos=0.5, align=center] {$\cdots$}
+    coordinate (a) {}
+    rectangle ++(-15mm,-10mm)
+    node [pos=0.5, align=center] {id0}
+    rectangle ++(-15mm,10mm)
+    node [pos=0.5, align=center] {duration}
+    rectangle ++(-30mm,-10mm)
+    coordinate (b) {}
+    node [pos=0.5, align=center] {timestamp}
+    rectangle ++(30mm,-10mm) rectangle ++(15mm,10mm) rectangle ++(15mm,-10mm)
+    rectangle ++(-60mm,-15mm)
+    node [pos=0.5, align=center] {$\cdots$};
+
+\node [anchor=west, text width=60mm] at (0,-32mm)
+    {Binary search timestamps to find 6.5 second data block index};
+
+\path [draw, ->, thick] (67mm,25mm) -- ++(0mm,-20mm)
+    node [pos=0.5, align=center, rotate=90, yshift=3mm] {index};
+
+
+\begin{pgfonlayer}{background}
+\path [highlight fill] (disk.text split west) rectangle (disk.two split east);
+\draw [background fill] (a) rectangle (b);
+\end{pgfonlayer}
+
+
+\end{tikzpicture}
+
+% vim: filetype=tex:
