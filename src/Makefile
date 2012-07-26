@@ -17,7 +17,7 @@ default:    # Default target comes first!
 
 CFLAGS += -std=gnu99
 CFLAGS += -O3
-# CFLAGS += -g
+CFLAGS += -g
 
 CFLAGS += -Werror
 CFLAGS += -Wall -Wextra
@@ -70,6 +70,7 @@ archiver_SRCS += disk_writer.c      # Core disk writing access
 archiver_SRCS += disk.c             # Disk header format definitions
 archiver_SRCS += socket_server.c    # Socket server
 archiver_SRCS += transform.c        # Data transformation and access
+archiver_SRCS += pool.c             # Shared buffer pool for readers
 archiver_SRCS += reader.c           # Sniffer data readout
 archiver_SRCS += decimate.c         # Continuous data reduction
 archiver_SRCS += config_file.c      # Config file parsing
