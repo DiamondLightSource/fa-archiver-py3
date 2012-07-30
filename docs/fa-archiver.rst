@@ -10,7 +10,7 @@ Captures, stores and redistributes data from the FA archive data stream
 -----------------------------------------------------------------------
 
 :Author:            Michael Abbott, Diamond Light Source Ltd
-:Date:              2011-05-27
+:Date:              2012-07-30
 :Manual section:    1
 :Manual group:      Diamond Light Source
 
@@ -32,21 +32,22 @@ using fa-prepare_\(1).  Normally simply called thus:
 
 A TCP socket server on the configured port, number 8888 by default, provides
 access to both the live data stream and any part of the stored archive.  The
-fa-capture_\(1) tool can be used to access this data, fa-viewer_\(1) can be used
-to view the live data streams, or falib_\(3) can be used to write Python
-applications using the data stream.
+fa-capture_\(1), fa_zoomer_\(7) and fa_load_\(7) tools can be used to access
+this data, fa-viewer_\(1) can be used to view the live data streams, or
+falib_\(3) can be used to write Python applications using the data stream.
 
 Live data is available for any FA id on the controller network, while historical
 data is only available for those pvs configured to be saved by fa-prepare_\(1).
 
 Live data can be delivered either at the full FA data rate, or if the `-c`
-option is specified, as a decimated data stream.  Historical data is available
-at full data rate or at two degrees of decimation.  Note that the decimated live
-data stream is unrelated to the archived decimated data, in particular the
-decimated live data is properly down filtered, whereas the historical decimated
-data is binned.
+option is specified, as a filtered decimated data stream.  Historical data is
+available at full data rate or at two degrees of decimation by binning.  Note
+that the decimated live data stream is unrelated to the archived decimated data,
+in particular the decimated live data is properly down filtered, whereas the
+historical decimated data is binned.
 
-The archiver should normally be halted by sending it a SIGINT signal.
+The archiver should be halted by sending it a SIGINT signal if it is running as
+a daemon, or sending ctrl-D if it is running in the shell.
 
 
 Options
@@ -97,7 +98,14 @@ Options
     Set SO_REUSEADDR on the listening socket.  Only useful for debugging when
     repeatedly restarting the server.
 
-The recommended options are -c and -t.
+-G
+    Use gigabit ethernet (Libera grouping) as data source.
+
+-N
+    Run with data source disabled.  The archiver will run in read-only mode and
+    no subscription data will be available.
+
+The recommended options are `-c` and `-t`.
 
 The rest of this man page can be ignored by most users.
 
@@ -107,7 +115,7 @@ Filter Configuration File
 The archiver can be configured to generate filtered and decimated data stream
 from the live data as well as the raw unfiltered stream.  This data stream can
 only be read through the `S` subscription command, and is only available if a
-filter configuration file has been specified by the -c option to the archiver.
+filter configuration file has been specified by the `-c` option to the archiver.
 
 The decimation stream is generated through two stages of filtering: first a CIC
 filter is run, this should generate the majority of the decimation, and secondly
@@ -188,7 +196,7 @@ R
     Archival retrieval commands, used to fetch data from the archive.
 
 D
-    Debug commands, only available if -X was specified on the command line.
+    Debug commands, only available if `-X` was specified on the command line.
 
 
 Configuration Command (C)
@@ -220,7 +228,7 @@ T
     seconds.
 
 V
-    Returns a protocol identification string.  Will probably always be 1.
+    Returns a protocol identification string, currently 1.1.
 
 M
     Returns a mask identifying the list of FA ids being archived.
@@ -228,7 +236,7 @@ M
 C
     Returns the decimation factor for live data if decimated live data is
     available, returns 0 if no decimation stream available.  Live decimated data
-    is available if -c was specified on the command line.
+    is available if `-c` was specified on the command line.
 
 S
     Returns a number of registers reporting the detailed status of the sniffer
@@ -248,6 +256,10 @@ S
         data stream.
     :run state:     0 means halted, 1 means fetching data
     :overrun:       1 means halted due to driver buffer overflow
+
+K
+    Returns the configured number of FA samples configured to be captured.
+    Determines the maximum legal FA id that can be requested.
 
 I
     Returns a list of all currently connected clients, one client per line.
@@ -274,16 +286,19 @@ The syntax of a subscription request is::
 
     subscription = "S" filter-mask options
     filter-mask = "R" raw-mask | mask
-    raw-mask = hex-digit{64}
+    raw-mask = hex-digit{N}
     mask = id [ "-" id ] [ "," mask ]
-    options = [ "T" ] [ "Z" ] [ "U" ] [ "D" ]
+    options = [ "T" [ "E" ] ] [ "Z" ] [ "U" ] [ "D" ]
+
+The number of digits `N` in a `raw-mask` is equal to the number of captured FA
+ids as returned by the `CK` command divided by 4, ie one bit per id.
 
 In other words, a subscription request consists of a list of BPM ids to be
 observed followed by options.  The list of ids can be specified either as a
 comma separated list of numbers or ranges (with each number in the range 0 to
-255 inclusive), or as a "raw mask" consisting of an array of 256 bits in hex
-with the highest bits sent first.  Any options must be specified in precisely
-the order shown.
+N-1 inclusive), or as a "raw mask" consisting of an array of N bits in hex with
+the highest bits sent first.  Any options must be specified in precisely the
+order shown.
 
 Subscription data is returned in binary as a sequence of 32-bit words
 transmitted in little endian order.  Data is sent as X,Y positions in sequence
@@ -309,12 +324,29 @@ T
     Transmit timestamp at start of data stream.  This is the timestamp of the
     first sample in the data stream in microseconds in the Unix epoch as an 64
     bit number in little endian order, and is sent after the initial null byte
-    and before the rest of the stream.
+    and before the rest of the stream.  If `TE` is specified this behaviour is
+    changed as described below.
+
+TE
+    Transmit "extended" timestamps within the data stream instead of just a
+    single timestamp at the start.  This allows for more accurate timestamps to
+    be recorded.  The format of extended timestamps is the same as for
+    historical data, consisting of an 8 byte header sent at the start of the
+    data followed by a 12 or 16 byte header at the start of each block of data.
+
+    The initial header consists of a 4 byte block size followed by 4 bytes of 0,
+    the block size specifies the number of samples sent in each data block.
+    The header at the start of each data block consists of an 8 byte timestamp
+    (microseconds in the Unix epoch) followed by a 4 byte block duration (also
+    in microseconds) and optionally (if `TEZ` specifed) 4 bytes specifing the
+    FA turn counter.
 
 Z
-    Transmit T0 at start of data stream.  This is the FA turn counter of the
-    first sample, if available from the data stream, sent as a 32 bit number in
-    little endian order.
+    Transmit T0 at start of data stream, unless `TE` specified.  This is the FA
+    turn counter of the first sample, if available from the data stream, sent as
+    a 32 bit number in little endian order.
+
+    If `TEZ` specified see `TE` above for details.
 
 U
     Don't use the TCP_CORK option to buffer the data stream.  By default the
@@ -327,6 +359,25 @@ D
     Requests decimated data stream.  If the decimated data stream was enabled
     with `-c` then this will be returned instead of the full data stream.
 
+The format of data can be formally described thus::
+
+    data = [ | timestamp [ id0 ] | timestamp-header ] data-block*
+    timestamp-header = block-size offset
+    data-block = [ data-header ] sample-data{N}
+    data-header = timestamp duration [ id0 ]
+    sample-data = ( X Y ){M}
+
+    timestamp : 8 bytes, microseconds in Unix epoch
+    id0 : 4 bytes
+    block-size : 4 bytes
+    offset : 4 bytes = 0
+    duration : 4 bytes, microseconds
+    X, Y : 4 bytes each
+
+where `N` = `block-size` if `TE` specified, `timestamp-header` and `data-header`
+are only present if `TE` specified, and `id0` is only present if `TEZ`
+specified.
+
 
 Read Archive Command (R)
 ------------------------
@@ -338,10 +389,10 @@ of a read request is defined by this syntax::
     data-mask = integer
     start = time-or-seconds
     end = "N" samples | "E" time-or-seconds
-    time-or-seconds = "T" date-time | "S" seconds [ "." nanoseconds ] [ "Z" ]
-    date-time = yyyy "-" mm "-" dd "T" hh ":" mm ":" ss [ "." ns ]
+    time-or-seconds = "T" date-time | "S" seconds [ "." nanoseconds ]
+    date-time = yyyy "-" mm "-" dd "T" hh ":" mm ":" ss [ "." ns ] [ "Z" ]
     samples = integer
-    options = [ "N" ] [ "A" ] [ "T" [ "E" ]] [ "G" ] [ "C" ] [ "Z" ]
+    options = [ "N" ] [ "A" ] [ "T" [ "E" | "A" ]] [ "Z" ] [ "C" [ "Z" ]]
 
 A read request specifies a source, one of `F`, `D` or `DD`, followed by a filter
 mask (as specified for the `S` command), followed by a time range consisting of
@@ -411,7 +462,7 @@ The following options can be specified:
 
 N
     Send sample count as part of data stream.  The number of samples between the
-    start and end times being transmitted is sent as a 32 bit little endian
+    start and end times being transmitted is sent as a 64 bit little endian
     integer.
 
 A
@@ -425,30 +476,70 @@ T
     the Unix epoch.  Note that this is different from `TE`.
 
 TE
-    Send "extended timestamps".  A four byte header is transmitted at the start
-    of the transmitted data specifying the number of samples per block and the
-    offset into the first block of the first transmitted sample.  The remaining
-    data is transmitted in blocks with each block preceded by the timestamp and
-    block duration, both in microseconds.  The timestamp is sent as a 64 bit
-    number followed by the duration as a 32 bit number.
+    Send "extended timestamps".  An eight byte header is transmitted at the
+    start of the transmitted data specifying the number of samples per block and
+    the offset into the first block of the first transmitted sample.  The
+    remaining data is transmitted in blocks with each block preceded by the
+    timestamp and block duration, both in microseconds.  The timestamp is sent
+    as a 64 bit number followed by the duration as a 32 bit number.
 
-G
-    Send gap list at end of data capture.  After transmitting the complete
-    dataset, if this option is specified then a gap list is transmitted.  First
-    the gap count is sent, as a 32 bit integer, followed by start information
-    for each block (so for a gap count of N a total of N+1 `gap_data` blocks are
-    sent).  The format of a `struct gap_data` block is described in
-    `src/reader.h`.
+TA
+    Send "extended timestamps", but send entire timestamp information after data
+    block.  The initial timestamp header is sent as for TE, but the timestamps
+    and durations are sent separately; see detailed description of data format
+    below.
+
+Z
+    Send "id0" information with data.  The precise behaviour of this option
+    depends on how `T` is configured.  If there is no `T` option or only `T` is
+    specified then the initial four byte id0 value is sent at the start of the
+    data, after any timestamp.  If `TEZ` is specified then id0 values are sent
+    with data headers, if `TEA` is specified then id0 values are sent at the end
+    of the data stream.
 
 C
     Ensure no gaps in selected dataset, fail if any.  If this option is set then
     only contiguous data is returned from the archive.
 
-Z
-    Check for gaps generated by id0.  If this option is not set then
+CZ
+    Also check for gaps generated by id0.  If this option is not set then
     discontinuities in the FA timebase are not treated as gaps.  This option
-    should be omitted on systems with older firmware where the timebase
+    will always report a gap on systems with older firmware where the timebase
     information is not available to the FA sniffer hardware.
+
+A formal description of the data returned follows::
+
+    data = header data-block{K} [ footer ]
+    header = [ sample-count ] [ [ timestamp ] [ id0 ] | timestamp-header ]
+    timestamp-header = block-size offset
+    data-block = [ data-header ] sample-data{N}
+    data-header = timestamp duration [ id0 ]
+    sample-data = ( X Y ){M}
+    footer = block-count timestamp{K} offset{K} [ id0{K} ]
+
+    sample-count : 8 bytes
+    timestamp : 8 bytes, microseconds in Unix epoch
+    id0 : 4 bytes
+    block-size : 4 bytes
+    offset : 4 bytes
+    duration : 4 bytes, microseconds
+    X, Y : 4 bytes each
+    block-count : 4 bytes
+
+    N = block-size (see note below)
+    K = block-count
+    sample-count present if N option
+    sample-count <= N*K
+    timestamp-header present if TE or TA option
+    data-header present if TE option
+    initial timestamp present if T option
+    initial id0 present if Z without TE or TA
+    footer present if TA option
+    footer id0 present if Z option
+
+Note, `N` = `block-size` if `TE` or `TA` specified, except for the first block
+where `N` = `block-size` - `offset`.  Otherwise `N` has no effect on the data
+format.
 
 
 Debug Command (D)
@@ -529,10 +620,13 @@ Filter Configuration
 
 See Also
 ========
-fa-prepare_\(1), fa_sniffer_\(8), fa-capture_\(1), fa-viewer_\(1), falib_\(3)
+fa-prepare_\(1), fa_sniffer_\(8), fa-capture_\(1), fa-viewer_\(1), falib_\(3),
+fa_zoomer_\(7), fa_load_\(7)
 
 .. _fa-prepare: fa-prepare.html
 .. _fa_sniffer: fa_sniffer.html
 .. _fa-capture: fa-capture.html
 .. _fa-viewer: fa-viewer.html
 .. _falib: falib.html
+.. _fa_zoomer: fa_zoomer.html
+.. _fa_load: fa_load.html

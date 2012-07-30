@@ -10,6 +10,7 @@
 %          'D' for 10072/16384 decimated
 %          'C' for continuous data, in which case tse must be a single number
 %              specifying the number of samples wanted
+%          Use 'Z' suffix to select ID0 capture as well.
 %   server = IP address of FA archiver
 %
 % Output:
@@ -22,6 +23,7 @@
 %   d.data          The returned data
 %   d.t             Timestamp array for each sample point
 %   d.day           Matlab number of day containing first sample
+%   d.id0           ID 0 values if Z option specified.
 %
 % FA ids are returned in the same order that they were requested, including
 % any duplicates.

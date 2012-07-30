@@ -10,7 +10,7 @@ Captures data from the FA archiver to disk
 ------------------------------------------
 
 :Author:            Michael Abbott, Diamond Light Source Ltd
-:Date:              2011-05-27
+:Date:              2012-07-30
 :Manual section:    1
 :Manual group:      Diamond Light Source
 
@@ -102,31 +102,36 @@ The following further options can be given:
     Forbid any gaps in the captured sequence, contiguous data only.  Capture
     will fail if the data was interrupted.
 
+-z
+    When used in combination with `-c` includes checking for gaps in ID0 data.
+
 -k
     Keep extra dimensions in matlab values
 
--n:
+-n data-name
     Specify name of data array (default is "data")
 
--S:
+-S server
     Specify archive server to read from.  The default name is compiled into
     fa-capture.
 
--p:
+-p port
     Specify port to connect to on server (default is 8888).
 
 -q
     Suppress display of progress of capture on stderr.
 
--z
-    Check for gaps in ID0 data, otherwise any communication controller timebase
-    skips are ignored.  If the *id0* field is wanted this must be specified.  If
-    the hardware is unable to correctly retrieve the timebase information
-    setting this information can report an excessive gap count.
-
 -Z
     Use UTC timestamps for matlab timestamps, otherwise local time is used
     including any local daylight saving offset.
+
+-d
+    Subtract the day of the first timestamp from the stored matlab timestamp
+    vector.
+
+-T
+    Save "id0" communication controller timestamp information as a matlab array
+    in the captured data.
 
 
 Data Format
@@ -143,32 +148,29 @@ in matlab format with the following fields.
     retrieval.  Note that this is not particularly accurate and is not tied
     to the time of capture.
 
+:ids:
+    Array of requested FA ids captured in ascending numerical order.
+
 :timestamp:
     Timestamp in matlab format of the first captured sample.
 
-:ids:
-    Array of requested FA ids captured in ascending numerical order.
+:day:
+    Timestamp in matlab format of the day part of *timestamp*.  If `-d` was
+    specified then *day+t* will recover the true data timestamp.
+
+:t:
+    Array of timestamps of the captured data, equal in length to the timebase
+    axis of the *data* array.
 
 :data:
     Data array.  See detailed description below.
 
-Unless `-c` is specified the following fields are set:
-
-:gapix:
-    This is an array of gap indexes recording the offset into the *data* array
-    of the start of each contiguous data block.  The first value in the array
-    always has the value 0.
-
-:gaptimes:
-    Unless `-c` was specified the timestamps in matlab format of the start
-    of each contiguous block is recorded in this array.  The first value in the
-    array is always equal to *timestamp*.
-
-If `-z` was specified then a further field is set:
+If `-T` was specified then a further field is set:
 
 :id0:
-    If `-z` was used to retrieve id0 data then the communication controller
-    timebase counter for the first sample is returned as this value.
+    Array of communication controller timestamps.  Note that this data is
+    interpolated in blocks, the true timestamp information can be retrieved by
+    fetching FA id 0.
 
 
 Data Array

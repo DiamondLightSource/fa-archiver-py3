@@ -10,7 +10,7 @@ Prepares archive file for use as FA archive
 -------------------------------------------
 
 :Author:            Michael Abbott, Diamond Light Source Ltd
-:Date:              2011-05-27
+:Date:              2012-07-30
 :Manual section:    1
 :Manual group:      Diamond Light Source
 
@@ -51,6 +51,11 @@ Options
     Specify size of file.  The file will be resized to the given size with all
     disk blocks allocated.  Optional if the file already exists, should not be
     used when initialising a block device for use as an archive.
+
+-N fa-count
+    Specify number of FA ids to capture from sniffer.  This affects the maximum
+    valid value of FA ids when communicating with the archiver.  The default
+    value is 256.
 
 -I block-size
     Specify input block size for reads from FA sniffer device.  The default

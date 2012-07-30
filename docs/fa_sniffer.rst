@@ -10,7 +10,7 @@ Linux Device Driver for FA sniffer
 ----------------------------------
 
 :Author:            Michael Abbott, Diamond Light Source Ltd
-:Date:              2011-05-27
+:Date:              2012-07-30
 :Manual section:    4
 :Manual group:      Diamond Light Source
 
@@ -29,7 +29,7 @@ Description
 The fa_sniffer device driver provides a character device interface to the
 Diamond FA sniffer PCI express card.  This card captures fast acquisition frames
 to memory at a data rate of one frame every 100 microseconds, where a data frame
-contains X and Y position data for 256 FA nodes.
+contains X and Y position data for up to 1024 FA nodes.
 
 Frames are buffered in memory and made available through the character device
 `/dev/fa_sniffer0`, and a careful client of this device can capture a continuous
@@ -45,7 +45,8 @@ unpredictable!
 Module Parameters
 =================
 
-Two module parameters can be specified when loading the fa_sniffer device.
+The following module parameters can be specified when loading the fa_sniffer
+device.
 
 `fa_buffer_count`
     A circular queue of fixed sized blocks is used to buffer the interface from
@@ -58,6 +59,11 @@ Two module parameters can be specified when loading the fa_sniffer device.
     This is used to program the size of each block in the circular buffer.  This
     number is the logarithm base 2 of the block size, and the default is 19,
     corresponding to a block size of 512KB.
+
+`fa_entry_count`
+    Specifies the default transfer size, defaults to 256 if not otherwise
+    specified.  This can also be modified at run time via the `SET_ENTRY_COUNT`
+    ioctl.
 
 
 Character Device
@@ -72,14 +78,14 @@ The data stream can be interrupt if the client lags too far behind and the
 buffer overflows, or if there is an interrupt in the communication network and
 the FA sniffer card times out.  In either case reading will return 0 bytes,
 indicating end of file.  In this case the stream can be restarted with the
-RESTART ioctl, or by closing and reopening the device, and the reason for
-interrupt can be read using the GET_STATUS ioctl.
+`RESTART` ioctl, or by closing and reopening the device, and the reason for
+interrupt can be read using the `GET_STATUS` ioctl.
 
-The data stream is delivered as a sequence of 2048 byte frames, one frame for
+The data stream is delivered as a sequence of fixed size frames, one frame for
 each communication controller update, at an update rate of 10072 Hz at Diamond.
-Each frame consists of a sequence of X,Y pairs for FA ids in the range 0 to 255,
-except that id 0 is used by the sniffer to write the communication controller
-timestamp.
+Each frame consists of a sequence of X,Y pairs for FA ids in the range 0 to N-1,
+where N is the configured transfer size, except that id 0 is used by the sniffer
+to write the communication controller timestamp.
 
 Only one file handle to the sniffer device can be open at any time.
 
@@ -124,6 +130,28 @@ The following ioctls are available for this device:
     :running:   0 means halted, 1 means fetching data
     :overrun:   1 means halted due to driver buffer overflow
 
+`FASNIF_IOCTL_GET_TIMESTAMP`
+    Called with a `struct fa_timestamp` pointer as the third argument, returns
+    timestamp information about the block just read in the following fields:
+
+    :timestamp:
+        This is the timestamp (in microseconds in the Unix epoch) at which point
+        the block just read was fully received by the device driver.
+    :residue:
+        This records how many bytes from the block have not yet been read by the
+        driver and can be used if necessary to correct the timestamp.  Note that
+        if blocks are read in multiples of `2^fa_block_shift` then this will
+        always be zero.
+
+`FASNIF_IOCTL_GET_ENTRY_COUNT`
+    Returns the currently configured number of FA ids to be read in a single
+    block.
+
+`FASNIF_IOCTL_SET_ENTRY_COUNT`
+    Can be used to configure the number of FA ids to be read in a single block.
+    After calling this the device must be closed and reopened for the requested
+    change to take effect.
+
 
 Sysfs Interface
 ===============
@@ -136,9 +164,9 @@ usual places, namely::
     /sys/bus/pci/drivers/fa_sniffer
 
 as well as some further bus specific locations.  The following sysfs nodes are
-added by this driver under `/sys/class/fa_sniffer/fa_sniffer0/device`.  Note
-that this is essentially the same information as provided by the GET_STATUS
-ioctl.
+added by this driver under `/sys/class/fa_sniffer/fa_snifferx/device` (where `x`
+is usually `0`).  Note that this is essentially the same information as provided
+by the `GET_STATUS` ioctl.
 
     :firmware:          FPGA version number
     :last_interrupt:    Last interrupt reason code
@@ -147,6 +175,12 @@ ioctl.
     :frame_errors:      Count of total frame errors since hardware reset
     :soft_errors:       Count of total soft errors
     :hard_errors:       Count of total hard errors
+
+The following further nodes provide information available through the other
+ioctls.
+
+    :api_version:       Value returned by `GET_VERSION` ioctl.
+    :fa_entry_count:    Value returned by `GET_ENTRY_COUNT` ioctl.
 
 
 Files
