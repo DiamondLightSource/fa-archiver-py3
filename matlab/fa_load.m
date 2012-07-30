@@ -60,7 +60,8 @@ function d = fa_load(tse, mask, type, server)
     if nargin < 4
         server = 'fa-archiver.diamond.ac.uk';
     end
-    [decimation, frequency, typestr, ts_at_end] = process_type(server, type);
+    [decimation, frequency, typestr, ts_at_end, save_id0] = ...
+        process_type(server, type);
 
     % Compute unique sorted list from id mask and remember the permuation.
     [request_mask, dummy, perm] = unique(mask);
@@ -69,16 +70,17 @@ function d = fa_load(tse, mask, type, server)
     % Prepare the request and send to server
     maskstr = sprintf('%d,', request_mask);
     maskstr = maskstr(1:end-1);     % Chop off trailing comma
+    if save_id0; id0_req = 'Z'; else id0_req = ''; end
     if type == 'C'
         % Continuous data request
         tz_offset = get_tz_offset(now);
-        request = sprintf('S%sTE', maskstr);
+        request = sprintf('S%sTE%s', maskstr, id0_req);
     else
         tz_offset = get_tz_offset(tse(1));
         if ts_at_end; ts_req = 'A'; else ts_req = 'E'; end
-        request = sprintf('R%sM%sT%sZET%sZNAT%s', typestr, maskstr, ...
+        request = sprintf('R%sM%sT%sZET%sZNAT%s%s', typestr, maskstr, ...
             format_time(tse(1) - tz_offset), ...
-            format_time(tse(2) - tz_offset), ts_req);
+            format_time(tse(2) - tz_offset), ts_req, id0_req);
     end
     [sc, cleanup] = send_request(server, request);
 
@@ -129,17 +131,24 @@ function d = fa_load(tse, mask, type, server)
         % Prepare timestamps buffers, we guess a sensible initial size
         timestamps = zeros(round(sample_count / block_size) + 2, 1);
         durations  = zeros(round(sample_count / block_size) + 2, 1);
+        if save_id0
+            id_zeros = int32(zeros(round(sample_count / block_size) + 2, 1));
+        end
         ts_read = 0;
     end
+    if save_id0; ts_buf_size = 16; else ts_buf_size = 12; end
 
     % Read the requested data block by block
     samples_read = 0;
     while samples_read < sample_count
         if ~ts_at_end
             % Timestamp buffer first unless we've put it off until the end.
-            timestamp_buf = read_bytes(sc, 12, true);
+            timestamp_buf = read_bytes(sc, ts_buf_size, true);
             timestamps(ts_read + 1) = timestamp_buf.getLong();
             durations (ts_read + 1) = timestamp_buf.getInt();
+            if save_id0
+                id_zeros  (ts_read + 1) = timestamp_buf.getInt();
+            end
             ts_read = ts_read + 1;
         end
 
@@ -169,11 +178,18 @@ function d = fa_load(tse, mask, type, server)
         ts_read = read_int_array(sc, 1);
         timestamps = read_long_array(sc, ts_read);
         durations  = read_int_array(sc, ts_read);
+        if save_id0
+            id_zeros   = read_int_array(sc, ts_read);
+        end
     end
 
     [d.day, d.timestamp, d.t] = process_timestamps( ...
         timestamps, durations, ...
         tz_offset, sample_count, block_size, initial_offset);
+    if save_id0
+        d.id0 = process_id0( ...
+            id_zeros, sample_count, block_size, initial_offset, decimation);
+    end
 
     % Restore the originally requested permutation if necessary.
     if any(diff(perm) ~= 1)
@@ -271,20 +287,23 @@ end
 
 
 % Process decimation request in light of server parameters.
-function [decimation, frequency, typestr, ts_at_end] = ...
+function [decimation, frequency, typestr, ts_at_end, save_id0] = ...
         process_type(server, type)
 
     [first_dec, second_dec, frequency] = read_params(server);
 
+    save_id0 = type(end) == 'Z';
+    if save_id0; type = type(1:end-1); end
+
     ts_at_end = false;
-    if type == 'F' || type == 'C'
+    if strcmp(type, 'F') || strcmp(type, 'C')
         decimation = 1;
         typestr = 'F';
-    elseif type == 'd'
+    elseif strcmp(type, 'd')
         decimation = first_dec;
         typestr = 'D';
         frequency = frequency / decimation;
-    elseif type == 'D'
+    elseif strcmp(type, 'D')
         decimation = first_dec * second_dec;
         typestr = 'DD';
         frequency = frequency / decimation;
@@ -324,7 +343,7 @@ function tz_offset = get_tz_offset(time)
 end
 
 
-% Reads timestamp information sent at end.
+% Computes timebase from timestamps and offsets.
 % Note that we could avoid converting timestamps to doubles until subtracting
 % ts_offset below, but in fact we have just enough precision for microseconds.
 function [day, start_time, ts] = process_timestamps( ...
@@ -343,4 +362,15 @@ function [day, start_time, ts] = process_timestamps( ...
     ts = repmat(timestamps, 1, block_size) + durations;
     ts = reshape(ts', [], 1);
     ts = ts(initial_offset + 1:initial_offset + sample_count);
+end
+
+
+% Computes id0 array from captured information.
+function id0 = process_id0( ...
+        id_zeros, sample_count, block_size, initial_offset, decimation)
+    id_zeros = int32(id_zeros);
+    offsets = int32(decimation * [0:block_size - 1]);
+    id0 = repmat(id_zeros, 1, block_size) + repmat(offsets, size(id_zeros), 1);
+    id0 = reshape(id0', [], 1);
+    id0 = id0(initial_offset + 1:initial_offset + sample_count);
 end
