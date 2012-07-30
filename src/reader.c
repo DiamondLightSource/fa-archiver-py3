@@ -75,31 +75,6 @@ struct iter_mask {
 };
 
 
-/* Converts an external mask into indexes into the archive. */
-static bool mask_to_archive(
-    const struct filter_mask *mask, struct iter_mask *iter)
-{
-    const struct disk_header *header = get_header();
-    unsigned int ix = 0;
-    unsigned int n = 0;
-    bool ok = true;
-    for (unsigned int i = 0; ok  &&  i < fa_entry_count; i ++)
-    {
-        if (test_mask_bit(mask, i))
-        {
-            ok = TEST_OK_(test_mask_bit(&header->archive_mask, i),
-                "BPM %d not in archive", i);
-            iter->index[n] = (uint16_t) ix;
-            n += 1;
-        }
-        if (test_mask_bit(&header->archive_mask, i))
-            ix += 1;
-    }
-    iter->count = n;
-    return ok;
-}
-
-
 struct reader {
     /* Reads the requested block from archive into buffer, samples_per_fa_block
      * samples will be returned:
@@ -130,11 +105,35 @@ struct reader {
 };
 
 
+/* Converts an external mask into indexes into the archive. */
+static bool mask_to_archive(
+    const struct filter_mask *mask, struct iter_mask *iter)
+{
+    const struct disk_header *header = get_header();
+    unsigned int ix = 0;
+    unsigned int n = 0;
+    bool ok = true;
+    for (unsigned int i = 0; ok  &&  i < fa_entry_count; i ++)
+    {
+        if (test_mask_bit(mask, i))
+        {
+            ok = TEST_OK_(test_mask_bit(&header->archive_mask, i),
+                "BPM %d not in archive", i);
+            iter->index[n] = (uint16_t) ix;
+            n += 1;
+        }
+        if (test_mask_bit(&header->archive_mask, i))
+            ix += 1;
+    }
+    iter->count = n;
+    return ok;
+}
+
+
 static unsigned int round_up(uint64_t a, uint64_t b)
 {
     return (unsigned int) ((a + b - 1) / b);
 }
-
 
 
 /* Checks that the run of samples from (ix_start,offset) has no gaps.  Here the
@@ -218,56 +217,6 @@ static bool compute_start(
 }
 
 
-static bool send_gaplist(
-    const struct reader *reader, struct write_buffer *buffer, bool check_id0,
-    unsigned int ix_start, unsigned int offset, uint64_t samples)
-{
-    /* First convert block, offset and samples into an index block count. */
-    unsigned int samples_per_block = reader->samples_per_fa_block;
-    unsigned int ix_count = round_up(samples + offset, samples_per_block);
-    unsigned int N = get_header()->major_block_count;
-
-    /* Now count the gaps. */
-    uint32_t gap_count = 0;
-    for (unsigned int ix_block_ = ix_start, ix_count_ = ix_count;
-            find_gap(check_id0, &ix_block_, &ix_count_); )
-        gap_count += 1;
-
-    /* Send the gap count and gaps to the client. */
-    bool ok = write_buffer(buffer, &gap_count, sizeof(uint32_t));
-    unsigned int ix_block = ix_start;
-    for (unsigned int i = 0;  ok  &&  i <= gap_count;  i ++)
-    {
-        struct gap_data gap_data;
-        const struct data_index *data_index = read_index(ix_block);
-        gap_data.timestamp = data_index->timestamp;
-        gap_data.id_zero = data_index->id_zero;
-        if (i == 0)
-        {
-            /* The first data point needs to be adjusted so that it's the first
-             * delivered data point, not the first point in the index block. */
-            gap_data.data_index = 0;
-            gap_data.id_zero += offset << reader->decimation_log2;
-            gap_data.timestamp +=
-                (uint64_t) offset * data_index->duration /
-                    reader->samples_per_fa_block;
-        }
-        else
-        {
-            /* For subsequent blocks the offset into the data stream will be on
-             * an index block boundary, but offset by our start offset. */
-            unsigned int blocks = ix_block >= ix_start ?
-                ix_block - ix_start : ix_block - ix_start + N;
-            gap_data.data_index = blocks * samples_per_block - offset;
-        }
-
-        ok = write_buffer(buffer, &gap_data, sizeof(gap_data));
-        find_gap(check_id0, &ix_block, &ix_count);
-    }
-    return ok;
-}
-
-
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /* Timestamp support. */
@@ -283,10 +232,12 @@ enum send_timestamp {
 
 struct ts_buffer {
     uint32_t count;                 // Number of timestamps actually written
-    /* To help the client out even further, we send the timestamps and durations
-     * separately. */
+    bool send_id0;                  // Set if id0s is in use
+    /* To help the client out even further, we send the timestamps, durations
+     * and option id0 values separately. */
     struct write_buffer timestamps;
     struct write_buffer durations;
+    struct write_buffer id0s;
 };
 
 
@@ -294,45 +245,9 @@ struct ts_buffer {
     struct ts_buffer buf = { \
         .count = 0, \
         .timestamps = { .file = -1 }, \
-        .durations  = { .file = -1 } \
+        .durations  = { .file = -1 }, \
+        .id0s       = { .file = -1 }, \
     }
-
-
-/* For basic timestamps we just send the timestamp of the first sample at the
- * head of the data. */
-static bool send_basic_timestamp(
-    const struct reader *reader, struct write_buffer *buffer,
-    unsigned int ix_block, unsigned int ix_offset)
-{
-    const struct data_index *data_index = read_index(ix_block);
-    uint64_t timestamp =
-        data_index->timestamp +
-        /* A note on this calculation: both ix_offset and duration both
-         * comfortably fit into 32 bits, so this is a sensible way of computing
-         * the timestamp within the selected block. */
-        (uint64_t) ix_offset * data_index->duration /
-            reader->samples_per_fa_block;
-    return write_buffer(buffer, &timestamp, sizeof(uint64_t));
-}
-
-
-
-/* When sending a timestamp with each major block ("extended timestamps") we
- * start by send a header with block information. */
-static bool send_extended_header(
-    enum send_timestamp send_timestamp, struct write_buffer *buffer,
-    const struct reader *reader, unsigned int offset)
-{
-    if (send_timestamp == SEND_EXTENDED  ||  send_timestamp == SEND_AT_END)
-    {
-        struct extended_timestamp_header header = {
-            .block_size = reader->samples_per_fa_block,
-            .offset = offset };
-        return write_buffer(buffer, &header, sizeof(header));
-    }
-    else
-        return true;
-}
 
 
 /* When sending timestamps at the end we have to first of all allocate a buffer
@@ -340,9 +255,10 @@ static bool send_extended_header(
  * this could in fact end up being a lot of data we use the preallocated buffer
  * pool for this. */
 static bool allocate_timestamp_buffer(
-    enum send_timestamp send_timestamp, struct ts_buffer *ts_buffer,
-    unsigned int samples_per_block, uint64_t count)
+    enum send_timestamp send_timestamp, bool send_id0,
+    struct ts_buffer *ts_buffer, unsigned int samples_per_block, uint64_t count)
 {
+    ts_buffer->send_id0 = send_id0;
     if (send_timestamp == SEND_AT_END)
     {
         /* We only need a rough estimate here, so long as we don't
@@ -355,39 +271,91 @@ static bool allocate_timestamp_buffer(
             round_up(ts_count, pooled_buffer_size / sizeof(uint32_t));
         return
             allocate_write_buffer(&ts_buffer->timestamps, timestamp_blocks)  &&
-            allocate_write_buffer(&ts_buffer->durations,  duration_blocks);
+            allocate_write_buffer(&ts_buffer->durations,  duration_blocks)  &&
+            IF_(send_id0,
+                allocate_write_buffer(&ts_buffer->id0s, duration_blocks));
     }
     else
         return true;
 }
 
 
-/* For extended timestamps we write the timestamp and duration at the head of
- * each block. */
-static bool send_extended_timestamp(
-    enum send_timestamp send_timestamp, struct ts_buffer *ts_buffer,
-    struct write_buffer *buffer, unsigned int ix_block)
+/* When sending a timestamp with each major block ("extended timestamps") we
+ * start by send a header with block information. */
+static bool send_timestamp_header(
+    enum send_timestamp send_timestamp, bool send_id0,
+    struct write_buffer *buffer, const struct reader *reader,
+    unsigned int ix_block, unsigned int offset)
 {
     const struct data_index *data_index = read_index(ix_block);
-    if (send_timestamp == SEND_EXTENDED)
-    {
-        struct extended_timestamp timestamp = {
-            .timestamp = data_index->timestamp,
-            .duration  = data_index->duration };
+    uint32_t id0 = data_index->id_zero + offset;
 
-        return write_buffer(buffer, &timestamp, sizeof(timestamp));
-    }
-    else if (send_timestamp == SEND_AT_END)
+    switch (send_timestamp)
     {
-        ts_buffer->count += 1;
-        return
-            write_buffer(&ts_buffer->timestamps,
-                &data_index->timestamp, sizeof(uint64_t))  &&
-            write_buffer(&ts_buffer->durations,
-                &data_index->duration, sizeof(uint32_t));
+        case SEND_NOTHING:
+            if (send_id0)
+                return BUFFER_ITEM(buffer, id0);
+            else
+                return true;
+
+        case SEND_BASIC:
+        {
+            /* For basic timestamps we just send the timestamp of the first
+             * sample at the head of the data, possibly followed by id0. */
+            uint64_t timestamp =
+                data_index->timestamp +
+                /* A note on this calculation: both ix_offset and duration both
+                 * comfortably fit into 32 bits, so this is a sensible way of
+                 * computing the timestamp within the selected block. */
+                (uint64_t) offset * data_index->duration /
+                    reader->samples_per_fa_block;
+            return
+                BUFFER_ITEM(buffer, timestamp)  &&
+                IF_(send_id0, BUFFER_ITEM(buffer, id0));
+        }
+
+        case SEND_EXTENDED:
+        case SEND_AT_END:
+        {
+            /* Extended timestamps are sent for each block.  Start the data with
+             * a format description. */
+            struct extended_timestamp_header header = {
+                .block_size = reader->samples_per_fa_block,
+                .offset = offset };
+            return BUFFER_ITEM(buffer, header);
+        }
+
+        default: ASSERT_FAIL(); // Nonsense.  Will not happen
     }
-    else
-        return true;
+}
+
+
+/* For extended timestamps we write the timestamp and duration at the head of
+ * each block, or possibly delayed to the end of the transfer. */
+static bool send_extended_timestamp(
+    enum send_timestamp send_timestamp,
+    struct ts_buffer *ts_buffer, struct write_buffer *buffer,
+    unsigned int ix_block)
+{
+    const struct data_index *data_index = read_index(ix_block);
+    ts_buffer->count += 1;
+    switch (send_timestamp)
+    {
+        case SEND_EXTENDED:
+            return
+                BUFFER_ITEM(buffer, data_index->timestamp)  &&
+                BUFFER_ITEM(buffer, data_index->duration)  &&
+                IF_(ts_buffer->send_id0,
+                    BUFFER_ITEM(buffer, data_index->id_zero));
+        case SEND_AT_END:
+            return
+                BUFFER_ITEM(&ts_buffer->timestamps, data_index->timestamp)  &&
+                BUFFER_ITEM(&ts_buffer->durations,  data_index->duration)  &&
+                IF_(ts_buffer->send_id0,
+                    BUFFER_ITEM(&ts_buffer->id0s, data_index->id_zero));
+        default:
+            return true;
+    }
 }
 
 
@@ -396,9 +364,11 @@ static bool write_timestamp_buffer(
     struct ts_buffer *ts_buffer, struct write_buffer *out_buffer)
 {
     return
-        write_buffer(out_buffer, &ts_buffer->count, sizeof(uint32_t))  &&
+        BUFFER_ITEM(out_buffer, ts_buffer->count)  &&
         write_delayed_buffer(&ts_buffer->timestamps, out_buffer)  &&
-        write_delayed_buffer(&ts_buffer->durations, out_buffer);
+        write_delayed_buffer(&ts_buffer->durations, out_buffer)  &&
+        IF_(ts_buffer->send_id0,
+            write_delayed_buffer(&ts_buffer->id0s, out_buffer));
 }
 
 
@@ -406,6 +376,8 @@ static void release_timestamp_buffer(struct ts_buffer *ts_buffer)
 {
     release_write_buffer(&ts_buffer->timestamps);
     release_write_buffer(&ts_buffer->durations);
+    if (ts_buffer->send_id0)
+        release_write_buffer(&ts_buffer->id0s);
 }
 
 
@@ -413,21 +385,38 @@ static void release_timestamp_buffer(struct ts_buffer *ts_buffer)
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /* Data transfer control. */
 
+/* Result of parsing a read command. */
+struct read_parse {
+    struct filter_mask read_mask;   // List of BPMs to be read
+    uint64_t samples;               // Requested number of samples
+    uint64_t start;                 // Data start (in microseconds into epoch)
+    uint64_t end;                   // Data end (alternative to count)
+    const struct reader *reader;    // Interpretation of data source
+    unsigned int data_mask;         // Data mask for D and DD data
+    bool send_sample_count;         // Send sample count at start
+    bool send_all_data;             // Don't bail out if insufficient data
+    enum send_timestamp send_timestamp; // Send timestamp configuration
+    bool send_id0;                  // Send id0 (with timestamp data)
+    bool only_contiguous;           // Only contiguous data acceptable
+    bool check_id0;                 // Consider id0 gap as a gap
+};
+
+
 static bool transfer_data(
-    const struct reader *reader, struct read_buffers *read_buffers,
+    const struct read_parse *parse, struct read_buffers *read_buffers,
     int archive, struct write_buffer *out_buffer, struct iter_mask *iter,
-    unsigned int data_mask, enum send_timestamp send_timestamp,
     struct ts_buffer *ts_buffer,
     unsigned int ix_block, unsigned int offset, uint64_t count)
 {
+    const struct reader *reader = parse->reader;
     const struct disk_header *header = get_header();
-    size_t line_size_out = iter->count * reader->output_size(data_mask);
+    size_t line_size_out = iter->count * reader->output_size(parse->data_mask);
 
-    bool ok = send_extended_header(send_timestamp, out_buffer, reader, offset);
+    bool ok = true;
     while (ok  &&  count > 0)
     {
         ok = send_extended_timestamp(
-            send_timestamp, ts_buffer, out_buffer, ix_block);
+            parse->send_timestamp, ts_buffer, out_buffer, ix_block);
 
         /* Read a single timeframe for each id from the archive.  This is
          * normally a single large disk IO block per BPM id. */
@@ -460,7 +449,7 @@ static bool transfer_data(
 
             reader->write_lines(
                 line_count, iter->count,
-                read_buffers, offset, data_mask, line_buffer);
+                read_buffers, offset, parse->data_mask, line_buffer);
             release_buffer(out_buffer, line_count * line_size_out);
 
             count -= line_count;
@@ -474,26 +463,9 @@ static bool transfer_data(
     }
 
     return ok  &&
-        IF_(send_timestamp == SEND_AT_END,
+        IF_(parse->send_timestamp == SEND_AT_END,
             write_timestamp_buffer(ts_buffer, out_buffer));
 }
-
-
-/* Result of parsing a read command. */
-struct read_parse {
-    struct filter_mask read_mask;   // List of BPMs to be read
-    uint64_t samples;               // Requested number of samples
-    uint64_t start;                 // Data start (in microseconds into epoch)
-    uint64_t end;                   // Data end (alternative to count)
-    const struct reader *reader;    // Interpretation of data source
-    unsigned int data_mask;         // Data mask for D and DD data
-    bool send_sample_count;         // Send sample count at start
-    bool send_all_data;             // Don't bail out if insufficient data
-    bool only_contiguous;           // Only contiguous data acceptable
-    enum send_timestamp send_timestamp; // Send timestamp configuration
-    bool gaplist;                   // Send gaplist after data
-    bool check_id0;                 // Consider id0 gap as a gap
-};
 
 
 static bool read_data(
@@ -526,7 +498,7 @@ static bool read_data(
         lock_buffers(&read_buffers, iter.count)  &&
         allocate_write_buffer(&out_buffer, 1)  &&
         allocate_timestamp_buffer(
-            parse->send_timestamp, &ts_buffer,
+            parse->send_timestamp, parse->send_id0, &ts_buffer,
             parse->reader->samples_per_fa_block, samples)  &&
         /* Finally we're ready to go. */
         TEST_IO(archive = open(archive_filename, O_RDONLY));
@@ -536,17 +508,13 @@ static bool read_data(
     {
         write_ok =
             IF_(parse->send_sample_count,
-                write_buffer(&out_buffer, &samples, sizeof(samples)))  &&
-            IF_(parse->send_timestamp == SEND_BASIC,
-                send_basic_timestamp(
-                    parse->reader, &out_buffer, ix_block, offset))  &&
-            IF_(parse->gaplist,
-                send_gaplist(parse->reader, &out_buffer,
-                    parse->check_id0, ix_block, offset, samples))  &&
+                BUFFER_ITEM(&out_buffer, samples))  &&
+            send_timestamp_header(
+                parse->send_timestamp, parse->send_id0, &out_buffer,
+                parse->reader, ix_block, offset)  &&
             transfer_data(
-                parse->reader, &read_buffers, archive, &out_buffer,
-                &iter, parse->data_mask, parse->send_timestamp, &ts_buffer,
-                ix_block, offset, samples)  &&
+                parse, &read_buffers, archive, &out_buffer,
+                &iter, &ts_buffer, ix_block, offset, samples)  &&
             flush_buffer(&out_buffer);
     }
 
@@ -713,7 +681,7 @@ static struct reader dd_reader = {
  *  end = "N" samples | "E" time-or-seconds
  *  time-or-seconds = "T" date-time | "S" seconds [ "." nanoseconds ]
  *  samples = integer
- *  options = [ "N" ] [ "A" ] [ "T" [ "E" | "A" ] ] [ "G" ] [ "C" ] [ "Z" ]
+ *  options = [ "N" ] [ "A" ] [ "T" [ "E" | "A" ] ] [ "Z" ] [ "C" [ "Z" ] ]
  *
  * The options can only appear in the order given and have the following
  * meanings:
@@ -722,10 +690,10 @@ static struct reader dd_reader = {
  *  A   Send all data there is, even if samples is too large or starts too early
  *  T   Send timestamp at head of dataset
  *  TE  Send extended timestamp at head of dataset and with each major block
- *  TX  Send extended timestamp at head and tail of dataset
- *  G   Send gap list at end of data capture
+ *  TA  Send extended timestamp at head and tail of dataset
+ *  Z   Send id0 with data at the same time as the timestamp (or at start)
  *  C   Ensure no gaps in selected dataset, fail if any
- *  Z   Check for gaps generated by id0
+ *  CZ  Include gaps generated by id0 in gap check
  */
 
 /* source = "F" | "D" [ "D" ] [ "F" data-mask ] . */
@@ -788,7 +756,7 @@ static bool parse_end(const char **string, uint64_t *end, uint64_t *samples)
 }
 
 
-/* options = [ "N" ] [ "A" ] [ "T" [ "E" | "A" ] ] [ "G" ] [ "C" ] [ "Z" ] . */
+/* options = [ "N" ] [ "A" ] [ "T" [ "E" | "A" ] ] [ "C" ] [ "Z" ] . */
 static bool parse_options(const char **string, struct read_parse *parse)
 {
     parse->send_sample_count = read_char(string, 'N');
@@ -799,9 +767,9 @@ static bool parse_options(const char **string, struct read_parse *parse)
             read_char(string, 'A') ? SEND_AT_END :      // TA
         SEND_BASIC :                                    // T
         SEND_NOTHING;
-    parse->gaplist           = read_char(string, 'G');
+    parse->send_id0          = read_char(string, 'Z');
     parse->only_contiguous   = read_char(string, 'C');
-    parse->check_id0         = read_char(string, 'Z');
+    parse->check_id0 = parse->only_contiguous && read_char(string, 'Z');
     return true;
 }
 

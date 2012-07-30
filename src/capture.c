@@ -87,6 +87,7 @@ static bool all_data = false;
 static bool check_id0 = false;
 static bool offset_matlab_times = true;
 static bool subtract_day_zero = false;
+static bool save_id0 = false;
 
 /* Archiver parameters read from archiver during initialisation. */
 static double sample_frequency;
@@ -156,7 +157,7 @@ static bool parse_version(const char **string)
 }
 
 
-/* Parses expected server response to CFdDV command: should be three newline
+/* Parses expected server response to CFdDVK command: should be four newline
  * terminated numbers and a version string. */
 static bool parse_archive_parameters(const char **string)
 {
@@ -258,16 +259,17 @@ static void usage(char *argv0)
 "        capture fails if more data requested than present in archive.\n"
 "   -R   Save in raw format, otherwise the data is saved in matlab format\n"
 "   -c   Forbid any gaps in the captured sequence, contiguous data only\n"
+"   -z   Check for gaps in ID0 data when checking for gaps, otherwise ignored\n"
 "   -k   Keep extra dimensions in matlab values\n"
 "   -n:  Specify name of data array (default is \"%s\")\n"
 "   -S:  Specify archive server to read from (default is\n"
 "            %s)\n"
 "   -p:  Specify port to connect to on server (default is %d)\n"
 "   -q   Suppress display of progress of capture on stderr\n"
-"   -z   Check for gaps in ID0 data, otherwise ignored\n"
 "   -Z   Use UTC timestamps for matlab timestamps, otherwise local time is\n"
 "        used including any local daylight saving offset.\n"
 "   -d   Subtract the day from the matlab timestamp vector.\n"
+"   -T   Save \"id0\" communication controller timestamp information.\n"
 "\n"
 "Note that if matlab format is specified and no sample count is specified\n"
 "(interrupted continuous capture or range of times given) then output must be\n"
@@ -406,7 +408,7 @@ static bool parse_opts(int *argc, char ***argv)
     bool ok = true;
     while (ok)
     {
-        switch (getopt(*argc, *argv, "+hRCo:aS:qckn:zZds:t:b:p:f:"))
+        switch (getopt(*argc, *argv, "+hRCo:aS:qckn:zZdTs:t:b:p:f:"))
         {
             case 'h':   usage(argv0);                               exit(0);
             case 'R':   matlab_format = false;                      break;
@@ -421,6 +423,7 @@ static bool parse_opts(int *argc, char ***argv)
             case 'z':   check_id0 = true;                           break;
             case 'Z':   offset_matlab_times = false;                break;
             case 'd':   subtract_day_zero = true;                   break;
+            case 'T':   save_id0 = true;                            break;
             case 's':   ok = parse_start(parse_datetime, optarg);   break;
             case 't':   ok = parse_start(parse_today, optarg);      break;
             case 'b':   ok = parse_start(parse_before, optarg);     break;
@@ -498,6 +501,8 @@ static bool validate_args(void)
             "Cannot combine continuous and archive capture")  &&
         TEST_OK_(continuous_capture  ||  end_specified  ||  sample_count > 0,
             "Must specify sample count or end for historical data")  &&
+        TEST_OK_(!continuous_capture  ||  !request_contiguous,
+            "Gap checking not meaningful for subscription data")  &&
         TEST_OK_(sample_count == 0  ||  !end_specified,
             "Cannot specify both sample count and data end point")  &&
         TEST_OK_(!end_specified  ||  compare_ts(&start, &end) < 0,
@@ -505,7 +510,11 @@ static bool validate_args(void)
         TEST_OK_(start_specified  ||  data_format == DATA_FA,
             "Decimated data must be historical")  &&
         TEST_OK_(!matlab_format  ||  sample_count <= UINT32_MAX,
-            "Too many samples for matlab format capture");
+            "Too many samples for matlab format capture")  &&
+        TEST_OK_(matlab_format  ||  !save_id0,
+            "Can only capture ID0 in matlab format")  &&
+        TEST_OK_(request_contiguous  ||  !check_id0,
+            "ID0 checking only meaningful with gap checking");
 }
 
 
@@ -515,7 +524,7 @@ static bool validate_args(void)
 
 /* Timestamp capture. */
 static struct extended_timestamp_header timestamp_header;
-static struct extended_timestamp *timestamps_array = NULL;
+static struct extended_timestamp_id0 *timestamps_array = NULL;
 static size_t timestamps_array_size = 0; // Current size of timestamps array
 static size_t timestamps_count = 0;     // Current number of captured timestamps
 
@@ -542,15 +551,28 @@ static bool initialise_signal(void)
 
 /* Formats data request options for archive data request.  See reader.c for
  * definitions of these options. */
-static void format_options(char *options)
+static void format_read_options(char *options)
 {
-    if (true)                *options++ = 'N';  // Send sample count
-    if (all_data)            *options++ = 'A';  // Send all available data
-    if (matlab_format)       *options++ = 'T';  // Send timestamps
-    if (matlab_format)       *options++ = 'E';  //  in extended format
-    if (matlab_format)       *options++ = 'G';  // Send gap list
-    if (request_contiguous)  *options++ = 'C';  // Ensure no gaps in data
-    if (check_id0)           *options++ = 'Z';  // Include ID0 in gap check
+    if (true)               *options++ = 'N';   // Send sample count
+    if (all_data)           *options++ = 'A';   // Send all available data
+    if (matlab_format)      *options++ = 'T';   // Send timestamps
+    if (matlab_format)      *options++ = 'E';   //  in extended format
+    if (matlab_format  &&  save_id0)
+                            *options++ = 'Z';   //  with id0 values
+    if (request_contiguous) *options++ = 'C';   // Ensure no gaps in data
+    if (request_contiguous  &&  check_id0)
+                            *options++ = 'Z';   // Include ID0 in gap check
+    *options = '\0';
+}
+
+/* Formats data request options for subscription data request.  See subscribe.c
+ * for definitions of these options. */
+static void format_subscribe_options(char *options)
+{
+    if (matlab_format)      *options++ = 'T';   // Timestamps
+    if (matlab_format)      *options++ = 'E';   //  in extended format
+    if (matlab_format  &&  save_id0)
+                            *options++ = 'Z';   //  with id0 values
     *options = '\0';
 }
 
@@ -561,8 +583,11 @@ static bool request_data(FILE *stream)
     char raw_mask[RAW_MASK_BYTES];
     format_mask(&capture_mask, fa_entry_count, raw_mask);
     if (continuous_capture)
-        return TEST_OK(fprintf(stream,
-            "S%s%s\n", raw_mask, matlab_format ? "TEZ" : "") > 0);
+    {
+        char options[64];
+        format_subscribe_options(options);
+        return TEST_OK(fprintf(stream, "S%s%s\n", raw_mask, options) > 0);
+    }
     else
     {
         char format[16];
@@ -578,7 +603,7 @@ static bool request_data(FILE *stream)
         else
             sprintf(end_str, "N%"PRIu64, sample_count);
         char options[64];
-        format_options(options);
+        format_read_options(options);
         // Send R<source> M<mask> S<start> <end> <options>
         return TEST_OK(fprintf(stream, "R%sM%sS%ld.%09ld%s%s\n",
             format, raw_mask, start.tv_sec, start.tv_nsec,
@@ -636,7 +661,7 @@ static void reset_progress(void)
 
 
 /* Ensures there's enough room to record one more timestamp. */
-static struct extended_timestamp *get_timestamp_block(void)
+static struct extended_timestamp_id0 *get_timestamp_block(void)
 {
     if (timestamps_count >= timestamps_array_size)
     {
@@ -648,9 +673,20 @@ static struct extended_timestamp *get_timestamp_block(void)
             timestamps_array_size =
                 timestamps_array_size + timestamps_array_size / 2;
         timestamps_array = realloc(timestamps_array,
-            timestamps_array_size * sizeof(struct extended_timestamp));
+            timestamps_array_size * sizeof(struct extended_timestamp_id0));
     }
     return &timestamps_array[timestamps_count];
+}
+
+
+/* Reads the appropriate size of block from input. */
+static bool read_timestamp_block(FILE *stream)
+{
+    struct extended_timestamp_id0 *block = get_timestamp_block();
+    if (save_id0)
+        return READ_ITEM(stream, *block);
+    else
+        return READ_ITEM(stream, *(struct extended_timestamp *) block);
 }
 
 
@@ -678,7 +714,7 @@ static bool capture_data(FILE *stream, uint64_t *frames_written)
         /* Read the extended timestamp if appropriate. */
         if (matlab_format  &&  lines_to_timestamp == 0)
         {
-            if (!READ_ITEM(stream, *get_timestamp_block()))
+            if (!read_timestamp_block(stream))
                 break;      // End of input
 
             timestamps_count += 1;
@@ -735,44 +771,6 @@ static bool capture_raw_data(FILE *stream)
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /* Matlab data capture */
 
-/* Gap list read from server. */
-#define MAX_GAP_COUNT   128     // Sanity limit
-static uint32_t gap_count;
-static uint32_t data_index[MAX_GAP_COUNT];
-static uint32_t id_zero[MAX_GAP_COUNT];
-static double gap_timestamps[MAX_GAP_COUNT];
-
-
-/* Reads id 0 from server. */
-static bool read_t0(FILE *stream)
-{
-    gap_count = 0;
-    return TEST_OK(READ_ITEM(stream, id_zero[0]));
-}
-
-
-/* Reads list of contiguous data blocks from server, see reader.c for detailed
- * definition. */
-static bool read_gap_list(FILE *stream, time_t local_offset)
-{
-    bool ok =
-        TEST_OK(READ_ITEM(stream, gap_count))  &&
-        TEST_OK_(gap_count < MAX_GAP_COUNT,
-            "Implausible gap count of %"PRIu32" rejected", gap_count);
-    if (ok)
-    {
-        for (unsigned int i = 0; ok && i <= gap_count; i ++)
-        {
-            struct gap_data gap_data;
-            ok = TEST_OK(READ_ITEM(stream, gap_data));
-            data_index[i] = gap_data.data_index;
-            id_zero[i] = gap_data.id_zero;
-            gap_timestamps[i] =
-                matlab_timestamp(gap_data.timestamp, local_offset);
-        }
-    }
-    return ok;
-}
 
 
 /* Writes complete matlab header including size of captured data and auxilliary
@@ -794,8 +792,6 @@ static bool write_header(uint32_t frames_written)
     /* Write out the decimation and sample frequency and timestamp. */
     place_matlab_value(&header, "decimation", miINT32, &decimation);
     place_matlab_value(&header, "f_s",        miDOUBLE, &frequency);
-    if (check_id0)
-        place_matlab_vector(&header, "id0", miINT32, id_zero, gap_count + 1);
 
     /* Write out the index array tying data back to original BPM ids. */
     uint16_t mask_ids[fa_entry_count];
@@ -803,106 +799,149 @@ static bool write_header(uint32_t frames_written)
         compute_mask_ids(mask_ids, &capture_mask, fa_entry_count);
     place_matlab_vector(&header, "ids", miUINT16, mask_ids, mask_length);
 
-    /* Write out the gap list data. */
-    if (!continuous_capture)
-    {
-        place_matlab_vector(&header,
-            "gapix", miINT32, data_index, gap_count + 1);
-        place_matlab_vector(&header, "gaptimes",
-            miDOUBLE, gap_timestamps, gap_count + 1);
-    }
-
     /* Finally write out the matrix mat_header for the fa data. */
     unsigned int field_count = count_data_bits(data_mask);
-    place_matrix_header(&header, data_name,
+    unsigned int padding = place_matrix_header(&header, data_name,
         miINT32, squeeze,
         4, 2, field_count, mask_length, frames_written);
+    ASSERT_OK(padding == 0);            // Minimum element size is 8 bytes
 
     return write_matlab_buffer(output_file, &header);
 }
 
 
-
-/* Computes a block of timestamps starting at the given offset. */
-static void compute_timestamps(
-    struct extended_timestamp *timestamps, size_t offset,
-    double day_zero, time_t local_offset, double *buffer, size_t count)
+/* Support for converting and writing the blocks of footer data derived from
+ * captured timestamp information. */
+static bool buffered_convert_write(
+    unsigned int padding, unsigned int frames_written, size_t element_size,
+    void (*convert)(struct extended_timestamp_id0 *timestamps, void *result))
 {
-    unsigned int block_size = timestamp_header.block_size;
+    struct extended_timestamp_id0 *timestamps = timestamps_array;
+    size_t offset = timestamp_header.offset;
+    size_t block_size = timestamp_header.block_size;
 
-    /* Matlab timestamp and conversion fixups. */
-    double conversion = 1e-6 / SECS_PER_DAY;
-    double matlab_epoch =
-        MATLAB_EPOCH + (double) local_offset / SECS_PER_DAY - day_zero;
-
-    double increment = conversion * timestamps->duration / block_size;
-    double timestamp =
-        conversion * (double) timestamps->timestamp +
-        matlab_epoch + (double) offset * increment;
-
-    /* This way of filling the buffer is brisk and the accumulated increment
-     * error with double precision is negligible (count is at most 8192). */
-    for (unsigned int i = 0; i < count; i ++)
+    bool ok = true;
+    for (size_t written = 0; ok  &&  written < frames_written; )
     {
-        buffer[i] = timestamp;
-        timestamp += increment;
+        /* Convert timestamps in blocks corresponding to original data. */
+        char buffer[block_size * element_size];
+        convert(timestamps, buffer);
+
+        /* Write out as much of the current block as wanted. */
+        size_t to_write = block_size - offset;
+        if (to_write > frames_written - written)
+            to_write = frames_written - written;
+        ok = TEST_OK(fwrite(
+            buffer + offset * element_size,
+            element_size, to_write, output_file) == to_write);
+
+        written += to_write;
+        timestamps ++;
+        offset = 0;
     }
+
+    /* Write out any padding needed to ensure the data size is a multiple of 8
+     * bytes. */
+    if (ok  &&  padding > 0)
+    {
+        char buffer[padding];
+        memset(buffer, 0, padding);
+        ok = TEST_OK(fwrite(buffer, 1, padding, output_file) == padding);
+    }
+    return ok;
 }
 
 
-/* Writes timestamps vector at end of stream. */
-static bool write_footer(unsigned int frames_written, time_t local_offset)
+/* Timestamp to add to or subtract from server timestamps. */
+static uint64_t timestamp_offset;
+
+/* Computes a block of timestamps for a single data block. */
+static void convert_timestamps(
+    struct extended_timestamp_id0 *timestamps, void *buffer)
 {
-    DECLARE_MATLAB_BUFFER(header, 512); // Just need space for vector heading
+    unsigned int block_size = timestamp_header.block_size;
+    double scaling = 1e-6 / SECS_PER_DAY;
+    double increment = (scaling * timestamps->duration) / block_size;
+    double timestamp =
+        scaling * (double) (timestamps->timestamp + timestamp_offset);
+    double delta = 0.0;     // Separate accumulator to improve precision
 
-    /* Compute the timestamps from the arrays of timestamps we've read. */
-    struct extended_timestamp *timestamps = timestamps_array;
-    size_t offset = timestamp_header.offset;
+    double *result = buffer;
+    for (unsigned int i = 0; i < block_size; i ++)
+    {
+        result[i] = timestamp + delta;
+        delta += increment;
+    }
+}
 
-    double timestamp;
-    compute_timestamps(timestamps, offset, 0, local_offset, &timestamp, 1);
+static bool write_timestamps(unsigned int frames_written, time_t local_offset)
+{
+    /* Prepare timestamp conversion.  First we need to compute the starting
+     * timestamp and day_zero and then from this the timestamp offset used in
+     * the conversion above. */
+
+    /* Matlab epoch in archive units, taking the local offset into account. */
+    timestamp_offset = (uint64_t) 1000000 *
+        ((uint64_t) local_offset + (uint64_t) SECS_PER_DAY * MATLAB_EPOCH);
+    /* Timestamp of first point in captured data in archive epoch. */
+    uint64_t start_ts =
+        timestamps_array[0].timestamp +
+        (uint64_t) timestamps_array[0].duration * timestamp_header.offset /
+            timestamp_header.block_size;
+    /* Can now compute timestamp and day */
+    double timestamp =
+        1e-6 / SECS_PER_DAY * (double) (start_ts + timestamp_offset);
     double day_zero = floor(timestamp);
 
+    if (subtract_day_zero)
+        timestamp_offset -= (uint64_t) (1e6 * SECS_PER_DAY * day_zero);
+
     /* Output the matlab values. */
+    DECLARE_MATLAB_BUFFER(header, 512); // Just need space for vector heading
     place_matlab_value(&header, "timestamp", miDOUBLE, &timestamp);
     place_matlab_value(&header, "day", miDOUBLE, &day_zero);
-    place_matrix_header(
+    unsigned int padding = place_matrix_header(
         &header, "t", miDOUBLE, NULL, 2, 1, frames_written);
-    bool ok = write_matlab_buffer(output_file, &header);
 
-    if (!subtract_day_zero)
-        day_zero = 0;
+    return
+        write_matlab_buffer(output_file, &header)  &&
+        buffered_convert_write(
+            padding, frames_written, sizeof(double), convert_timestamps);
+}
 
-    /* Need to buffer output as fwrite isn't as fast as it ought to be. */
-    unsigned int block_size = timestamp_header.block_size;
-    size_t buffer_size = BUFFER_SIZE / sizeof(double);
-    double buffer[buffer_size];
 
-    for (size_t i = 0; ok  &&  i < frames_written; )
+static void convert_id0(struct extended_timestamp_id0 *timestamps, void *buffer)
+{
+    uint32_t *result = buffer;
+    uint32_t id_zero = timestamps->id_zero;
+    unsigned int decimation = get_decimation();
+    for (unsigned int i = 0; i < timestamp_header.block_size; i ++)
     {
-        /* We need to do timestamp conversion in reasonable sized blocks for
-         * speed.  Figure out how many will fit into the current block. */
-        size_t to_convert = buffer_size;
-        if (to_convert > block_size - offset)
-            to_convert = block_size - offset;
-        if (to_convert > frames_written - i)
-            to_convert = frames_written - i;
-
-        compute_timestamps(
-            timestamps, offset, day_zero, local_offset, buffer, to_convert);
-        ok = TEST_OK(fwrite(
-            buffer, sizeof(double), to_convert, output_file) == to_convert);
-
-        offset += to_convert;
-        i += to_convert;
-        if (offset >= block_size)
-        {
-            timestamps ++;
-            offset = 0;
-        }
+        result[i] = id_zero;
+        id_zero += decimation;
     }
+}
 
-    return ok;
+static bool write_id0(unsigned int frames_written)
+{
+    DECLARE_MATLAB_BUFFER(header, 512); // Just need space for vector heading
+    unsigned int padding = place_matrix_header(
+        &header, "id0", miINT32, NULL, 2, 1, frames_written);
+    return
+        write_matlab_buffer(output_file, &header)  &&
+        buffered_convert_write(
+            padding, frames_written, sizeof(uint32_t), convert_id0);
+}
+
+
+/* The matlab footer includes the timestamp information and optionally the id0
+ * information, both derived from the timestamps blocks captured during data
+ * transfer. */
+static bool write_footer(unsigned int frames_written, time_t local_offset)
+{
+    return
+        write_timestamps(frames_written, local_offset)  &&
+        IF_(save_id0, write_id0(frames_written));
 }
 
 
@@ -912,10 +951,9 @@ static bool capture_matlab_data(FILE *stream)
     uint64_t frames_written;
     time_t local_offset = offset_matlab_times ? local_time_offset() : 0;
     return
-        IF_ELSE(continuous_capture,
-            read_t0(stream),
-            read_gap_list(stream, local_offset))  &&
         TEST_OK(READ_ITEM(stream, timestamp_header))  &&
+        TEST_OK_(timestamp_header.offset < timestamp_header.block_size,
+            "Invalid response from server")  &&
 
         write_header((uint32_t) sample_count)  &&
         capture_data(stream, &frames_written)  &&

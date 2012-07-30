@@ -27,12 +27,6 @@
  *      michael.abbott@diamond.ac.uk
  */
 
-#define TIMING_BUFFER_SIZE  128
-
-static uint64_t __timing_buffer[TIMING_BUFFER_SIZE];
-static int __timing_count = 0;
-static bool __timing_reported = false;
-
 
 static __inline__ uint64_t get_ticks(void)
 {
@@ -47,6 +41,15 @@ static __inline__ uint64_t get_ticks(void)
 #endif
 }
 
+
+#ifdef TIMING_TEST
+
+#define TIMING_BUFFER_SIZE  128
+
+static uint64_t __timing_buffer[TIMING_BUFFER_SIZE];
+static int __timing_count = 0;
+static bool __timing_reported = false;
+
 static void update_timing(uint64_t interval)
 {
     if (__timing_count < TIMING_BUFFER_SIZE)
@@ -60,7 +63,7 @@ static void update_timing(uint64_t interval)
             printf("%"PRIu64" ", t);
             if (i % 8 == 7)
                 printf("\n");
-            sum += t;
+            sum += (double) t;
         }
         printf("mean: %g\n", sum / TIMING_BUFFER_SIZE);
         __timing_reported = true;
@@ -71,3 +74,4 @@ static void update_timing(uint64_t interval)
 #define STOP_TIMING  \
     uint64_t __timing_stop__ = get_ticks(); \
     update_timing(__timing_stop__ - __timing_start__)
+#endif

@@ -83,17 +83,3 @@ bool format_readable_mask(
  * Prints error message and returns false if parsing fails. */
 bool parse_mask(
     const char **string, unsigned int fa_entry_count, struct filter_mask *mask);
-
-/* Copies a single FA frame taking the mask into account, returns the number
- * of bytes copied into the target buffer (will be 8*count_mask_bits(mask)).
- * 'from' should point to a completely populated frame, 'to' will contain X,Y
- * pairs in ascending numerical order for bits set in mask. */
-int copy_frame(
-    void *to, const void *from,
-    const struct filter_mask *mask, unsigned int fa_entry_count);
-
-/* Writes the selected number of masked frames to the given file, returning
- * false if writing fails. */
-bool write_frames(
-    int file, const struct filter_mask *mask, unsigned int fa_entry_count,
-    const void *frame, unsigned int count);

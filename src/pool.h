@@ -70,6 +70,10 @@ struct write_buffer {
 #define ALLOCATE_WRITE_BUFFER(buffer, scon) \
     struct write_buffer buffer = { .file = scon }
 
+/* Helper macro for writing a single item. */
+#define BUFFER_ITEM(buffer, item)    write_buffer(buffer, &item, sizeof(item))
+
+
 /* Allocates write buffer.  Assumes the buffer has been correctly zero
  * initialised with ALLOCATE_WRITE_BUFFER. */
 bool allocate_write_buffer(struct write_buffer *buffer, unsigned int count);

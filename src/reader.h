@@ -35,13 +35,6 @@ bool process_read(int scon, const char *client_name, const char *buf);
 bool initialise_reader(const char *archive);
 
 
-/* Format of gap data transmitted over the wire. */
-struct gap_data {
-    uint32_t data_index;
-    uint32_t id_zero;
-    uint64_t timestamp;
-} __attribute__((packed));
-
 /* Timestamp header when sending extended data. */
 struct extended_timestamp_header {
     uint32_t block_size;        // Number of samples in each major block
@@ -52,4 +45,9 @@ struct extended_timestamp_header {
 struct extended_timestamp {
     uint64_t timestamp;         // Start of block in microseconds
     uint32_t duration;          // Duration of block in microseconds
+} __attribute__((packed));
+struct extended_timestamp_id0 {
+    uint64_t timestamp;         // Start of block in microseconds
+    uint32_t duration;          // Duration of block in microseconds
+    uint32_t id_zero;           // CC cycle number
 } __attribute__((packed));

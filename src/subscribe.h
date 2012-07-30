@@ -1,6 +1,6 @@
-/* Interface to archive server.
+/* Subscription to live FA data stream
  *
- * Copyright (c) 2011 Michael Abbott, Diamond Light Source Ltd.
+ * Copyright (c) 2012 Michael Abbott, Diamond Light Source Ltd.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,15 +27,8 @@
  *      michael.abbott@diamond.ac.uk
  */
 
-bool initialise_server(
-    struct buffer *fa_buffer, struct buffer *decimated, int port,
-    bool extra, bool reuseaddr);
-bool start_server(void);
-void terminate_server(void);
+/* Process subscription command. */
+bool process_subscribe(int scon, const char *client_name, const char *buf);
 
-/* Reports error status on the connected socket and calls pop_error_handling().
- * If there is no error to report then a single null byte is written to the
- * socket to signal a valid status. */
-bool report_socket_error(int scon, const char *client_name, bool ok);
-/* Controls buffering of socket. */
-bool set_socket_cork(int sock, bool cork);
+/* Inform subscription service of data sources. */
+void initialise_subscribe(struct buffer *fa_buffer, struct buffer *decimated);

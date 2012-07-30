@@ -69,6 +69,7 @@ archiver_SRCS += gigabit.c          # Gigabit Ethernet interface
 archiver_SRCS += disk_writer.c      # Core disk writing access
 archiver_SRCS += disk.c             # Disk header format definitions
 archiver_SRCS += socket_server.c    # Socket server
+archiver_SRCS += subscribe.c        # Subscription to current data
 archiver_SRCS += transform.c        # Data transformation and access
 archiver_SRCS += pool.c             # Shared buffer pool for readers
 archiver_SRCS += reader.c           # Sniffer data readout

@@ -52,9 +52,6 @@
 #include "mask.h"
 
 
-#define WRITE_BUFFER_SIZE       (1 << 16)
-
-
 unsigned int count_mask_bits(
     const struct filter_mask *mask, unsigned int fa_entry_count)
 {
@@ -218,61 +215,4 @@ unsigned int format_mask(
         buffer[0] = 'R';
         return format_raw_mask(mask, fa_entry_count, buffer + 1);
     }
-}
-
-int copy_frame(
-    void *to, const void *from,
-    const struct filter_mask *mask, unsigned int fa_entry_count)
-{
-    const int32_t *from_p = from;
-    int32_t *to_p = to;
-    int copied = 0;
-    for (unsigned int i = 0; i < fa_entry_count / 8; i ++)  // 8 bits at a time
-    {
-        uint8_t m = mask->mask[i];
-        for (unsigned int j = 0; j < 8; j ++)
-        {
-            if ((m >> j) & 1)
-            {
-                *to_p++ = from_p[0];
-                *to_p++ = from_p[1];
-                copied += 8;
-            }
-            from_p += 2;
-        }
-    }
-    return copied;
-}
-
-
-bool write_frames(
-    int file, const struct filter_mask *mask, unsigned int fa_entry_count,
-    const void *frame, unsigned int count)
-{
-    size_t out_frame_size =
-        count_mask_bits(mask, fa_entry_count) * FA_ENTRY_SIZE;
-    while (count > 0)
-    {
-        char buffer[WRITE_BUFFER_SIZE];
-        size_t buffered = 0;
-        while (count > 0  &&  buffered + out_frame_size <= WRITE_BUFFER_SIZE)
-        {
-            copy_frame(buffer + buffered, frame, mask, fa_entry_count);
-            frame = frame + FA_ENTRY_SIZE * fa_entry_count;
-            buffered += out_frame_size;
-            count -= 1;
-        }
-
-        size_t written = 0;
-        while (buffered > 0)
-        {
-            ssize_t wr;
-            if (!TEST_IO_(wr = write(file, buffer + written, buffered),
-                    "Unable to write frame"))
-                return false;
-            written  += (size_t) wr;
-            buffered -= (size_t) wr;
-        }
-    }
-    return true;
 }

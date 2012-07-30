@@ -49,7 +49,6 @@
 #include "mask.h"
 #include "buffer.h"
 #include "reader.h"
-#include "parse.h"
 #include "disk.h"
 #include "transform.h"
 #include "decimate.h"
@@ -57,6 +56,7 @@
 #include "locking.h"
 #include "list.h"
 #include "disk_writer.h"
+#include "subscribe.h"
 
 #include "socket_server.h"
 
@@ -67,8 +67,6 @@
 
 /* Block buffer for full resolution FA data. */
 static struct buffer *fa_block_buffer;
-/* Block buffer for decimated FA data. */
-static struct buffer *decimated_buffer;
 
 /* If set the debug commands are enabled.  These are normally only enabled for
  * debugging, as we don't want to allow external users to normally have this
@@ -180,8 +178,7 @@ static bool process_error(int scon, const char *client_name, const char *buf)
 
 /* Sets socket receive and transmit timeouts.  Used so we don't have threads
  * hanging waiting for users to complete sending their commands and to receive
- * their data.  (Also so I can remember how to do this!)  See socket(7) for
- * documentatino of SO_RCVTIMEO option. */
+ * their data.  See socket(7) for documentation of SO_RCVTIMEO option. */
 static bool set_socket_timeout(int sock, int rx_secs, int tx_secs)
 {
     struct timeval rx_timeout = { .tv_sec = rx_secs, .tv_usec = 0 };
@@ -194,7 +191,7 @@ static bool set_socket_timeout(int sock, int rx_secs, int tx_secs)
 }
 
 /* Using cork should be harmless and should increase write efficiency. */
-static bool set_socket_cork(int sock, bool cork)
+bool set_socket_cork(int sock, bool cork)
 {
     int _cork = cork;       // In case sizeof(bool) isn't sizeof(int)
     return TEST_IO(setsockopt(sock, SOL_TCP, TCP_CORK, &_cork, sizeof(_cork)));
@@ -413,67 +410,6 @@ static bool process_command(int scon, const char *client_name, const char *buf)
 }
 
 
-/* Same options as for reader. */
-enum send_timestamp {
-    SEND_NOTHING = 0,               // Don't send timestamp with data
-    SEND_BASIC,                     // Send timestamp at start of data
-    SEND_EXTENDED                   // Send timestamp with each data block
-};
-
-/* Result of parsing a subscribe command. */
-struct subscribe_parse {
-    struct filter_mask mask;        // List of BPMs to be subscribed
-    struct buffer *buffer;          // Source of data (FA or decimated)
-    enum send_timestamp send_timestamp; // Timestamp options
-    bool want_t0;                   // Set if T0 should be sent
-    bool uncork;                    // Set if stream should be uncorked
-};
-
-
-static bool parse_options(const char **string, struct subscribe_parse *parse)
-{
-    parse->send_timestamp =
-        read_char(string, 'T') ?    //        "TE"          "T"             ""
-            read_char(string, 'E') ? SEND_EXTENDED : SEND_BASIC : SEND_NOTHING;
-    parse->want_t0 = read_char(string, 'Z');
-    parse->uncork = read_char(string, 'U');
-    if (read_char(string, 'D'))
-        parse->buffer = decimated_buffer;
-    else
-        parse->buffer = fa_block_buffer;
-    return
-        TEST_NULL_(parse->buffer, "Decimated data not available")  &&
-        TEST_OK_(
-            parse->send_timestamp != SEND_EXTENDED  ||
-            parse->buffer != decimated_buffer,
-            "Extended timestamps not available for decimated data");
-}
-
-/* A subscribe request is a filter mask followed by options:
- *
- *  subscription = "S" filter-mask options
- *  options = [ "T" [ "E" ]] [ "Z" ] [ "U" ] [ "D" ]
- *
- * The options have the following meanings:
- *
- *  T   Start subscription stream with timestamp
- *  TE  Send extended timestamps
- *  Z   Start subscription stream with t0
- *  U   Uncork data stream
- *  D   Want decimated data stream
- *
- * If both T and Z are specified then the timestamp is sent first before T0. */
-static bool parse_subscription(
-    const char **string, unsigned int fa_entry_count,
-    struct subscribe_parse *parse)
-{
-    return
-        parse_char(string, 'S')  &&
-        parse_mask(string, fa_entry_count, &parse->mask)  &&
-        parse_options(string, parse);
-}
-
-
 bool report_socket_error(int scon, const char *client_name, bool ok)
 {
     if (ok)
@@ -492,113 +428,6 @@ bool report_socket_error(int scon, const char *client_name, bool ok)
         free(error_message);
         return write_ok;
     }
-}
-
-
-static bool send_extended_header(int scon, size_t block_size)
-{
-    struct extended_timestamp_header header = {
-        .block_size = (uint32_t) block_size,
-        .offset = 0 };
-    return TEST_write(scon, &header, sizeof(header));
-}
-
-
-static bool send_extended_timestamp(
-    int scon, size_t block_size, uint64_t timestamp)
-{
-    /* This duration calculation is why we can't do decimated data with extended
-     * timestamps -- just don't have the value to deliver!  Actually, it's not a
-     * great match to the data anyway, but that's another problem... */
-    const struct disk_header *header = get_header();
-    size_t duration =
-        header->last_duration / (header->major_sample_count / block_size);
-
-    struct extended_timestamp extended_timestamp = {
-        .timestamp = timestamp - duration,  // timestamp is after *last* point
-        .duration = (uint32_t) duration };
-    return TEST_write_(
-        scon, &extended_timestamp, sizeof(extended_timestamp),
-        "Unable to write timestamp");
-}
-
-
-static bool send_subscription(
-    int scon, struct reader_state *reader, uint64_t timestamp,
-    struct subscribe_parse *parse, unsigned int fa_entry_count,
-    const void **block)
-{
-    /* The transmitted block optionally begins with the timestamp and T0 values,
-     * in that order, if requested. */
-    unsigned int block_size = (unsigned int) (
-        reader_block_size(reader) / fa_entry_count / FA_ENTRY_SIZE);
-    bool ok =
-        IF_(parse->send_timestamp == SEND_BASIC,
-            TEST_write(scon, &timestamp, sizeof(uint64_t)))  &&
-        IF_(parse->want_t0,
-            TEST_write(scon, *block, sizeof(uint32_t)))  &&
-        IF_(parse->uncork,
-            set_socket_cork(scon, false))  &&
-        IF_(parse->send_timestamp == SEND_EXTENDED,
-            send_extended_header(scon, block_size));
-
-    while (ok)
-    {
-        ok = FINALLY(
-            IF_(parse->send_timestamp == SEND_EXTENDED,
-                send_extended_timestamp(scon, block_size, timestamp))  &&
-            write_frames(
-                scon, &parse->mask, fa_entry_count, *block, block_size),
-
-            // Always do this, even if write_frames fails.
-            TEST_OK_(release_read_block(reader),
-                "Write underrun to client"));
-        if (ok)
-            ok = TEST_NULL_(
-                *block = get_read_block(reader, &timestamp),
-                "Gap in subscribed data");
-        else
-            *block = NULL;
-    }
-    return ok;
-}
-
-
-/* A subscription is a command of the form S<mask> where <mask> is a mask
- * specification as described in mask.h.  The default mask is empty. */
-static bool process_subscribe(
-    int scon, const char *client_name, const char *buf)
-{
-    unsigned int fa_entry_count = get_header()->fa_entry_count;
-
-    push_error_handling();
-
-    /* Parse the incoming request. */
-    struct subscribe_parse parse;
-    if (!DO_PARSE("subscription",
-            parse_subscription, buf, fa_entry_count, &parse))
-        return report_socket_error(scon, client_name, false);
-
-    /* See if we can start the subscription, report the final status to the
-     * caller. */
-    struct reader_state *reader = open_reader(parse.buffer, false);
-    uint64_t timestamp;
-    const void *block = get_read_block(reader, &timestamp);
-    bool start_ok = TEST_NULL_(block, "No data currently available");
-    bool ok = report_socket_error(scon, client_name, start_ok);
-
-    /* Send the requested subscription if all is well. */
-    if (start_ok  &&  ok)
-        ok = send_subscription(
-            scon, reader, timestamp, &parse, fa_entry_count, &block);
-
-    /* Clean up resources.  Rather important to get this right, as this can
-     * happen many times. */
-    if (block != NULL)
-        release_read_block(reader);
-    close_reader(reader);
-
-    return ok;
 }
 
 
@@ -733,8 +562,8 @@ bool initialise_server(
     struct buffer *fa_buffer, struct buffer *decimated, int port,
     bool extra, bool reuseaddr)
 {
+    initialise_subscribe(fa_buffer, decimated);
     fa_block_buffer = fa_buffer;
-    decimated_buffer = decimated;
     debug_commands = extra;
 
     struct sockaddr_in sin = {
@@ -757,10 +586,8 @@ bool initialise_server(
 
 bool start_server(void)
 {
-    return
-        TEST_0(pthread_create(
-            &server_thread, NULL, run_server,
-            (void *) (intptr_t) server_socket));
+    return TEST_0(pthread_create(
+        &server_thread, NULL, run_server, (void *) (intptr_t) server_socket));
 }
 
 
