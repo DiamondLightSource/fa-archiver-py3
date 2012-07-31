@@ -88,6 +88,10 @@ Options
 -s socket
     Specify server socket (default 8888).
 
+-B address
+    Bind server socket to listen only to the specifed address, otherwise listens
+    on all available addresses.
+
 -F matfile
     Run dummy sniffer with canned data.  See `Canned Data Format`_ for details.
 

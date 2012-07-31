@@ -559,8 +559,8 @@ static pthread_t server_thread;
 static int server_socket;
 
 bool initialise_server(
-    struct buffer *fa_buffer, struct buffer *decimated, int port,
-    bool extra, bool reuseaddr)
+    struct buffer *fa_buffer, struct buffer *decimated,
+    const char *bind_address, int port, bool extra, bool reuseaddr)
 {
     initialise_subscribe(fa_buffer, decimated);
     fa_block_buffer = fa_buffer;
@@ -573,6 +573,9 @@ bool initialise_server(
     };
     int reuse = 1;
     return
+        IF_(bind_address,
+            TEST_OK_(inet_aton(bind_address, &sin.sin_addr),
+                "Malformed listening address"))  &&
         TEST_IO(server_socket = socket(AF_INET, SOCK_STREAM, 0))  &&
         IF_(reuseaddr,
             TEST_IO(setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR,

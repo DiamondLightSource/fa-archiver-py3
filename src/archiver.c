@@ -103,6 +103,8 @@ static bool extra_commands = false;
 static bool verbose = true;
 /* Enable SO_REUSEADDR option on listening socket. */
 static bool reuseaddr = false;
+/* Specify address to bind server socket to. */
+static char *server_bind_address = NULL;
 
 
 static void usage(void)
@@ -122,6 +124,7 @@ static void usage(void)
 "    -D   Run as a daemon\n"
 "    -p:  Write PID to specified file\n"
 "    -s:  Specify server socket (default 8888)\n"
+"    -B:  Bind server socket to specified address (otherwise listens on all)\n"
 "    -F:  Run dummy sniffer with canned data.\n"
 "    -X   Enable extra commands (debug only)\n"
 "    -R   Set SO_REUSEADDR on listening socket, debug use only\n"
@@ -146,7 +149,7 @@ static bool process_options(int *argc, char ***argv)
     bool ok = true;
     while (ok)
     {
-        switch (getopt(*argc, *argv, "+hc:d:rb:qtDp:s:F:XRGN"))
+        switch (getopt(*argc, *argv, "+hc:d:rb:qtDp:s:F:B:XRGN"))
         {
             case 'h':   usage();                                    exit(0);
             case 'c':   decimation_config = optarg;                 break;
@@ -157,6 +160,7 @@ static bool process_options(int *argc, char ***argv)
             case 'p':   pid_filename = optarg;                      break;
             case 'X':   extra_commands = true;                      break;
             case 'R':   reuseaddr = true;                           break;
+            case 'B':   server_bind_address = optarg;               break;
             case 'd':   fa_sniffer_device = optarg;
                         ok = set_sniffer_source(SNIFFER_DEVICE);    break;
             case 'F':   fa_sniffer_device = optarg;
@@ -344,8 +348,8 @@ int main(int argc, char **argv)
                 fa_entry_count))  &&
         initialise_sniffer(fa_block_buffer, fa_entry_count)  &&
         initialise_server(
-            fa_block_buffer, decimated_buffer, server_socket,
-            extra_commands, reuseaddr)  &&
+            fa_block_buffer, decimated_buffer,
+            server_bind_address, server_socket, extra_commands, reuseaddr)  &&
         initialise_reader(output_filename)  &&
 
         maybe_daemonise()  &&

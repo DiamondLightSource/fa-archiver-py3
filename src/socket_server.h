@@ -28,8 +28,8 @@
  */
 
 bool initialise_server(
-    struct buffer *fa_buffer, struct buffer *decimated, int port,
-    bool extra, bool reuseaddr);
+    struct buffer *fa_buffer, struct buffer *decimated,
+    const char *bind_address, int port, bool extra, bool reuseaddr);
 bool start_server(void);
 void terminate_server(void);
 
