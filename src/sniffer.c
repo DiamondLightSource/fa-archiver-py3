@@ -215,9 +215,9 @@ const struct sniffer_context *initialise_sniffer_device(
             IF_((unsigned int) current_count != fa_entry_count,
                 /* If we need to change the entry count we need to close and
                  * reopen the sniffer handle to avoid getting mis-sized data. */
-                TEST_IO(ioctl(
-                    fa_sniffer, FASNIF_IOCTL_SET_ENTRY_COUNT,
-                    &fa_entry_count)) &&
+                TEST_IO_(ioctl(
+                    fa_sniffer, FASNIF_IOCTL_SET_ENTRY_COUNT, &fa_entry_count),
+                    "Unable to set sniffer count to %u", fa_entry_count) &&
                 TEST_IO(close(fa_sniffer))  &&
                 TEST_IO(fa_sniffer = open(fa_sniffer_device, O_RDONLY)));
     }

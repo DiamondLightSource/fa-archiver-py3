@@ -477,7 +477,7 @@ A
 T
     Send timestamp at head of dataset.  The timestamp of the first transmitted
     sample is sent as a 64 bit little endian integer counting microseconds in
-    the Unix epoch.  Note that this is different from `TE`.
+    the Unix epoch.  Note that this is different from `TE` or `TA`.
 
 TE
     Send "extended timestamps".  An eight byte header is transmitted at the
@@ -498,7 +498,7 @@ Z
     depends on how `T` is configured.  If there is no `T` option or only `T` is
     specified then the initial four byte id0 value is sent at the start of the
     data, after any timestamp.  If `TEZ` is specified then id0 values are sent
-    with data headers, if `TEA` is specified then id0 values are sent at the end
+    with data headers, if `TAZ` is specified then id0 values are sent at the end
     of the data stream.
 
 C
