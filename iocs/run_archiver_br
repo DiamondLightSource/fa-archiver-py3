@@ -3,8 +3,12 @@
 # Runs the FA archiver for the booster ring.  This runs on the booster archiver,
 # server cs03r-cs-serv-03
 
-ARCHIVE_FILE=/archive/fa-archive
-ARCHIVE_ARGS='-X -c filters/decimate.config'
+ARCHIVE_FILE=/dev/mapper/vg.1-lv_archive
+SNIFFER_DEV=/dev/fa_sniffer/pci-0000:03:00.0
+ARCHIVE_PORT=8889
+
+ARCHIVE_ARGS="-X -c filters/decimate.config -s $ARCHIVE_PORT"
 
 cd "$(dirname "$0")"/..
-exec build/$(uname -m)/fa-archiver $* $ARCHIVE_ARGS "$ARCHIVE_FILE"
+exec build/$(uname -m)/fa-archiver \
+    $* $ARCHIVE_ARGS -d "$SNIFFER_DEV" "$ARCHIVE_FILE"
