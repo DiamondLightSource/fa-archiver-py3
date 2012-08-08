@@ -208,7 +208,7 @@ const struct sniffer_context *initialise_sniffer_device(
     {
         /* This API lets us set the FA entry count. */
         int current_count;
-        ok =
+        ok = ok  &&
             TEST_IO(
                 current_count = ioctl(
                     fa_sniffer, FASNIF_IOCTL_GET_ENTRY_COUNT)) &&
@@ -222,7 +222,7 @@ const struct sniffer_context *initialise_sniffer_device(
                 TEST_IO(fa_sniffer = open(fa_sniffer_device, O_RDONLY)));
     }
     else
-        ok = TEST_OK_(fa_entry_count == 256, "Invalid FA entry count");
+        ok = ok  &&  TEST_OK_(fa_entry_count == 256, "Invalid FA entry count");
     return ok ? &sniffer_device : NULL;
 }
 
