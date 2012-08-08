@@ -73,7 +73,7 @@ function d = fa_load(tse, mask, type, server)
     maskstr = sprintf('%d,', request_mask);
     maskstr = maskstr(1:end-1);     % Chop off trailing comma
     if save_id0; id0_req = 'Z'; else id0_req = ''; end
-    if type == 'C'
+    if typestr == 'C'
         % Continuous data request
         tz_offset = get_tz_offset(now);
         request = sprintf('S%sTE%s', maskstr, id0_req);
@@ -94,7 +94,7 @@ function d = fa_load(tse, mask, type, server)
         error([char(rc) read_string(sc)]);
     end
 
-    if type == 'C'
+    if typestr == 'C'
         % For continuous data tse is the count.
         sample_count = tse(1);
     else
@@ -300,7 +300,7 @@ function [decimation, frequency, typestr, ts_at_end, save_id0] = ...
     ts_at_end = false;
     if strcmp(type, 'F') || strcmp(type, 'C')
         decimation = 1;
-        typestr = 'F';
+        typestr = type;
     elseif strcmp(type, 'd')
         decimation = first_dec;
         typestr = 'D';

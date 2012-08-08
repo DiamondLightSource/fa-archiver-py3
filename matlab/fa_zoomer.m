@@ -226,6 +226,7 @@ function plotfa(h, d)
         set_ylim = [];
     end
 
+    if isunix; mum = 'µm'; else mum = '\mu m'; end  % UTF-8 mu not for Windows!
     for n = 1:2
         subplot(2, 1, n)
         if length(size(d.data)) == 4
@@ -244,7 +245,7 @@ function plotfa(h, d)
 
         xlim([d.t(1) d.t(end)]);
         if length(set_ylim) > 0; ylim(set_ylim); end
-        label_axis(n, 'µm')
+        label_axis(n, mum)
     end
 end
 
