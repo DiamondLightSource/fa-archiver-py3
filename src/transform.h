@@ -35,8 +35,11 @@ void process_block(const void *read_block, uint64_t timestamp);
 
 /* Interlocked access. */
 
-/* Returns earliest timestamp in archive. */
-uint64_t get_earliest_timestamp(void);
+/* Returns timestamp corresponding to index block containing or nearest to the
+ * given timestamp.  Can search for timestamps of 1 and -1 to get bounds of
+ * archive. */
+uint64_t timestamp_to_index_ts(uint64_t timestamp);
+
 /* Converts timestamp to block and offset into block together with number of
  * available samples.  Fails if timestamp is too early unless all_data set. */
 bool timestamp_to_start(

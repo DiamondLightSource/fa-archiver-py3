@@ -594,11 +594,12 @@ static unsigned int binary_search(uint64_t timestamp, bool *first_block)
 }
 
 
-uint64_t get_earliest_timestamp(void)
+/* Converts timestamp to timestamp of closest block. */
+uint64_t timestamp_to_index_ts(uint64_t timestamp)
 {
     uint64_t result;
     LOCK(transform_lock);
-    result = data_index[binary_search(1, NULL)].timestamp;
+    result = data_index[binary_search(timestamp, NULL)].timestamp;
     UNLOCK(transform_lock);
     return result;
 }

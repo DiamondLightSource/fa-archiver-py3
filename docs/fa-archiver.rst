@@ -231,6 +231,12 @@ T
     buffer this data is unlikely to remain available for more than a few
     seconds.
 
+U
+    Returns the timestamp, as for T, of the most recently available block of
+    samples in the archive.  To get the most up to date timestamp the duration
+    of a block must be added, but as the archive fills this won't remain valid
+    for more than a few seconds.
+
 V
     Returns a protocol identification string, currently 1.1.
 

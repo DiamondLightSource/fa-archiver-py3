@@ -315,6 +315,37 @@ static bool report_clients(int scon)
 }
 
 
+static bool write_index_timestamp(int scon, uint64_t timestamp)
+{
+    timestamp = timestamp_to_index_ts(timestamp);
+    return write_string(scon, "%"PRIu64".%06"PRIu64"\n",
+        timestamp / 1000000, timestamp % 1000000);
+}
+
+
+static bool write_mask(int scon)
+{
+    const struct disk_header *header = get_header();
+    char string[RAW_MASK_BYTES + 1];
+    format_raw_mask(&header->archive_mask, header->fa_entry_count, string);
+    return write_string(scon, "%s\n", string);
+}
+
+
+static bool write_status(int scon, const char *client_name)
+{
+    struct fa_status status;
+    return CATCH_ERROR(scon, client_name,
+        get_sniffer_status(&status),
+        write_string(scon, "%u %u %u %u %u %u %u %u\n",
+            status.status, status.partner,
+            status.last_interrupt, status.frame_errors,
+            status.soft_errors, status.hard_errors,
+            status.running, status.overrun));
+}
+
+
+
 /* The C command prefix is followed by a sequence of one letter commands, and
  * each letter receives a one line response (except for the I command).  The
  * following commands are supported:
@@ -323,6 +354,7 @@ static bool report_clients(int scon)
  *  d   Returns first decimation
  *  D   Returns second decimation
  *  T   Returns earliest available timestamp
+ *  U   Returns the latest available timestamp
  *  V   Returns protocol identification string
  *  M   Returns configured capture mask
  *  C   Returns live decimation factor if available
@@ -358,49 +390,29 @@ static bool process_command(int scon, const char *client_name, const char *buf)
                      "%"PRIu32"\n", 1 << header->second_decimation_log2);
                 break;
             case 'T':
-            {
-                uint64_t start = get_earliest_timestamp();
-                ok = write_string(scon, "%"PRIu64".%06"PRIu64"\n",
-                    start / 1000000, start % 1000000);
+                ok = write_index_timestamp(scon, 1);
                 break;
-            }
+            case 'U':
+                ok = write_index_timestamp(scon, (uint64_t)-1);
+                break;
             case 'V':
                 ok = write_string(scon, PROTOCOL_VERSION "\n");
                 break;
             case 'M':
-            {
-                char string[RAW_MASK_BYTES + 1];
-                format_raw_mask(
-                    &header->archive_mask, header->fa_entry_count, string);
-                ok = write_string(scon, "%s\n", string);
+                ok = write_mask(scon);
                 break;
-            }
-
             case 'C':
                 ok = write_string(scon, "%u\n", get_decimation_factor());
                 break;
-
             case 'S':
-            {
-                struct fa_status status;
-                ok = CATCH_ERROR(scon, client_name,
-                    get_sniffer_status(&status),
-                    write_string(scon, "%u %u %u %u %u %u %u %u\n",
-                        status.status, status.partner,
-                        status.last_interrupt, status.frame_errors,
-                        status.soft_errors, status.hard_errors,
-                        status.running, status.overrun));
+                ok = write_status(scon, client_name);
                 break;
-            }
-
             case 'I':
                 ok = report_clients(scon);
                 break;
-
             case 'K':
                 ok = write_string(scon, "%u\n", header->fa_entry_count);
                 break;
-
             default:
                 ok = report_error(scon, client_name, "Unknown command");
                 break;
