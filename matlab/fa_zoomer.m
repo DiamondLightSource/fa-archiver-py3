@@ -47,8 +47,8 @@ function fa_zoomer(server)
     data = {};
 
     % Create the controls.
-    global h_pos;
-    h_pos = 10;
+    global h_pos v_pos;
+    h_pos = 10; v_pos = 10;
     h.bpm_list = control('edit', '4', 60, 'List of BPM FA ids');
     control('pushbutton', 'Back', 40, 'Return to previous zoom', ...
         'Callback', protect(@back_callback));
@@ -72,7 +72,13 @@ function fa_zoomer(server)
         'Callback', protect(@reload_plot));
     control('pushbutton', 'Save', 40, 'Save data to file', ...
         'Callback', protect(@save_data));
-    clear global h_pos;
+
+    % Some extra controls on the line above
+    h_pos = 10; v_pos = v_pos + 30;
+    control('popup', fa_getids(), 150, 'Valid BPM names', ...
+        'Value', 4, 'Callback', protect(@set_bpm_list));
+
+    clear global h_pos v_pos;
     h.history = cell(0, 2);
 
     % Hang onto the controls we need to reference later
@@ -84,8 +90,8 @@ end
 
 % Places control with specified style, value, width  and tooltip.
 function result = control(style, value, width, tooltip, varargin)
-    global h_pos;
-    position = [h_pos 10 width 20];
+    global h_pos v_pos;
+    position = [h_pos v_pos width 20];
     h_pos = h_pos + width + 5;
     result = uicontrol( ...
         'Style', style, 'String', value, 'Position', position, ...
@@ -103,6 +109,16 @@ function prot = protect(func)
         end
     end
     prot = @protected;
+end
+
+
+function set_bpm_list(fig, event)
+    h = guidata(fig);
+    names = get(fig, 'String');
+    index = get(fig, 'Value');
+    name = names{index};
+    id = fa_name2id(name);
+    set(h.bpm_list, 'String', id)
 end
 
 

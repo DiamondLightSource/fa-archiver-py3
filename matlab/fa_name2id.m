@@ -28,9 +28,7 @@
 %      OX11 0DE
 %      michael.abbott@diamond.ac.uk
 function ids = fa_name2id(names)
-    fa_ids_file = '/home/ops/diagnostics/concentrator/fa-ids.sr';
-    [allids, allnames] = ...
-        textread(fa_ids_file, '%n %s', 'commentstyle', 'shell');
+    [allnames, allids] = fa_getids();
 
     % Unfortunately, a single string will be a 'char array' while multiple
     % strings will come as a cell array, so to make sure we can live with both,

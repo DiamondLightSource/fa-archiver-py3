@@ -1,8 +1,9 @@
-% names = fa_id2name(ids)
+% [names, ids] = fa_getids()
 %
-% Returns corresponding EPICS names for a vector of FA ids
+% Returns device names and corresponding communication controller ids.  Used
+% internally for all name <-> id conversion.
 
-% Copyright (c) 2011 Michael Abbott, Diamond Light Source Ltd.
+% Copyright (c) 2012 Michael Abbott, Diamond Light Source Ltd.
 %
 % This program is free software; you can redistribute it and/or modify
 % it under the terms of the GNU General Public License as published by
@@ -27,13 +28,15 @@
 %      Oxfordshire,
 %      OX11 0DE
 %      michael.abbott@diamond.ac.uk
-function names = fa_id2name(ids)
-    [allnames, allids] = fa_getids();
-
-    ix(allids+1) = allnames;
-    names = ix(ids+1);
-    % An annoying little hack: handling cells for single values causes trouble.
-    if length(names) == 1
-        names = cell2mat(names);
+function [names, ids] = fa_getids()
+    if isunix
+        fa_ids_file = '/home/ops/diagnostics/concentrator/fa-ids.sr';
+    else
+        fa_ids_file = fullfile(fileparts(mfilename('fullpath')), 'fa-ids.sr');
     end
+    [allids, allnames] = ...
+        textread(fa_ids_file, '%n %s', 'commentstyle', 'shell');
+    valid = ~strcmp(allnames, '');
+    ids = allids(valid);
+    names = allnames(valid);
 end
