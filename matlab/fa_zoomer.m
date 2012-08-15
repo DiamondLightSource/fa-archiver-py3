@@ -186,21 +186,35 @@ function save_data(fig, event)
 end
 
 
+% Hann window for improved spectral resolution.
+function a = hannwin(n, m)
+    t = linspace(0, 2*pi, n+1);
+    t = t(1:n);
+    a = 0.5 * (1 - cos(t)).';
+    if nargin == 2
+        a = repmat(a, 1, m);
+    end
+end
+
+
+% Plot spectrogram
 function spectrogram_callback(fig, event)
     global data;
-    len=1024;
+    len = 1024;
 
+    scale = 1e-3 * sqrt(2 / (len * data.f_s));
     if length(size(data.data)) == 3
         busy;
         for n = 1:2
         subplot(2, 1, n)
             e = squeeze(data.data(n, 1, :));
             cols = floor(length(e)/len);
-            sg = log10(abs(fft(reshape(e(1:(len*cols)), len, cols))));
+            sg = log10(scale * abs(fft( ...
+                reshape(e(1:(len*cols)), len, cols) .* hannwin(len, cols))));
             imagesc(data.t, [0 data.f_s/5], sg(1:(round(len/5)), :));
 
             set(gca, 'Ydir', 'normal');
-            caxis([2 6])
+            colorbar
             label_axis(n, 'Hz')
         end
         describe;
