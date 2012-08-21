@@ -27,7 +27,7 @@
 #      michael.abbott@diamond.ac.uk
 
 from pkg_resources import require
-require('cothread==2.6')
+require('cothread==2.8')
 
 import os, sys
 import optparse
