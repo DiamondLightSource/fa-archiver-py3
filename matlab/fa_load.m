@@ -78,7 +78,7 @@ function d = fa_load(tse, mask, type, server)
         tz_offset = get_tz_offset(now);
         request = sprintf('S%sTE%s', maskstr, id0_req);
     else
-        tz_offset = get_tz_offset(tse(1));
+        tz_offset = get_tz_offset(tse(2));
         if ts_at_end; ts_req = 'A'; else ts_req = 'E'; end
         request = sprintf('R%sM%sT%sZET%sZNAT%s%s', typestr, maskstr, ...
             format_time(tse(1) - tz_offset), ...
