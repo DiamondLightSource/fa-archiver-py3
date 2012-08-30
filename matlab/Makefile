@@ -7,7 +7,7 @@ MATLAB_DIR ?= $(PREFIX)/matlab
 MCC ?= /dls_sw/prod/tools/RHEL5/bin/mcc
 MCRROOT ?= /dls_sw/prod/tools/RHEL5/opt/matlab2008b
 
-MATLAB_FILES = fa_zoomer.m fa_load.m fa_id2name.m fa_name2id.m
+MATLAB_FILES = fa_zoomer.m fa_load.m fa_id2name.m fa_name2id.m fa_getids.m
 
 default: fa_zoomer
 
