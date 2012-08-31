@@ -80,6 +80,6 @@ bool format_readable_mask(
  *
  *  mask = id [ "-" id ] [ "," mask ]
  *
- * Prints error message and returns false if parsing fails. */
+ * Prints error message and returns false if parsing fails or mask is empty. */
 bool parse_mask(
     const char **string, unsigned int fa_entry_count, struct filter_mask *mask);

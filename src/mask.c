@@ -102,7 +102,9 @@ static bool parse_raw_mask(
         // 2 nibbles per byte
         mask->mask[i / 2] |= (uint8_t) (nibble << (4 * (i % 2)));
     }
-    return true;
+    return
+        TEST_OK_(count_mask_bits(mask, fa_entry_count) > 0,
+            "Empty request mask");
 }
 
 
