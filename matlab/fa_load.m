@@ -62,7 +62,7 @@ function d = fa_load(tse, mask, type, server)
     if nargin < 4
         server = 'fa-archiver.diamond.ac.uk';
     end
-    [decimation, frequency, typestr, ts_at_end, save_id0] = ...
+    [decimation, frequency, typestr, ts_at_end, save_id0, max_id] = ...
         process_type(server, type);
 
     % Compute unique sorted list from id mask and remember the permuation.
@@ -70,8 +70,7 @@ function d = fa_load(tse, mask, type, server)
     id_count = length(request_mask);
 
     % Prepare the request and send to server
-    maskstr = sprintf('%d,', request_mask);
-    maskstr = maskstr(1:end-1);     % Chop off trailing comma
+    maskstr = format_mask(request_mask, max_id);
     if save_id0; id0_req = 'Z'; else id0_req = ''; end
     if typestr == 'C'
         % Continuous data request
@@ -207,6 +206,26 @@ function d = fa_load(tse, mask, type, server)
 end
 
 
+% Formats request mask into a format suitable for sending to the server.
+function result = format_mask(mask, max_id)
+    % Validate request
+    if numel(mask) == 0
+        error('Empty list of ids');
+    end
+    if mask(1) < 0 || max_id <= mask(end)
+        error('Invalid range of ids');
+    end
+
+    % Assemble array of ints from ids and send as raw mask array
+    mask_array = zeros(1, max_id / 32);
+    for id = mask
+        ix = floor(id / 32) + 1;
+        mask_array(ix) = bitor(mask_array(ix), bitshift(1, mod(id, 32)));
+    end
+    result = ['R' sprintf('%08X', mask_array(end:-1:1))];
+end
+
+
 % Opens socket channel to given server and sends request.  Both the opened
 % socket and a cleanup handler are returned, the socket will be closed when
 % cleanup is discarded.
@@ -279,20 +298,21 @@ end
 
 
 % Reads decimation and frequency parameters from server
-function [first_dec, second_dec, frequency] = read_params(server)
-    [sock, cleanup] = send_request(server, 'CdDF');
+function [first_dec, second_dec, frequency, max_id] = read_params(server)
+    [sock, cleanup] = send_request(server, 'CdDFK');
     params = textscan(read_string(sock), '%f');
     first_dec  = params{1}(1);
     second_dec = params{1}(2);
     frequency  = params{1}(3);
+    max_id     = params{1}(4);
 end
 
 
 % Process decimation request in light of server parameters.
-function [decimation, frequency, typestr, ts_at_end, save_id0] = ...
+function [decimation, frequency, typestr, ts_at_end, save_id0, max_id] = ...
         process_type(server, type)
 
-    [first_dec, second_dec, frequency] = read_params(server);
+    [first_dec, second_dec, frequency, max_id] = read_params(server);
 
     save_id0 = type(end) == 'Z';
     if save_id0; type = type(1:end-1); end
