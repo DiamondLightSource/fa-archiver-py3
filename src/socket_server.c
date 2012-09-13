@@ -164,7 +164,7 @@ static bool __attribute__((format(printf, 2, 3)))
 static bool report_error(
     int scon, const char *client_name, const char *error_message)
 {
-    log_message("Client %s sent error: %s", client_name, error_message);
+    log_message("Client %s error sent: %s", client_name, error_message);
     return write_string(scon, "%s\n", error_message);
 }
 
@@ -239,29 +239,33 @@ static bool process_debug_command(
         {
             case 'Q':
                 log_message("Shutdown command received");
-                ok = write_string(scon, "Shutdown\n");
                 shutdown_archiver();
+                ok = write_string(scon, "Shutdown\n");
                 break;
             case 'H':
                 log_message("Temporary halt command received");
-                ok = write_string(scon, "Halted\n");
                 enable_buffer_write(fa_block_buffer, false);
+                ok = write_string(scon, "Halted\n");
                 break;
             case 'R':
                 log_message("Resume command received");
                 enable_buffer_write(fa_block_buffer, true);
+                ok = write_string(scon, "Resumed\n");
                 break;
             case 'I':
                 log_message("Interrupt command received");
-                ok = CATCH_ERROR(scon, client_name, interrupt_sniffer(), true);
+                ok = CATCH_ERROR(scon, client_name,
+                    interrupt_sniffer(), write_string(scon, "Interrupted\n"));
                 break;
             case 'D':
                 log_message("Disabling writing to disk");
                 enable_disk_writer(false);
+                ok = write_string(scon, "Disabled\n");
                 break;
             case 'E':
                 log_message("Enabling writing to disk");
                 enable_disk_writer(true);
+                ok = write_string(scon, "Enabled\n");
                 break;
             case 'S':
                 ok = write_string(scon, "%d %d\n",
@@ -422,6 +426,16 @@ static bool process_command(int scon, const char *client_name, const char *buf)
 }
 
 
+/* Pops error message and writes it to client. */
+static bool pop_client_error(int scon, const char *client_name)
+{
+    char *error_message = pop_error_handling(true);
+    bool write_ok = report_error(scon, client_name, error_message);
+    free(error_message);
+    return write_ok;
+}
+
+
 bool report_socket_error(int scon, const char *client_name, bool ok)
 {
     if (ok)
@@ -433,19 +447,16 @@ bool report_socket_error(int scon, const char *client_name, bool ok)
         return TEST_write(scon, &nul, 1);
     }
     else
-    {
         /* If an error is encountered write the error message to the socket. */
-        char *error_message = pop_error_handling(true);
-        bool write_ok = report_error(scon, client_name, error_message);
-        free(error_message);
-        return write_ok;
-    }
+        return pop_client_error(scon, client_name);
 }
 
 
+typedef bool (*command_t)(int scon, const char *client_name, const char *buf);
+
 static const struct command_table {
     char id;            // Identification character
-    bool (*process)(int scon, const char *client_name, const char *buf);
+    command_t process;
 } command_table[] = {
     { 'C', process_command },
     { 'R', process_read },
@@ -453,6 +464,16 @@ static const struct command_table {
     { 'D', process_debug_command },
     { 0,   process_error }
 };
+
+
+/* Looks up command character in command_table above. */
+static command_t lookup_command(char ch)
+{
+    const struct command_table *command = command_table;
+    while (command->id  &&  command->id != ch)
+        command += 1;
+    return command->process;
+}
 
 
 /* Converts connected socket to a printable identification string. */
@@ -496,22 +517,25 @@ static bool read_line(int sock, struct client_info *client)
         buflen -= (size_t) rx;
         buf += rx;
     }
+
     /* On failure report what we managed to read before failing. */
     *buf = '\0';
-    log_message("Client %s sent \"%s\"", client->name, client->buf);
+    log_message("Client %s sent: \"%s\"", client->name, client->buf);
     return false;
 }
 
 
 /* Command successfully read, dispatch it to the appropriate handler. */
-static bool dispatch_command(
+static void dispatch_command(
     int scon, const char *client_name, const char *buf)
 {
-    log_message("Client %s: \"%s\"", client_name, buf);
-    const struct command_table *command = command_table;
-    while (command->id  &&  command->id != buf[0])
-        command += 1;
-    return command->process(scon, client_name, buf);
+    log_message("Client %s command: \"%s\"", client_name, buf);
+    command_t command = lookup_command(buf[0]);
+    bool ok = command(scon, client_name, buf);
+    char *error_message = pop_error_handling(!ok);
+    if (!ok)
+        log_message("Client %s error: %s", client_name, error_message);
+    free(error_message);
 }
 
 
@@ -528,22 +552,26 @@ static void *process_connection(void *context)
      * to the appropriate handler.  Any errors are handled locally and are
      * reported below. */
     push_error_handling();
-    bool ok = FINALLY(
+    bool ok =
         set_socket_cork(scon, true)  &&
         set_socket_timeout(scon, 1, 10)  &&
-        read_line(scon, client)  &&
-        dispatch_command(scon, client->name, client->buf),
+        read_line(scon, client);
 
-        // Always close the socket when done
-        TEST_IO(close(scon)));
+    if (ok)
+        /* Past this point only dispatch_command() can communicate with the
+         * client, any further errors it needs to handle. */
+        dispatch_command(scon, client->name, client->buf);
+    else
+        /* Any errors seen at this stage are reported back to the client. */
+        pop_client_error(scon, client->name);
 
-    /* Report any errors. */
-    char *error_message = pop_error_handling(!ok);
-    if (!ok)
-        log_message("Client %s error: %s", client->name, error_message);
-    free(error_message);
+    /* Uncork the socket before closing to ensure any remaining data is sent.
+     * It seems that if we close the socket with cork enabled and unread
+     * incoming data then the tail end of the sent data stream can be lost. */
+    set_socket_cork(scon, false);
+    IGNORE(TEST_IO(close(scon)));
+
     remove_client(client);
-
     return NULL;
 }
 
