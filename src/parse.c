@@ -211,9 +211,9 @@ bool parse_seconds(const char **string, struct timespec *ts)
 
 
 bool report_parse_error(
-    const char *message, bool ok, const char *string, const char **end)
+    const char *message, bool ok, const char *start, const char *end)
 {
-    if (ok  &&  parse_eos(end))
+    if (ok  &&  parse_eos(&end))
     {
         pop_error_handling(false);
         return true;
@@ -223,7 +223,7 @@ bool report_parse_error(
         char *error_message = pop_error_handling(true);
         print_error(
             "Error parsing %s: %s at offset %zd in \"%s\"",
-            message, error_message, *end - string + 1, string);
+            message, error_message, end - start + 1, start);
         free(error_message);
         return false;
     }

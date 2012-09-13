@@ -78,12 +78,12 @@ bool skip_whitespace(const char **string);
     ( { \
       const char *__string__ = (string); \
       push_error_handling(); \
-      report_parse_error((message), \
-          (parse)(&__string__, ##result), (string), &__string__); \
+      bool __parse_ok = (parse)(&__string__, ##result); \
+      report_parse_error((message), __parse_ok, (string), __string__); \
     } )
 
 /* This must be called with push_error_handling() in force, and will call
  * pop_error_handling() before returning.  Designed to be wrapped by the
  * DO_PARSE macro above. */
 bool report_parse_error(
-    const char *message, bool ok, const char *string, const char **end);
+    const char *message, bool ok, const char *start, const char *end);
