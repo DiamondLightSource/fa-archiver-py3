@@ -41,6 +41,7 @@
 #include <string.h>
 #include <errno.h>
 #include <fenv.h>
+#include <pthread.h>
 
 #include "error.h"
 #include "buffer.h"
@@ -208,12 +209,19 @@ static bool process_args(int argc, char **argv)
 static sem_t shutdown_semaphore;
 
 
+/* Wait for shutdown semaphore to be notified. */
+static void wait_for_exit(void)
+{
+    /* Wait for a shutdown signal.  Ignore the signal, instead waiting for
+     * the clean shutdown request. */
+    while (sem_wait(&shutdown_semaphore) == -1  &&  TEST_OK(errno == EINTR))
+        ; /* Repeat wait while we see EINTR. */
+}
+
+
 void shutdown_archiver(void)
 {
-    if (daemon_mode)
-        ASSERT_IO(sem_post(&shutdown_semaphore));
-    else
-        close(STDIN_FILENO);
+    ASSERT_IO(sem_post(&shutdown_semaphore));
 }
 
 
@@ -293,25 +301,22 @@ static bool maybe_daemonise(void)
 }
 
 
-/* If running as a daemon wait for the shutdown semaphore, otherwise read lines
- * from stdin until it closes or we see an exit command. */
-static void wait_for_exit(void)
+/* Separate thread used to read exit command from stdin.  This allows the main
+ * thread to simply block on the shutdown semaphore. */
+static void *run_command_loop(void *context)
 {
-    if (daemon_mode)
-        /* Wait for a shutdown signal.  Ignore the signal, instead waiting for
-         * the clean shutdown request. */
-        while (sem_wait(&shutdown_semaphore) == -1  &&  TEST_OK(errno == EINTR))
-            ; /* Repeat wait while we see EINTR. */
-    else
+    char line[80];
+    while (fgets(line, sizeof(line), stdin))
     {
-        char line[80];
-        while (fgets(line, sizeof(line), stdin))
-        {
-            if (strcmp(line, "exit\n") == 0)
-                break;
-            printf("> ");
-        }
+        if (strcmp(line, "exit\n") == 0)
+            break;
+        printf("The only command is exit (or Ctrl-D)\n");
+        printf("> ");
     }
+
+    /* Shutdown command received. */
+    shutdown_archiver();
+    return NULL;
 }
 
 
@@ -337,6 +342,7 @@ int main(int argc, char **argv)
     uint32_t input_block_size, fa_entry_count;
     struct buffer *fa_block_buffer;
     struct buffer *decimated_buffer = NULL;
+    pthread_t exit_thread;
     bool ok =
         process_args(argc, argv)  &&
         initialise_disk_writer(
@@ -363,6 +369,11 @@ int main(int argc, char **argv)
         IF_(decimation_config, start_decimation())  &&
         start_server()  &&
 
+        IF_(!daemon_mode,
+            /* In interactive mode spawn a separate thread to receive the
+             * orderly exit command. */
+            TEST_0(pthread_create(
+                &exit_thread, NULL, run_command_loop, NULL)))  &&
         DO_(run_archiver());
 
     return ok ? 0 : 1;
