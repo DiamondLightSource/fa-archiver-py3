@@ -55,7 +55,7 @@
 
 
 /* Used to terminate threads. */
-static bool writer_running;
+static bool writer_running = true;
 
 /* File handle for writing to disk. */
 static int disk_fd;
@@ -165,7 +165,7 @@ static void *writer_thread(void *context)
         LOCK(writer_lock);
         writing_active = false;
         UNLOCK(writer_lock);
-        psignal(&writer_lock);
+        pbroadcast(&writer_lock);
     }
     return NULL;
 }
@@ -188,7 +188,7 @@ void schedule_write(off64_t offset, void *block, size_t length)
     writing_length = length;
     writing_active = true;
     UNLOCK(writer_lock);
-    psignal(&writer_lock);
+    pbroadcast(&writer_lock);
 }
 
 void request_read(void)
@@ -215,7 +215,7 @@ static void *transform_thread(void *context)
         const void *block = get_read_block(reader, &timestamp);
         process_block(transform_enabled ? block : NULL, timestamp);
         if (block)
-            release_read_block(reader);
+            IGNORE(TEST_OK(release_read_block(reader)));
     }
     return NULL;
 }
@@ -242,7 +242,6 @@ static pthread_t writer_id;
 bool start_disk_writer(struct buffer *buffer)
 {
     reader = open_reader(buffer, true);
-    writer_running = true;
     return
         TEST_0(pthread_create(&writer_id, NULL, writer_thread, NULL))  &&
         TEST_0(pthread_create(&transform_id, NULL, transform_thread, NULL));
