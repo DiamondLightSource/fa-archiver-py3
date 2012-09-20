@@ -250,8 +250,8 @@ bool release_read_block(struct reader_state *reader)
         /* If we were underflowed then perform a complete reset of the read
          * stream.  Discard everything in the buffer and start again.  This
          * helps the writer which can rely on this. */
-        reader->index_out = buffer->index_in;
-        reader->cycle_count = buffer->cycle_count;
+        reader->index_out = index_in;
+        reader->cycle_count = cycle_count;
         reader->gap_reported = false;   // Strictly speaking, already set so!
         return false;
     }

@@ -235,6 +235,8 @@ static bool initialise_signals(void)
 {
     struct sigaction do_shutdown = {
         .sa_handler = at_exit, .sa_flags = SA_RESTART };
+    struct sigaction do_ignore = {
+        .sa_handler = SIG_IGN, .sa_flags = SA_RESTART };
     return
         TEST_IO(sem_init(&shutdown_semaphore, 0, 0))  &&
 
@@ -245,7 +247,7 @@ static bool initialise_signals(void)
         TEST_IO(sigaction(SIGINT,  &do_shutdown, NULL))  &&
         TEST_IO(sigaction(SIGTERM, &do_shutdown, NULL))  &&
         /* When acting as a server we need to ignore SIGPIPE, of course. */
-        TEST_IO(signal(SIGPIPE, SIG_IGN));
+        TEST_IO(sigaction(SIGPIPE, &do_ignore,   NULL));
 }
 
 
