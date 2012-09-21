@@ -1,0 +1,22 @@
+# This file contains definitions of structures for which the layout must be
+# fixed.  This file is processed by the make-layout script to generate the
+# layout list which is then checked during build.
+
+# This file contains one definition per line, except for blank lines or lines
+# starting with #, consisting of:
+#   <struct> <header> <extra-headers>...
+# where <struct> is the structure for which layout will be generated, <header>
+# is the header file containing the definition of <struct> and <extra-headers>
+# list any headers needed before <header> can be processed.
+
+# These structures define the layout of data in the archive.  Strictly speaking
+# fa_entry should also be included.
+disk_header                 disk.h  fa_sniffer.h mask.h
+decimated_data              disk.h  fa_sniffer.h mask.h
+filter_mask                 mask.h  fa_sniffer.h
+data_index                  disk.h  fa_sniffer.h mask.h
+
+# These structures define the format of data transferred to clients.
+extended_timestamp_header   reader.h
+extended_timestamp          reader.h
+extended_timestamp_id0      reader.h

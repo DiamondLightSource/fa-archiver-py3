@@ -89,7 +89,7 @@ capture_SRCS += matlab.c            # Matlab header support
 
 
 BUILD_NAMES = $(patsubst %,$(PROGRAM_PREFIX)%,$(BUILD))
-default: $(BUILD_NAMES)
+default: $(BUILD_NAMES) check_alignment
 
 define expand_build
 $(PROGRAM_PREFIX)$(target): $(COMMON_SRCS:.c=.o) $($(target)_SRCS:.c=.o)
@@ -110,4 +110,18 @@ include $(patsubst %.c,%.d,$(foreach target,$(BUILD),$($(target)_SRCS)))
 install: $(BUILD_NAMES)
 	$(INSTALL) -m 555 $^ $(SCRIPT_DIR)
 
-.PHONY: default install
+
+# Check that the preserved layout definition hasn't changed
+check_alignment: layout layout.new
+	diff $^
+
+# Computes structure layout for structures defined in layout-list.
+LAYOUT_DEPENDS = $(shell sed '/^\#/d; s/^[^ ]*//' $(srcdir)/layout-list)
+layout.new: make-layout layout-list show-layout.c $(LAYOUT_DEPENDS)
+	CC="$(CC)" CPPFLAGS="$(CPPFLAGS)" CFLAGS="$(CFLAGS)" \
+            srcdir="$(srcdir)" $< >$@
+
+VPATH += $(DEVICE_DIR)
+
+.PHONY: default install check_alignment
+.DELETE_ON_ERROR:
