@@ -144,9 +144,3 @@ Notes on work to do
 
 * Is it worth making the effort to close the listen socket on shutdown?
   Probably not as program exit will close it anyway.
-
-* Almost certainly need to look at using `madvise` or `readahead` to preload DD
-  pages into memory before computing double decimation.  Otherwise we're likely
-  to end up inadvertently forcing a gap when the archiver wraps around.  At
-  present we only see the problem at startup, when the first DD computation
-  takes too long.

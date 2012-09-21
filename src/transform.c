@@ -37,6 +37,7 @@
 #include <math.h>
 #include <pthread.h>
 #include <errno.h>
+#include <sys/mman.h>
 
 #include "error.h"
 #include "fa_sniffer.h"
@@ -77,6 +78,8 @@ static unsigned int input_decimation_count;
  * The request_read() function ensures that the previously current block is
  * written and therefore is available. */
 DECLARE_LOCKING(transform_lock);
+
+static size_t page_size;    // 4096
 
 
 
@@ -365,7 +368,7 @@ static void compute_result(
 
 
 /* Array of result accumulators for double decimation. */
-struct fa_accum *double_accumulators;
+static struct fa_accum *double_accumulators;
 
 
 /* Converts a column of N FA entries into a single entry by computing the mean,
@@ -421,8 +424,11 @@ static void decimate_block(const void *read_block)
 /* Double data decimation. */
 
 /* Current offset into DD data area. */
-unsigned int dd_offset;
-unsigned int output_id_count;
+static unsigned int dd_offset;
+/* Count of IDs being stored. */
+static unsigned int output_id_count;
+/* Array of previously madvised addresses. */
+static void **madvise_array;
 
 
 
@@ -452,12 +458,36 @@ static void reset_double_decimation(void)
         initialise_accum(&double_accumulators[i]);
 }
 
+
+/* This is called at the start of a round of block processing to give the system
+ * notice to ensure that all the pages required for writing double decimation
+ * values are in memory.  This should be called after dd_offset has been
+ * advanced. */
+static void madvise_double_decimation(void)
+{
+    struct decimated_data *output = dd_area + dd_offset;
+    for (unsigned int i = 0; i < output_id_count; i ++)
+    {
+        void *dd_address = (void *) ((intptr_t) output & (intptr_t) -page_size);
+        output += header->dd_total_count;
+        if (dd_address != madvise_array[i])
+        {
+            IGNORE(TEST_IO(madvise(dd_address, page_size, MADV_WILLNEED)));
+            madvise_array[i] = dd_address;
+        }
+    }
+}
+
+
 static void initialise_double_decimation(void)
 {
     output_id_count =
         count_mask_bits(&header->archive_mask, header->fa_entry_count);
     double_accumulators = calloc(output_id_count, sizeof(struct fa_accum));
+    madvise_array = calloc(output_id_count, sizeof(void *));
     reset_double_decimation();
+
+    madvise_double_decimation();
 }
 
 
@@ -775,6 +805,8 @@ void process_block(const void *block, uint64_t timestamp)
             write_major_block();
             advance_index();
             UNLOCK(transform_lock);
+
+            madvise_double_decimation();
         }
     }
     else
@@ -799,6 +831,7 @@ void initialise_transform(
         header->input_block_size / header->fa_entry_count / FA_ENTRY_SIZE;
     input_decimation_count = input_frame_count >> header->first_decimation_log2;
 
+    page_size = (size_t) sysconf(_SC_PAGESIZE);
     initialise_double_decimation();
     initialise_io_buffer();
     initialise_index();
