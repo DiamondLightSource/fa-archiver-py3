@@ -121,7 +121,7 @@ pcie sniffer driver, or svn commit 50921)::
      *      Lists intrinsics for another compiler
      *  http://math.nju.edu.cn/help/mathhpc/doc/intel/cc/
      *  mergedProjects/intref_cls/
-     *      Documents Intel intrinsics. 
+     *      Documents Intel intrinsics.
      *  www.info.univ-angers.fr/~richer/ens/l3info/ao/intel_intrinsics.pdf
      *      Intel Intrinsic Reference, document 312482-003US. */
     _mm_stream_pi((__m64 *) output++, *(__m64 *) input);
@@ -133,3 +133,20 @@ pcie sniffer driver, or svn commit 50921)::
      * floating point state as otherwise subsequent floating point arithmetic
      * will fail mysteriously. */
     _mm_empty();
+
+
+Notes on work to do
+-------------------
+
+* Possibly eliminate use of `pthread_cancel` and thus simplify `LOCK` and
+  `UNLOCK` macros.  Would need to either orderly shut down every thread or
+  simply allow them to die on exit.
+
+* Is it worth making the effort to close the listen socket on shutdown?
+  Probably not as program exit will close it anyway.
+
+* Almost certainly need to look at using `madvise` or `readahead` to preload DD
+  pages into memory before computing double decimation.  Otherwise we're likely
+  to end up inadvertently forcing a gap when the archiver wraps around.  At
+  present we only see the problem at startup, when the first DD computation
+  takes too long.
