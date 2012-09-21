@@ -102,8 +102,9 @@ struct disk_header {
     uint32_t archive_mask_count;     // Number of BPMs captured in this file
     uint32_t first_decimation_log2;  // Decimation factors, stored as shifts
     uint32_t second_decimation_log2;
-    uint32_t input_block_size;       // Controls read size from sniffer device
+    uint32_t input_block_size;  // Controls read size from sniffer device
     uint32_t fa_entry_count;    // Number of FA samples in a single frame
+    uint32_t pad1;   // Padding to ensure 32-bit and 64-bit agree on alignment
 
     /* Description of high level data structure.  The data offsets are a
      * multiple of page size and the data sizes are rounded up to a multiple
@@ -111,9 +112,9 @@ struct disk_header {
     uint64_t index_data_start;  // Start of index block
     uint64_t dd_data_start;     // Start of double decimated data
     uint64_t major_data_start;  // Start of major data area
-    uint32_t index_data_size;   // Size of index block
     uint64_t dd_data_size;      // Size of double decimated data area
     uint64_t total_data_size;   // Size of complete file, for check
+    uint32_t index_data_size;   // Size of index block
     uint32_t dd_total_count;    // Total number of DD samples
 
     /* Parameters describing major data layout. */
@@ -123,12 +124,13 @@ struct disk_header {
     uint32_t d_sample_count;    // Decimated samples in a major block
     uint32_t dd_sample_count;   // Double dec samples in a major block
 
+    uint32_t pad2;  // Avoid false alarm from block size discrepancy
 
     /* All the parameters above remain fixed during the operation of the
      * archiver, the parameters below are updated dynamically. */
 
     uint32_t current_major_block;   // This block is being written
-    uint32_t last_duration;         // Time for last major block in microseconds
+    uint32_t last_duration;     // Time for last major block in microseconds
 };
 
 
@@ -146,7 +148,7 @@ struct data_index {
 
 
 #define DISK_SIGNATURE      "FASNIFF"
-#define DISK_VERSION        4
+#define DISK_VERSION        5
 
 
 /* Two helper routines for converting sample number (within a major block) and
