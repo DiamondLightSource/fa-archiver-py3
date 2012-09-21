@@ -82,6 +82,12 @@ Options
     controller update rate is substantially different from the default this can
     make settling to the correct frequency occur more quickly.
 
+-T iir
+    Specify IIR factor for frequency calculation, default is 0.1.  This is used
+    when computing the running frequency of the FA source to smooth out any
+    discrepancies.  A value of 1 corresponds to no smoothing, a value close to 0
+    to high smoothing.
+
 -n
     Print file header that would be generated but don't actually write anything.
 

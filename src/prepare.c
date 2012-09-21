@@ -75,6 +75,7 @@ static double sample_frequency = 10072.4;
 static bool dry_run = false;
 static bool quiet_allocate = false;
 static uint32_t fa_entry_count = 256;
+static double timestamp_iir = 0.1;
 
 /* Options for read only operation. */
 static bool read_only = false;
@@ -108,7 +109,8 @@ static void usage(void)
 "        value is %"PRIu32".\n"
 "   -d:  Specify first decimation factor.  The default value is %"PRIu32".\n"
 "   -D:  Specify second decimation factor.  The default value is %"PRIu32".\n"
-"   -f:  Specify nominal sample frequency.  The default is %.1gHz\n"
+"   -f:  Specify nominal sample frequency.  The default is %.1fHz.\n"
+"   -T:  Specify timestamp IIR factor.  The default is %g.\n"
 "   -n   Print file header but don't actually write anything.\n"
 "   -q   Use faster but quiet mechanism for allocating file buffer.\n"
 "\n"
@@ -118,18 +120,18 @@ static void usage(void)
 "\n"
 "If instead -H is given then the file header will be printed.  This can be\n"
 "followed by the following options:\n"
-"   -f   Bypass header validation and display even if appears invalid\n"
-"   -d   Dump index.  This can generate a lot of data, or -s/-e can be used\n"
-"   -s:  Offset of first index block to dump\n"
-"   -e:  Offset of last index block to dump\n"
-"   -n   Don't actually dump the header\n"
-"   -u   Don't lock the archive while dumping index.  Allows dumping of live\n"
+"   -f   Bypass header validation and display even if appears invalid.\n"
+"   -d   Dump index.  This can generate a lot of data, or -s/-e can be used.\n"
+"   -s:  Offset of first index block to dump.\n"
+"   -e:  Offset of last index block to dump.\n"
+"   -n   Don't actually dump the header.\n"
+"   -u   Don't lock the archive while dumping index.  Allows dumping of live.\n"
 "        archive but can produce inconsistent results over write boundary.\n"
 "   -t   Show timestamps in human readable form.\n"
         , argv0, argv0,
         input_block_size, major_sample_count,
         first_decimation, second_decimation,
-        sample_frequency);
+        sample_frequency, timestamp_iir);
 }
 
 
@@ -139,7 +141,7 @@ static bool process_opts(int *argc, char ***argv)
     bool ok = true;
     while (ok)
     {
-        switch (getopt(*argc, *argv, "+hs:N:I:M:d:D:f:nq"))
+        switch (getopt(*argc, *argv, "+hs:N:I:M:d:D:f:T:nq"))
         {
             case 'h':
                 usage();
@@ -172,6 +174,9 @@ static bool process_opts(int *argc, char ***argv)
                 ok = DO_PARSE("sample frequency",
                     parse_double, optarg, &sample_frequency);
                 break;
+            case 'T':
+                ok = DO_PARSE("timestamp IIR",
+                    parse_double, optarg, &timestamp_iir);
             case 'n':   dry_run = true;                             break;
             case 'q':   quiet_allocate = true;                      break;
             case '?':
@@ -268,7 +273,7 @@ static bool prepare_new_header(struct disk_header *header)
             &archive_mask, file_size,
             input_block_size, major_sample_count,
             first_decimation, second_decimation, sample_frequency,
-            fa_entry_count)  &&
+            timestamp_iir, fa_entry_count)  &&
         DO_(print_header(stdout, header));
 }
 

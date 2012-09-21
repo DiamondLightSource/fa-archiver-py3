@@ -86,6 +86,7 @@ bool initialise_header(
     uint32_t first_decimation,
     uint32_t second_decimation,
     double sample_frequency,
+    double timestamp_iir,
     uint32_t fa_entry_count)
 {
     uint32_t archive_mask_count = count_mask_bits(archive_mask, fa_entry_count);
@@ -102,6 +103,7 @@ bool initialise_header(
     header->second_decimation_log2 = uint_log2(second_decimation);
     header->input_block_size = input_block_size;
     header->fa_entry_count = fa_entry_count;
+    header->timestamp_iir = timestamp_iir;
 
     /* Compute the fixed size parameters describing the data layout. */
     header->major_sample_count = major_sample_count;
@@ -254,6 +256,10 @@ bool validate_header(struct disk_header *header, uint64_t file_size)
             "DD area too small: %"PRIu32" * %"PRIu32" * %zd > %"PRIu64,
                 header->dd_total_count, header->archive_mask_count,
                 sizeof(struct decimated_data), header->dd_data_size)  &&
+
+        TEST_OK_(
+            0 < header->timestamp_iir  &&  header->timestamp_iir <= 1,
+            "Invalid timetampt IIR: %g\n", header->timestamp_iir)  &&
 
         /* Check page alignment. */
         page_aligned(header->index_data_size, "index size")  &&

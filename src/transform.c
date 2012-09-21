@@ -49,9 +49,6 @@
 #include "transform.h"
 
 
-// !!! should be disk header parameter
-#define TIMESTAMP_IIR   0.1
-
 /* Allow up to 1ms delta before reporting a data capture gap. */
 #define MAX_DELTA_T     1000
 
@@ -529,8 +526,8 @@ static void advance_index(void)
     /* For the last duration we run an IIR to smooth out the bumps in our
      * timestamp calculations.  This gives us another digit or so. */
     header->last_duration = (uint32_t) round(
-        ix->duration * TIMESTAMP_IIR +
-        header->last_duration * (1 - TIMESTAMP_IIR));
+        ix->duration * header->timestamp_iir +
+        header->last_duration * (1 - header->timestamp_iir));
 
     /* All done, advance the block index and reset our index. */
     header->current_major_block =

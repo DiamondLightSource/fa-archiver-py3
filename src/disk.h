@@ -104,17 +104,16 @@ struct disk_header {
     uint32_t second_decimation_log2;
     uint32_t input_block_size;  // Controls read size from sniffer device
     uint32_t fa_entry_count;    // Number of FA samples in a single frame
-    uint32_t pad1;   // Padding to ensure 32-bit and 64-bit agree on alignment
 
     /* Description of high level data structure.  The data offsets are a
      * multiple of page size and the data sizes are rounded up to a multiple
      * of page size to facilitate data transfer. */
+    uint32_t index_data_size;   // Size of index block
     uint64_t index_data_start;  // Start of index block
     uint64_t dd_data_start;     // Start of double decimated data
     uint64_t major_data_start;  // Start of major data area
     uint64_t dd_data_size;      // Size of double decimated data area
     uint64_t total_data_size;   // Size of complete file, for check
-    uint32_t index_data_size;   // Size of index block
     uint32_t dd_total_count;    // Total number of DD samples
 
     /* Parameters describing major data layout. */
@@ -124,7 +123,7 @@ struct disk_header {
     uint32_t d_sample_count;    // Decimated samples in a major block
     uint32_t dd_sample_count;   // Double dec samples in a major block
 
-    uint32_t pad2;  // Avoid false alarm from block size discrepancy
+    double timestamp_iir;       // IIR for last_duration calculation
 
     /* All the parameters above remain fixed during the operation of the
      * archiver, the parameters below are updated dynamically. */
@@ -198,6 +197,7 @@ bool initialise_header(
     uint32_t first_decimation,
     uint32_t second_decimation,
     double sample_frequency,
+    double timestamp_iir,
     uint32_t fa_entry_count);
 /* Reads the file size of the given file. */
 bool get_filesize(int disk_fd, uint64_t *file_size);
