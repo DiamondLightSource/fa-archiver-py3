@@ -468,7 +468,7 @@ static void madvise_double_decimation(void)
     struct decimated_data *output = dd_area + dd_offset;
     for (unsigned int i = 0; i < output_id_count; i ++)
     {
-        void *dd_address = (void *) ((intptr_t) output & (intptr_t) -page_size);
+        void *dd_address = (void *) ((uintptr_t) output & -page_size);
         output += header->dd_total_count;
         if (dd_address != madvise_array[i])
         {
