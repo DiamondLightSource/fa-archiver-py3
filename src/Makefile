@@ -45,10 +45,11 @@ CFLAGS += -msse2
 CFLAGS += -mfpmath=sse
 CFLAGS += -ffast-math
 CFLAGS += -funsigned-char
+# This configures flags as necessary for large file support on 32-bit.
+CFLAGS += $(shell getconf LFS_CFLAGS)
 
 CPPFLAGS += -I$(DEVICE_DIR)
 CPPFLAGS += -D_GNU_SOURCE
-CPPFLAGS += -D_FILE_OFFSET_BITS=64
 CPPFLAGS += -D_FORTIFY_SOURCE=2
 
 LDLIBS += -lpthread -lrt -lm
