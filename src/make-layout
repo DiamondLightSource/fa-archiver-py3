@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # This file computes the detailed structure layout as defined by layout-list.
 # The definitions here are designed to be automatically checked as part of every

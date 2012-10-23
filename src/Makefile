@@ -33,12 +33,10 @@ CFLAGS += -Wmissing-declarations
 CFLAGS += -Wstrict-prototypes
 CFLAGS += -Wcast-qual
 
-ifeq ($(CC_NAME)-$(CC_VERSION),cc-4.1.2)
-    # Suppress this flag for gcc 4.1.2 because it behaves stupidly (warnings
-    # about prototype changing width?!)
-else
-    CFLAGS += -Wconversion
-endif
+# For some versions of gcc the conversion flag works, for others it's retarded
+# and generates warnings when formal parameters are smaller than int.  Add the
+# appropriate definition here if it's ok.
+CFLAGS_cc-4.4.6 += -Wconversion
 
 CFLAGS += -msse
 CFLAGS += -msse2
@@ -47,6 +45,10 @@ CFLAGS += -ffast-math
 CFLAGS += -funsigned-char
 # This configures flags as necessary for large file support on 32-bit.
 CFLAGS += $(shell getconf LFS_CFLAGS)
+
+# Compiler specific flags.
+CFLAGS += $(CFLAGS_$(CC_NAME)-$(CC_VERSION))
+
 
 CPPFLAGS += -I$(DEVICE_DIR)
 CPPFLAGS += -D_GNU_SOURCE

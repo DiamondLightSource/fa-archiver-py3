@@ -154,7 +154,7 @@ static bool send_extended_timestamp(
         header->last_duration / (header->major_sample_count / block_size));
     timestamp -= duration;      // timestamp is after *last* point
 
-    const char *on_error = "Unable to write timestamp block";
+#define TS_ERROR "Unable to write timestamp block"
     if (want_t0)
     {
         struct extended_timestamp_id0 extended_timestamp = {
@@ -162,7 +162,7 @@ static bool send_extended_timestamp(
             .duration = duration,
             .id_zero = *id0 };
         return TEST_write_(
-            scon, &extended_timestamp, sizeof(extended_timestamp), on_error);
+            scon, &extended_timestamp, sizeof(extended_timestamp), TS_ERROR);
     }
     else
     {
@@ -170,7 +170,7 @@ static bool send_extended_timestamp(
             .timestamp = timestamp,
             .duration = duration };
         return TEST_write_(
-            scon, &extended_timestamp, sizeof(extended_timestamp), on_error);
+            scon, &extended_timestamp, sizeof(extended_timestamp), TS_ERROR);
     }
 }
 
