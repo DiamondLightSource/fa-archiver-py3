@@ -84,11 +84,13 @@ def list_location_files():
             os.path.join(os.path.dirname(__file__), '..', 'conf', '*.conf'))]
 
 
-def load_location_file(globs, location, full_path, server = None):
+def load_location_file(globs, location, full_path, server = None, port = None):
     result = dict(FA_PORT = falib.DEFAULT_PORT)
     config_file = find_location_file(location, full_path)
     context = dict(here = os.path.dirname(config_file), os = os)
     execfile(config_file, context, result)
     if server:
         result['FA_SERVER'] = server
+    if port:
+        result['FA_PORT'] = port
     globs.update(result)

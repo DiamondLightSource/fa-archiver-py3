@@ -373,6 +373,9 @@ parser.add_option(
 parser.add_option(
     '-S', dest = 'server', default = None,
     help = 'Override server address in location file')
+parser.add_option(
+    '-P', dest = 'port', default = None,
+    help = 'Override server port in location file')
 options, arglist = parser.parse_args()
 if len(arglist) > 1:
     parser.error('Unexpected arguments')
@@ -383,7 +386,8 @@ else:
 
 # Load the location file and compute the groups
 falib.load_location_file(
-    globals(), location, options.full_path, options.server)
+    globals(), location, options.full_path,
+    server = options.server, port = options.port)
 BPM_list = falib.compute_bpm_groups(BPM_LIST, GROUPS, PATTERNS)
 
 server = falib.Server(server = FA_SERVER, port = FA_PORT)
