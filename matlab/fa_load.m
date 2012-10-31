@@ -86,7 +86,7 @@ function d = fa_load(tse, mask, type, server)
             format_time(tse(1) - tz_offset), ...
             format_time(tse(2) - tz_offset), ts_req, id0_req);
     end
-    [sc, cleanup] = send_request(server, request);
+    [sc, cleanup] = send_request(server, request);                  %#ok<NASGU>
 
     % Check the error code response and raise an error if failed
     buf = read_bytes(sc, 1, true);
@@ -240,7 +240,7 @@ function [channel, cleanup] = send_request(server, request)
 
     % Allow for a non standard port to be specified as part of the server name.
     [server, port] = strtok(server, ':');
-    if port; port = str2num(port(2:end)); else port = 8888; end
+    if port; port = str2double(port(2:end)); else port = 8888; end
 
     % Open the channel and connect to the server.
     channel = SocketChannel.open();
@@ -305,7 +305,7 @@ function [decimation, frequency, typestr, ts_at_end, save_id0, max_id] = ...
         process_type(server, type)
 
     % Read decimation and frequency parameters from server
-    [sock, cleanup] = send_request(server, 'CdDFKC');
+    [sock, cleanup] = send_request(server, 'CdDFKC');               %#ok<NASGU>
     params = textscan(read_string(sock), '%f');
     first_dec  = params{1}(1);
     second_dec = params{1}(2);
@@ -382,7 +382,7 @@ function [day, start_time, ts] = process_timestamps( ...
 
     ts_offset = (day - epoch - tz_offset) / scaling;
     timestamps = scaling * (timestamps - ts_offset);
-    durations = (scaling * durations) * [0:block_size - 1] / block_size;
+    durations = (scaling * durations) * (0 : block_size - 1) / block_size;
 
     ts = repmat(timestamps, 1, block_size) + durations;
     ts = reshape(ts', [], 1);
@@ -394,7 +394,7 @@ end
 function id0 = process_id0( ...
         id_zeros, sample_count, block_size, initial_offset, decimation)
     id_zeros = int32(id_zeros);
-    offsets = int32(decimation * [0:block_size - 1]);
+    offsets = int32(decimation * (0 : block_size - 1));
     id0 = repmat(id_zeros, 1, block_size) + repmat(offsets, size(id_zeros), 1);
     id0 = reshape(id0', [], 1);
     id0 = id0(initial_offset + 1:initial_offset + sample_count);
