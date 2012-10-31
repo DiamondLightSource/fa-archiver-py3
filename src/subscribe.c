@@ -45,6 +45,7 @@
 #include "reader.h"
 #include "disk.h"
 #include "transform.h"
+#include "decimate.h"
 
 #include "subscribe.h"
 
@@ -69,8 +70,8 @@ enum send_timestamp {
 /* Result of parsing a subscribe command. */
 struct subscribe_parse {
     struct filter_mask mask;        // List of BPMs to be subscribed
-    struct buffer *buffer;          // Source of data (FA or decimated)
     enum send_timestamp send_timestamp; // Timestamp options
+    bool decimated;                 // Source of data (FA or decimated)
     bool want_t0;                   // Set if T0 should be sent
     bool uncork;                    // Set if stream should be uncorked
 };
@@ -83,16 +84,10 @@ static bool parse_options(const char **string, struct subscribe_parse *parse)
             read_char(string, 'E') ? SEND_EXTENDED : SEND_BASIC : SEND_NOTHING;
     parse->want_t0 = read_char(string, 'Z');
     parse->uncork = read_char(string, 'U');
-    if (read_char(string, 'D'))
-        parse->buffer = decimated_buffer;
-    else
-        parse->buffer = fa_block_buffer;
+    parse->decimated = read_char(string, 'D');
     return
-        TEST_NULL_(parse->buffer, "Decimated data not available")  &&
-        TEST_OK_(
-            parse->send_timestamp != SEND_EXTENDED  ||
-            parse->buffer != decimated_buffer,
-            "Extended timestamps not available for decimated data");
+        TEST_OK_(!parse->decimated  ||  decimated_buffer != NULL,
+            "Decimated data not available");
 }
 
 /* A subscribe request is a filter mask followed by options:
@@ -143,15 +138,16 @@ static bool send_header(
 
 
 static bool send_extended_timestamp(
-    int scon, bool want_t0,
+    int scon, bool want_t0, bool decimated,
     size_t block_size, uint64_t timestamp, const uint32_t *id0)
 {
     const struct disk_header *header = get_header();
-    /* This duration calculation is why we can't do decimated data with extended
-     * timestamps -- just don't have the value to deliver!  Actually, it's not a
-     * great match to the data anyway, but that's another problem... */
+
+    /* Compute an estimate of the duration of this block. */
+    unsigned int decimation = decimated ? get_decimation_factor() : 1;
     uint32_t duration = (uint32_t) (
-        header->last_duration / (header->major_sample_count / block_size));
+        block_size * decimation * header->last_duration /
+        header->major_sample_count);
     timestamp -= duration;      // timestamp is after *last* point
 
 #define TS_ERROR "Unable to write timestamp block"
@@ -257,7 +253,8 @@ static bool send_subscription(
         ok = FINALLY(
             IF_(parse->send_timestamp == SEND_EXTENDED,
                 send_extended_timestamp(
-                    scon, parse->want_t0, block_size, timestamp, *block))  &&
+                    scon, parse->want_t0, parse->decimated,
+                    block_size, timestamp, *block))  &&
             write_frames(
                 scon, &parse->mask, fa_entry_count, *block, block_size),
 
@@ -290,7 +287,8 @@ bool process_subscribe(int scon, const char *client_name, const char *buf)
 
     /* See if we can start the subscription, report the final status to the
      * caller. */
-    struct reader_state *reader = open_reader(parse.buffer, false);
+    struct reader_state *reader = open_reader(
+        parse.decimated ? decimated_buffer : fa_block_buffer, false);
     uint64_t timestamp;
     const void *block = get_read_block(reader, &timestamp);
     bool start_ok = TEST_NULL_(block, "No data currently available");
