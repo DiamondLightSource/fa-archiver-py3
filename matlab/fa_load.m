@@ -10,6 +10,8 @@
 %          'D' for 10072/16384 decimated
 %          'C' for continuous data, in which case tse must be a single number
 %              specifying the number of samples wanted
+%          'CD' for continuous decimated data, and similarly tse must specify
+%              number of samples
 %          Use 'Z' suffix to select ID0 capture as well.
 %   server = IP address of FA archiver
 %
@@ -76,6 +78,7 @@ function d = fa_load(tse, mask, type, server)
         % Continuous data request
         tz_offset = get_tz_offset(now);
         request = sprintf('S%sTE%s', maskstr, id0_req);
+        if decimation > 1; request = [request 'D']; end
     else
         tz_offset = get_tz_offset(tse(2));
         if ts_at_end; ts_req = 'A'; else ts_req = 'E'; end
@@ -111,7 +114,7 @@ function d = fa_load(tse, mask, type, server)
     d.decimation = decimation;
     d.f_s = frequency;
     d.ids = request_mask;
-    if decimation == 1
+    if decimation == 1 || strcmp(typestr, 'C')
         field_count = 1;
         data = zeros(2, id_count, sample_count);
     else
@@ -161,7 +164,7 @@ function d = fa_load(tse, mask, type, server)
 
         % Read the data and convert to matlab format.
         int_buf = read_int_array(sc, 2 * field_count * id_count * block_count);
-        if decimation == 1
+        if decimation == 1 || strcmp(typestr, 'C')
             data(:, :, samples_read + 1:samples_read + block_count) = ...
                 reshape(int_buf, 2, id_count, block_count);
         else
@@ -297,23 +300,20 @@ function s = read_string(sc)
 end
 
 
-% Reads decimation and frequency parameters from server
-function [first_dec, second_dec, frequency, max_id] = read_params(server)
-    [sock, cleanup] = send_request(server, 'CdDFK');
+% Process decimation request in light of server parameters.
+function [decimation, frequency, typestr, ts_at_end, save_id0, max_id] = ...
+        process_type(server, type)
+
+    % Read decimation and frequency parameters from server
+    [sock, cleanup] = send_request(server, 'CdDFKC');
     params = textscan(read_string(sock), '%f');
     first_dec  = params{1}(1);
     second_dec = params{1}(2);
     frequency  = params{1}(3);
     max_id     = params{1}(4);
-end
+    stream_dec = params{1}(5);
 
-
-% Process decimation request in light of server parameters.
-function [decimation, frequency, typestr, ts_at_end, save_id0, max_id] = ...
-        process_type(server, type)
-
-    [first_dec, second_dec, frequency, max_id] = read_params(server);
-
+    % Parse request
     save_id0 = type(end) == 'Z';
     if save_id0; type = type(1:end-1); end
 
@@ -321,18 +321,21 @@ function [decimation, frequency, typestr, ts_at_end, save_id0, max_id] = ...
     if strcmp(type, 'F') || strcmp(type, 'C')
         decimation = 1;
         typestr = type;
+    elseif strcmp(type, 'CD')
+        if stream_dec == 0; error('No decimated data from server'); end
+        decimation = stream_dec;
+        typestr = 'C';
     elseif strcmp(type, 'd')
         decimation = first_dec;
         typestr = 'D';
-        frequency = frequency / decimation;
     elseif strcmp(type, 'D')
         decimation = first_dec * second_dec;
         typestr = 'DD';
-        frequency = frequency / decimation;
         ts_at_end = true;
     else
         error('Invalid datatype requested');
     end
+    frequency = frequency / decimation;
 end
 
 

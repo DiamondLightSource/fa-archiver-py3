@@ -61,6 +61,11 @@ also captured.  The following options are available:
     Live full resolution data is captured for the number of samples specified by
     *times*.  The returned `data` array is the same format as for `F`.
 
+`CD`
+    If available from the server, live decimated data is captured for the number
+    of samples specified by *times*, as for `C`, and similarly the format is as
+    for `F`.
+
 `.Z`
     If *type* ends in `Z` then the `id0` array is also stored.
 
