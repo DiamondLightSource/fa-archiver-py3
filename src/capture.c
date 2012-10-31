@@ -73,6 +73,7 @@ static struct filter_mask capture_mask;
 static bool matlab_format = true;
 static bool squeeze_matlab = true;
 static bool continuous_capture = false;
+static bool decimated_capture = false;
 static bool start_specified = false;
 static struct timespec start;
 static bool end_specified = false;
@@ -95,6 +96,7 @@ static unsigned int first_decimation;
 static unsigned int second_decimation;
 static unsigned int major_version, minor_version;
 static unsigned int fa_entry_count = 256;
+static unsigned int continuous_decimation;
 
 static FILE *output_file;
 
@@ -171,6 +173,8 @@ static bool parse_archive_parameters(const char **string)
         parse_version(string)  &&
         parse_char(string, '\n')  &&
         parse_uint(string, &fa_entry_count)  &&
+        parse_char(string, '\n')  &&
+        parse_uint(string, &continuous_decimation)  &&
         parse_char(string, '\n');
 }
 
@@ -182,7 +186,7 @@ static bool read_archive_parameters(void)
     char buffer[64];
     return
         connect_server(&stream)  &&
-        TEST_OK(fprintf(stream, "CFdDVK\n") > 0)  &&
+        TEST_OK(fprintf(stream, "CFdDVKC\n") > 0)  &&
         FINALLY(
             read_response(stream, buffer, sizeof(buffer)),
             // Finally, whether read_response succeeds
@@ -200,12 +204,17 @@ static bool read_archive_parameters(void)
 /* Returns configured decimation factor. */
 static unsigned int get_decimation(void)
 {
-    switch (data_format)
+    if (continuous_capture)
+        return decimated_capture ? continuous_decimation : 1;
+    else
     {
-        case DATA_DD:   return first_decimation * second_decimation;
-        case DATA_D:    return first_decimation;
-        case DATA_FA:   return 1;
-        default:        return 0;   // Not going to happen
+        switch (data_format)
+        {
+            case DATA_DD:   return first_decimation * second_decimation;
+            case DATA_D:    return first_decimation;
+            case DATA_FA:   return 1;
+            default:        return 0;   // Not going to happen
+        }
     }
 }
 
@@ -245,6 +254,7 @@ static void usage(char *argv0)
 "\n"
 "Alternatively, continuous capture of live data can be specified:\n"
 "   -C   Request continuous capture from live data stream\n"
+"   -D   Request continuous capture from decimated live data stream\n"
 "\n"
 "The following options can be given:\n"
 "\n"
@@ -408,11 +418,13 @@ static bool parse_opts(int *argc, char ***argv)
     bool ok = true;
     while (ok)
     {
-        switch (getopt(*argc, *argv, "+hRCo:aS:qckn:zZdTs:t:b:p:f:"))
+        switch (getopt(*argc, *argv, "+hRCDo:aS:qckn:zZdTs:t:b:p:f:"))
         {
             case 'h':   usage(argv0);                               exit(0);
             case 'R':   matlab_format = false;                      break;
             case 'C':   continuous_capture = true;                  break;
+            case 'D':   continuous_capture = true;
+                        decimated_capture = true;                   break;
             case 'o':   output_filename = optarg;                   break;
             case 'a':   all_data = true;                            break;
             case 'S':   server_name = optarg;                       break;
@@ -514,7 +526,9 @@ static bool validate_args(void)
         TEST_OK_(matlab_format  ||  !save_id0,
             "Can only capture ID0 in matlab format")  &&
         TEST_OK_(request_contiguous  ||  !check_id0,
-            "ID0 checking only meaningful with gap checking");
+            "ID0 checking only meaningful with gap checking")  &&
+        TEST_OK_(!decimated_capture  ||  continuous_decimation > 0,
+            "Continuous decimated data not available from server");
 }
 
 
@@ -573,6 +587,7 @@ static void format_subscribe_options(char *options)
     if (matlab_format)      *options++ = 'E';   //  in extended format
     if (matlab_format  &&  save_id0)
                             *options++ = 'Z';   //  with id0 values
+    if (decimated_capture)  *options++ = 'D';   // Decimated data stream
     *options = '\0';
 }
 

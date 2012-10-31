@@ -70,6 +70,10 @@ Alternatively, continuous capture of live data can be specified:
 -C
     Request continuous capture from live data stream
 
+-D
+    Request continuous capture of decimated live data.  If the server was
+    started with the `-c` flag the streaming decimated data will be captured.
+
 The following further options can be given:
 
 -o output-file
