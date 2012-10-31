@@ -75,15 +75,15 @@ static bool check_number(const char *start, const char *end)
 
 
 /* Parsing numbers is rather boilerplate.  This macro encapsulates everything in
- * one common form.  The REINTERPRET_CAST() in the middle is because annoyingly
- * the type of strtol and allies is incompatible with const. */
+ * one common form. */
 #define DEFINE_PARSE_NUM(name, type, convert, extra...) \
     bool name(const char **string, type *result) \
     { \
         errno = 0; \
         const char *start = *string; \
-        *result = (type) convert(start, \
-            REINTERPRET_CAST(char **, string), ##extra); \
+        char *end; \
+        *result = (type) convert(start, &end, ##extra); \
+        *string = end; \
         return check_number(start, *string); \
     }
 
