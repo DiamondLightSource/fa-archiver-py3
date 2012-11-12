@@ -159,8 +159,7 @@ const void *get_read_block(struct reader_state *reader, uint64_t *timestamp)
     /* Wait until one of the following conditions is satisfied:
      *  1. We're stopped by setting running to false
      *  2. The out and in indexes don't coincide
-     *  3. The we haven't reported a gap yet and the new frame starts a new
-     *     gap. */
+     *  3. We haven't reported a gap yet and the new frame starts a new gap. */
     while (reader->running  &&
            reader->index_out == buffer->index_in  &&
            (reader->gap_reported  ||  !frame_info->gap)  &&
@@ -228,10 +227,9 @@ static bool check_underflow(
 
 bool release_read_block(struct reader_state *reader)
 {
-    struct buffer *buffer = reader->buffer;
-
     /* Grab consistent snapshot of current buffer position. */
     size_t index_in, cycle_count;
+    struct buffer *buffer = reader->buffer;
     LOCK(buffer->lock);
     index_in    = buffer->index_in;
     cycle_count = buffer->cycle_count;

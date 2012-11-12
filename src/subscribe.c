@@ -69,11 +69,11 @@ enum send_timestamp {
 
 /* Result of parsing a subscribe command. */
 struct subscribe_parse {
-    struct filter_mask mask;        // List of BPMs to be subscribed
+    struct filter_mask mask;        // List of FA ids to be subscribed
     enum send_timestamp send_timestamp; // Timestamp options
-    bool decimated;                 // Source of data (FA or decimated)
     bool want_t0;                   // Set if T0 should be sent
     bool uncork;                    // Set if stream should be uncorked
+    bool decimated;                 // Source of data (FA or decimated)
 };
 
 
@@ -82,8 +82,8 @@ static bool parse_options(const char **string, struct subscribe_parse *parse)
     parse->send_timestamp =
         read_char(string, 'T') ?    //        "TE"          "T"             ""
             read_char(string, 'E') ? SEND_EXTENDED : SEND_BASIC : SEND_NOTHING;
-    parse->want_t0 = read_char(string, 'Z');
-    parse->uncork = read_char(string, 'U');
+    parse->want_t0   = read_char(string, 'Z');
+    parse->uncork    = read_char(string, 'U');
     parse->decimated = read_char(string, 'D');
     return
         TEST_OK_(!parse->decimated  ||  decimated_buffer != NULL,
@@ -116,7 +116,8 @@ static bool parse_subscription(
 }
 
 
-/* Sends header according to selected options. */
+/* Sends header according to selected options.  The transmitted data optionally
+ * begins with the timestamp and T0 values, in that order, if requested. */
 static bool send_header(
     int scon, struct subscribe_parse *parse,
     size_t block_size, uint64_t timestamp, const uint32_t *id0)
@@ -139,7 +140,7 @@ static bool send_header(
 
 static bool send_extended_timestamp(
     int scon, bool want_t0, bool decimated,
-    size_t block_size, uint64_t timestamp, const uint32_t *id0)
+    size_t block_size, uint64_t timestamp, uint32_t id0)
 {
     const struct disk_header *header = get_header();
 
@@ -156,7 +157,7 @@ static bool send_extended_timestamp(
         struct extended_timestamp_id0 extended_timestamp = {
             .timestamp = timestamp,
             .duration = duration,
-            .id_zero = *id0 };
+            .id_zero = id0 };
         return TEST_write_(
             scon, &extended_timestamp, sizeof(extended_timestamp), TS_ERROR);
     }
@@ -171,101 +172,81 @@ static bool send_extended_timestamp(
 }
 
 
-/* Copies a single FA frame taking the mask into account, returns the number
- * of bytes copied into the target buffer (will be 8*count_mask_bits(mask)).
+/* Copies a single FA frame taking the mask into account.
  * 'from' should point to a completely populated frame, 'to' will contain X,Y
  * pairs in ascending numerical order for bits set in mask. */
-static int copy_frame(
-    void *to, const void *from,
+static void copy_frame(
+    struct fa_entry *to, const struct fa_entry *from,
     const struct filter_mask *mask, unsigned int fa_entry_count)
 {
-    const int32_t *from_p = from;
-    int32_t *to_p = to;
-    int copied = 0;
     for (unsigned int i = 0; i < fa_entry_count / 8; i ++)  // 8 bits at a time
     {
         uint8_t m = mask->mask[i];
         for (unsigned int j = 0; j < 8; j ++)
         {
             if ((m >> j) & 1)
-            {
-                *to_p++ = from_p[0];
-                *to_p++ = from_p[1];
-                copied += 8;
-            }
-            from_p += 2;
+                *to++ = *from;
+            from += 1;
         }
     }
-    return copied;
 }
 
 
-/* Writes the selected number of masked frames to the given file, returning
- * false if writing fails. */
-static bool write_frames(
-    int file, const struct filter_mask *mask, unsigned int fa_entry_count,
-    const void *frame, unsigned int count)
+/* Takes copy of masked frames to buffer. */
+static void copy_frames(
+    void *buffer, const void *block,
+    const struct filter_mask *mask, unsigned int fa_entry_count,
+    unsigned int count)
 {
     size_t out_frame_size =
         count_mask_bits(mask, fa_entry_count) * FA_ENTRY_SIZE;
-    while (count > 0)
-    {
-        char buffer[WRITE_BUFFER_SIZE];
-        size_t buffered = 0;
-        while (count > 0  &&  buffered + out_frame_size <= WRITE_BUFFER_SIZE)
-        {
-            copy_frame(buffer + buffered, frame, mask, fa_entry_count);
-            frame = frame + FA_ENTRY_SIZE * fa_entry_count;
-            buffered += out_frame_size;
-            count -= 1;
-        }
+    size_t in_frame_size = fa_entry_count * FA_ENTRY_SIZE;
 
-        size_t written = 0;
-        while (buffered > 0)
-        {
-            ssize_t wr;
-            if (!TEST_IO_(wr = write(file, buffer + written, buffered),
-                    "Unable to write frame"))
-                return false;
-            written  += (size_t) wr;
-            buffered -= (size_t) wr;
-        }
+    for (unsigned int i = 0; i < count; i ++)
+    {
+        copy_frame(buffer, block, mask, fa_entry_count);
+        buffer += out_frame_size;
+        block += in_frame_size;
     }
-    return true;
 }
 
 
+/* Sends data for subscription until something fails, typically either the data
+ * source is interrupted or the client disconnects. */
 static bool send_subscription(
-    int scon, struct reader_state *reader, uint64_t timestamp,
+    int scon, struct reader_state *reader,
     struct subscribe_parse *parse, unsigned int fa_entry_count,
-    const void **block)
+    const void *block, uint64_t timestamp)
 {
-    /* The transmitted block optionally begins with the timestamp and T0 values,
-     * in that order, if requested. */
     unsigned int block_size = (unsigned int) (
         reader_block_size(reader) / fa_entry_count / FA_ENTRY_SIZE);
+    unsigned int id_count = count_mask_bits(&parse->mask, fa_entry_count);
+    size_t buffer_size = block_size * FA_ENTRY_SIZE * id_count;
+
     bool ok =
-        send_header(scon, parse, block_size, timestamp, *block)  &&
+        send_header(scon, parse, block_size, timestamp, block)  &&
         IF_(parse->uncork, set_socket_cork(scon, false));
 
     while (ok)
     {
-        ok = FINALLY(
+        /* Grab a copy of the data in the buffer. */
+        char buffer[buffer_size];
+        copy_frames(buffer, block, &parse->mask, fa_entry_count, block_size);
+        uint32_t id0 = *(const uint32_t *) block;
+
+        ok =
+            /* See if the data is clean, or if we've underrun. */
+            TEST_OK_(release_read_block(reader), "Write underrun to client")  &&
+            /* Write the data if it's clean. */
             IF_(parse->send_timestamp == SEND_EXTENDED,
                 send_extended_timestamp(
                     scon, parse->want_t0, parse->decimated,
-                    block_size, timestamp, *block))  &&
-            write_frames(
-                scon, &parse->mask, fa_entry_count, *block, block_size),
-
-            // Always do this, even if write_frames fails.
-            TEST_OK_(release_read_block(reader), "Write underrun to client"));
-        if (ok)
-            ok = TEST_NULL_(
-                *block = get_read_block(reader, &timestamp),
+                    block_size, timestamp, id0))  &&
+            TEST_write_(scon, buffer, buffer_size, "Unable to write frame")  &&
+            /* Get the next block. */
+            TEST_NULL_(
+                block = get_read_block(reader, &timestamp),
                 "Gap in subscribed data");
-        else
-            *block = NULL;
     }
     return ok;
 }
@@ -297,12 +278,8 @@ bool process_subscribe(int scon, const char *client_name, const char *buf)
     /* Send the requested subscription if all is well. */
     if (start_ok  &&  ok)
         ok = send_subscription(
-            scon, reader, timestamp, &parse, fa_entry_count, &block);
+            scon, reader, &parse, fa_entry_count, block, timestamp);
 
-    /* Clean up resources.  Rather important to get this right, as this can
-     * happen many times. */
-    if (block != NULL)
-        release_read_block(reader);
     close_reader(reader);
 
     return ok;
