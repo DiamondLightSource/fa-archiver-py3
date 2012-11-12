@@ -57,13 +57,15 @@
 %      michael.abbott@diamond.ac.uk
 
 function d = fa_load(tse, mask, type, server)
-    % Process arguments
+    % Assign defaults
     if nargin < 3
         type = 'F';
     end
     if nargin < 4
         server = 'fa-archiver.diamond.ac.uk';
     end
+
+    % Parse arguments
     [decimation, frequency, typestr, ts_at_end, save_id0, max_id] = ...
         process_type(server, type);
 
@@ -72,6 +74,76 @@ function d = fa_load(tse, mask, type, server)
     id_count = length(request_mask);
 
     % Prepare the request and send to server
+    [request, tz_offset] = format_server_request( ...
+        request_mask, max_id, save_id0, typestr, tse, decimation, ts_at_end);
+
+    % Send formatted request to server.  This returns open connection to server
+    % for reading response and returned datastream.
+    [sc, cleanup] = send_request(server, request);                  %#ok<NASGU>
+
+    % Parse response including initial header.
+    [sample_count, block_size, initial_offset] = ...
+        read_server_response(sc, typestr, tse);
+
+    % Capture requested data.
+    simple_data = strcmp(typestr, 'C')  ||  decimation == 1;
+    [data, timestamps, durations, id_zeros, sample_count] = ...
+        read_data(sc, sample_count, id_count, block_size, initial_offset, ...
+            ts_at_end, save_id0, simple_data);
+
+    % Prepare final result structure.  This involves some interpretation of the
+    % captured timestamp information.
+    d = format_results( ...
+        decimation, frequency, request_mask, perm, ...
+        data, timestamps, durations, id_zeros, ...
+        tz_offset, save_id0, simple_data, sample_count, ...
+        block_size, initial_offset);
+end
+
+
+% Process decimation request in light of server parameters.  This involves an
+% initial parameter request to the server.
+function [decimation, frequency, typestr, ts_at_end, save_id0, max_id] = ...
+        process_type(server, type)
+
+    % Read decimation and frequency parameters from server
+    [sock, cleanup] = send_request(server, 'CdDFKC');               %#ok<NASGU>
+    params = textscan(read_string(sock), '%f');
+    first_dec  = params{1}(1);
+    second_dec = params{1}(2);
+    frequency  = params{1}(3);
+    max_id     = params{1}(4);
+    stream_dec = params{1}(5);
+
+    % Parse request
+    save_id0 = type(end) == 'Z';
+    if save_id0; type = type(1:end-1); end
+
+    ts_at_end = false;
+    if strcmp(type, 'F') || strcmp(type, 'C')
+        decimation = 1;
+        typestr = type;
+    elseif strcmp(type, 'CD')
+        if stream_dec == 0; error('No decimated data from server'); end
+        decimation = stream_dec;
+        typestr = 'C';
+    elseif strcmp(type, 'd')
+        decimation = first_dec;
+        typestr = 'D';
+    elseif strcmp(type, 'D')
+        decimation = first_dec * second_dec;
+        typestr = 'DD';
+        ts_at_end = true;
+    else
+        error('Invalid datatype requested');
+    end
+    frequency = frequency / decimation;
+end
+
+
+function [request, tz_offset] = format_server_request( ...
+        request_mask, max_id, save_id0, typestr, tse, decimation, ts_at_end)
+
     maskstr = format_mask(request_mask, max_id);
     if save_id0; id0_req = 'Z'; else id0_req = ''; end
     if typestr == 'C'
@@ -86,7 +158,13 @@ function d = fa_load(tse, mask, type, server)
             format_time(tse(1) - tz_offset), ...
             format_time(tse(2) - tz_offset), ts_req, id0_req);
     end
-    [sc, cleanup] = send_request(server, request);                  %#ok<NASGU>
+end
+
+
+% Reads initial response from server including timestamp header, raises error if
+% server rejects request.
+function [sample_count, block_size, initial_offset] = ...
+        read_server_response(sc, typestr, tse)
 
     % Check the error code response and raise an error if failed
     buf = read_bytes(sc, 1, true);
@@ -99,23 +177,25 @@ function d = fa_load(tse, mask, type, server)
     if typestr == 'C'
         % For continuous data tse is the count.
         sample_count = tse(1);
-        simple_data = true;
     else
         % For historical data get the sample count at the head of the response.
         sample_count = read_long_array(sc, 1);
-        simple_data = decimation == 1;
     end
+
     % Read the timestamp header with block size and initial offset.
     header = read_int_array(sc, 2);
     block_size = header(1);             % Number of samples per block
     initial_offset = header(2);         % Offset into first block read
+end
 
-    % Prepare the result data structure
-    d = {};
-    d.t = zeros(1, sample_count);
-    d.decimation = decimation;
-    d.f_s = frequency;
-    d.ids = request_mask;
+
+% Prepares arrays and flags for reading data from server.
+function [ ...
+    field_count, block_offset, read_block_size, ...
+    data, timestamps, durations, id_zeros] = prepare_data( ...
+        sample_count, id_count, simple_data, initial_offset, block_size, ...
+        ts_at_end, save_id0)
+
     if simple_data
         field_count = 1;
         data = zeros(2, id_count, sample_count);
@@ -124,12 +204,16 @@ function d = fa_load(tse, mask, type, server)
         data = zeros(2, 4, id_count, sample_count);
     end
 
-    % Prepeare for reading.  Alas we need to support both options for timestamps
+    % Prepare for reading.  Alas we need to support both options for timestamps
     % if we want to support C data, as C data cannot be delivered with
     % timestamps at end.
     if ts_at_end
         block_offset = 0;
         read_block_size = 65536;
+        % Need dummy values for values read at end
+        timestamps = 0;
+        durations = 0;
+        id_zeros = 0;
     else
         block_offset = initial_offset;
         read_block_size = block_size;
@@ -139,13 +223,28 @@ function d = fa_load(tse, mask, type, server)
         durations  = zeros(round(sample_count / block_size) + 2, 1);
         if save_id0
             id_zeros = int32(zeros(round(sample_count / block_size) + 2, 1));
+        else
+            id_zeros = 0;   % Dummy value
         end
-        ts_read = 0;
     end
+end
+
+
+% Reads data from server.
+function [data, timestamps, durations, id_zeros, sample_count ...
+    ] = read_data( ...
+        sc, sample_count, id_count, block_size, initial_offset, ...
+        ts_at_end, save_id0, simple_data)
+
+    [field_count, block_offset, read_block_size, ...
+     data, timestamps, durations, id_zeros] = prepare_data( ...
+        sample_count, id_count, simple_data, initial_offset, block_size, ...
+        ts_at_end, save_id0);
     if save_id0; ts_buf_size = 16; else ts_buf_size = 12; end
 
     % Read the requested data block by block
     samples_read = 0;
+    ts_read = 0;
     while samples_read < sample_count
         if ~ts_at_end
             % Timestamp buffer first unless we've put it off until the end.
@@ -172,7 +271,7 @@ function d = fa_load(tse, mask, type, server)
             timestamps(ts_read + 1) = timestamp_buf.getLong();
             durations (ts_read + 1) = timestamp_buf.getInt();
             if save_id0
-                id_zeros  (ts_read + 1) = timestamp_buf.getInt();
+                id_zeros(ts_read + 1) = timestamp_buf.getInt();
             end
             ts_read = ts_read + 1;
         end
@@ -204,9 +303,23 @@ function d = fa_load(tse, mask, type, server)
         timestamps = read_long_array(sc, ts_read);
         durations  = read_int_array(sc, ts_read);
         if save_id0
-            id_zeros   = read_int_array(sc, ts_read);
+            id_zeros = read_int_array(sc, ts_read);
         end
     end
+end
+
+
+% Prepares final result.
+function d = format_results( ...
+        decimation, frequency, request_mask, perm, ...
+        data, timestamps, durations, id_zeros, ...
+        tz_offset, save_id0, simple_data, sample_count, ...
+        block_size, initial_offset)
+
+    % Prepare the result data structure
+    d = struct();
+    d.decimation = decimation;
+    d.f_s = frequency;
 
     [d.day, d.timestamp, d.t] = process_timestamps( ...
         timestamps, durations, ...
@@ -218,13 +331,14 @@ function d = fa_load(tse, mask, type, server)
 
     % Restore the originally requested permutation if necessary.
     if any(diff(perm) ~= 1)
-        d.ids = d.ids(perm);
+        d.ids = request_mask(perm);
         if simple_data
             d.data = data(:, perm, :);
         else
             d.data = data(:, :, perm, :);
         end
     else
+        d.ids = request_mask;
         d.data = data;
     end
 end
@@ -319,45 +433,6 @@ function s = read_string(sc)
     [buf, len] = read_bytes(sc, 4096, false);
     bytes = buf.array();
     s = char(bytes(1:len))';
-end
-
-
-% Process decimation request in light of server parameters.
-function [decimation, frequency, typestr, ts_at_end, save_id0, max_id] = ...
-        process_type(server, type)
-
-    % Read decimation and frequency parameters from server
-    [sock, cleanup] = send_request(server, 'CdDFKC');               %#ok<NASGU>
-    params = textscan(read_string(sock), '%f');
-    first_dec  = params{1}(1);
-    second_dec = params{1}(2);
-    frequency  = params{1}(3);
-    max_id     = params{1}(4);
-    stream_dec = params{1}(5);
-
-    % Parse request
-    save_id0 = type(end) == 'Z';
-    if save_id0; type = type(1:end-1); end
-
-    ts_at_end = false;
-    if strcmp(type, 'F') || strcmp(type, 'C')
-        decimation = 1;
-        typestr = type;
-    elseif strcmp(type, 'CD')
-        if stream_dec == 0; error('No decimated data from server'); end
-        decimation = stream_dec;
-        typestr = 'C';
-    elseif strcmp(type, 'd')
-        decimation = first_dec;
-        typestr = 'D';
-    elseif strcmp(type, 'D')
-        decimation = first_dec * second_dec;
-        typestr = 'DD';
-        ts_at_end = true;
-    else
-        error('Invalid datatype requested');
-    end
-    frequency = frequency / decimation;
 end
 
 
