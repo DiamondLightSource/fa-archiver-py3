@@ -1,4 +1,4 @@
-% [names, ids] = fa_getids()
+% [names, ids] = fa_getids([all_names])
 %
 % Returns device names and corresponding communication controller ids.  Used
 % internally for all name <-> id conversion.
@@ -28,15 +28,20 @@
 %      Oxfordshire,
 %      OX11 0DE
 %      michael.abbott@diamond.ac.uk
-function [names, ids] = fa_getids()
+function [names, ids] = fa_getids(all_names)
     if isunix
         fa_ids_file = '/home/ops/diagnostics/concentrator/fa-ids.sr';
     else
         fa_ids_file = fullfile(fileparts(mfilename('fullpath')), 'fa-ids.sr');
     end
-    [allids, allnames] = ...
-        textread(fa_ids_file, '%n %s', 'commentstyle', 'shell');
-    valid = ~strcmp(allnames, '');
-    ids = allids(valid);
-    names = allnames(valid);
+    [ids, names] = textread(fa_ids_file, '%n %s', 'commentstyle', 'shell');
+
+    % Unless all names requested filter out both names and IDs with no name
+    % assigned.
+    if nargin == 0; all_names = false; end
+    if ~all_names
+        valid = ~strcmp(names, '');
+        ids = ids(valid);
+        names = names(valid);
+    end
 end

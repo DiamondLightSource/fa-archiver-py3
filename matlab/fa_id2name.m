@@ -28,7 +28,7 @@
 %      OX11 0DE
 %      michael.abbott@diamond.ac.uk
 function names = fa_id2name(ids)
-    [allnames, allids] = fa_getids();
+    [allnames, allids] = fa_getids(true);
 
     ix(allids+1) = allnames;
     names = ix(ids+1);
