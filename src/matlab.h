@@ -116,7 +116,7 @@ bool find_matrix_by_name(
     bool *found, struct matlab_matrix *result);
 
 
-unsigned int __pure count_data_bits(unsigned int mask);
+unsigned int __const_ count_data_bits(unsigned int mask);
 unsigned int compute_mask_ids(
     uint16_t *array, struct filter_mask *mask, unsigned int max_bit_count);
 

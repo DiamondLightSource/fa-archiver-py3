@@ -234,6 +234,12 @@ void panic_error(const char *filename, int line)
 /* Use this to mark functions that can be constant folded, ie depend only on
  * their arguments and global state. */
 #define __pure __attribute__((pure))
+/* This function is a stronger variant of pure for functions which don't even
+ * look at global memory.
+ *    In truth and in practice we can get away with using this on functions
+ * which inspect constant global memory.  Note however that pointer arguments
+ * cannot be traversed by functions with this attribute. */
+#define __const_ __attribute__((const))
 
 
 /* Debug utility for dumping binary data in ASCII format. */
