@@ -99,9 +99,11 @@ function d = fa_load(tse, mask, type, server)
     if typestr == 'C'
         % For continuous data tse is the count.
         sample_count = tse(1);
+        simple_data = true;
     else
         % For historical data get the sample count at the head of the response.
         sample_count = read_long_array(sc, 1);
+        simple_data = decimation == 1;
     end
     % Read the timestamp header with block size and initial offset.
     header = read_int_array(sc, 2);
@@ -114,7 +116,7 @@ function d = fa_load(tse, mask, type, server)
     d.decimation = decimation;
     d.f_s = frequency;
     d.ids = request_mask;
-    if decimation == 1 || strcmp(typestr, 'C')
+    if simple_data
         field_count = 1;
         data = zeros(2, id_count, sample_count);
     else
@@ -147,7 +149,26 @@ function d = fa_load(tse, mask, type, server)
     while samples_read < sample_count
         if ~ts_at_end
             % Timestamp buffer first unless we've put it off until the end.
-            timestamp_buf = read_bytes(sc, ts_buf_size, true);
+            try
+                timestamp_buf = read_bytes(sc, ts_buf_size, true);
+            catch me
+                if ~strcmp(me.identifier, 'fa_load:read_bytes')
+                    rethrow(me)
+                end
+
+                % If we suffer from FA archiver buffer underrun it will be the
+                % timestamp buffer that fails to be read.  If this occurs,
+                % truncate sample_count and break -- we'll return what we have
+                % in hand.
+                warning('Data truncated');
+                sample_count = samples_read;
+                if simple_data
+                    data = data(:, :, 1:samples_read);
+                else
+                    data = data(:, :, :, 1:samples_read);
+                end
+                break
+            end
             timestamps(ts_read + 1) = timestamp_buf.getLong();
             durations (ts_read + 1) = timestamp_buf.getInt();
             if save_id0
@@ -164,7 +185,7 @@ function d = fa_load(tse, mask, type, server)
 
         % Read the data and convert to matlab format.
         int_buf = read_int_array(sc, 2 * field_count * id_count * block_count);
-        if decimation == 1 || strcmp(typestr, 'C')
+        if simple_data
             data(:, :, samples_read + 1:samples_read + block_count) = ...
                 reshape(int_buf, 2, id_count, block_count);
         else
@@ -198,7 +219,7 @@ function d = fa_load(tse, mask, type, server)
     % Restore the originally requested permutation if necessary.
     if any(diff(perm) ~= 1)
         d.ids = d.ids(perm);
-        if decimation == 1
+        if simple_data
             d.data = data(:, perm, :);
         else
             d.data = data(:, :, perm, :);
@@ -270,7 +291,8 @@ function [buf, pos] = read_bytes(sc, count, require)
     end
     pos = buf.position();
     if require && pos ~= count
-        error('Too few bytes received from server');
+        throw(MException( ...
+            'fa_load:read_bytes', 'Too few bytes received from server'))
     end
     buf.flip();
 end
