@@ -231,5 +231,10 @@ void panic_error(const char *filename, int line)
 #define IGNORE(e)       do if(e) {} while (0)
 
 
+/* Use this to mark functions that can be constant folded, ie depend only on
+ * their arguments and global state. */
+#define __pure __attribute__((pure))
+
+
 /* Debug utility for dumping binary data in ASCII format. */
 void dump_binary(FILE *out, const void *buffer, size_t length);

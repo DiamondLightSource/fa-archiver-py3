@@ -54,7 +54,7 @@ struct buffer;
 struct reader_state;
 
 /* All buffered times are represented in microseconds in the Unix epoch. */
-uint64_t ts_to_microseconds(const struct timespec *ts);
+uint64_t __pure ts_to_microseconds(const struct timespec *ts);
 /* Helper routine for getting current timestamp. */
 uint64_t get_timestamp(void);
 
@@ -64,9 +64,9 @@ bool create_buffer(
     struct buffer **buffer, size_t block_size, size_t block_count);
 
 /* Interrogates buffer block size. */
-size_t buffer_block_size(struct buffer *buffer);
+size_t __pure buffer_block_size(struct buffer *buffer);
 /* Similar helper routine when we only have a reader in our hands. */
-size_t reader_block_size(struct reader_state *reader);
+size_t __pure reader_block_size(struct reader_state *reader);
 
 /* Reserves the next slot in the buffer for writing. An entire contiguous
  * block of block_size bytes is guaranteed to be returned, and

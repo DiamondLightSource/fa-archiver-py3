@@ -38,9 +38,9 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+#include "error.h"
 #include "fa_sniffer.h"
 #include "mask.h"
-#include "error.h"
 
 #include "matlab.h"
 

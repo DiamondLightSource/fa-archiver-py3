@@ -44,14 +44,14 @@ static inline void set_mask_bit(struct filter_mask *mask, unsigned int bit)
     mask->mask[bit >> 3] |= (uint8_t) (1 << (bit & 7));
 }
 
-static inline bool test_mask_bit(
+static inline bool __pure test_mask_bit(
     const struct filter_mask *mask, unsigned int bit)
 {
     return !!(mask->mask[bit >> 3] & (1 << (bit & 7)));
 }
 
 /* Returns number of bits set in mask. */
-unsigned int count_mask_bits(
+unsigned int __pure count_mask_bits(
     const struct filter_mask *mask, unsigned int fa_entry_count);
 
 

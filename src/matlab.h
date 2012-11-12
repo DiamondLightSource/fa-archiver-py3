@@ -88,7 +88,7 @@ struct region
 /* Maps matlab file into memory, returning the mapped memory region. */
 bool map_matlab_file(int file, struct region *region);
 /* Checks if the given region has been consumed. */
-bool nonempty_region(const struct region *region);
+bool __pure nonempty_region(const struct region *region);
 /* Reads a matlab data element from a region. */
 bool read_data_element(struct region *region, struct region *result, int *type);
 
@@ -116,7 +116,7 @@ bool find_matrix_by_name(
     bool *found, struct matlab_matrix *result);
 
 
-unsigned int count_data_bits(unsigned int mask);
+unsigned int __pure count_data_bits(unsigned int mask);
 unsigned int compute_mask_ids(
     uint16_t *array, struct filter_mask *mask, unsigned int max_bit_count);
 
@@ -129,4 +129,4 @@ unsigned int compute_mask_ids(
 /* Converts a timestamp in FA sniffer format (microseconds in Unix epoch) to a
  * timestamp in matlab format (double days in Matlab epoch).  As matlab times
  * are normally in local time the local time offset is also passed. */
-double matlab_timestamp(uint64_t timestamp, time_t local_offset);
+double __pure matlab_timestamp(uint64_t timestamp, time_t local_offset);

@@ -153,12 +153,12 @@ struct data_index {
 /* Two helper routines for converting sample number (within a major block) and
  * bpm id (as an index into the archive mask) into offsets into a major block
  * for both FA and D data. */
-static inline size_t fa_data_offset(
+static inline size_t __pure fa_data_offset(
     struct disk_header *header, unsigned int sample, unsigned int id)
 {
     return FA_ENTRY_SIZE * (id * header->major_sample_count + sample);
 }
-static inline size_t d_data_offset(
+static inline size_t __pure d_data_offset(
     struct disk_header *header, unsigned int sample, unsigned int id)
 {
     return

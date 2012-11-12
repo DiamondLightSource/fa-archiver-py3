@@ -11,6 +11,7 @@
 #include <inttypes.h>
 #include <string.h>
 
+#include "error.h"
 #include FIELD_HEADER
 
 
