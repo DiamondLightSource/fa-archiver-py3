@@ -19,10 +19,13 @@ ifndef SCRIPT_DIR
 endif
 	$(PYTHON) -m compileall .
 
-$(SCRIPT_DIR)/%: % FORCE
+$(SCRIPT_DIR)/%: % $(SCRIPT_DIR) FORCE
 	rm -f $@
 	sed <$< >$@ $(FA_SUBST)
 	chmod 555 $@
+
+$(SCRIPT_DIR):
+	install -d $(SCRIPT_DIR)
 
 FORCE:
 

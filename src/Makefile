@@ -110,6 +110,7 @@ include $(patsubst %.c,%.d,$(foreach target,$(BUILD),$($(target)_SRCS)))
 
 # Installation: we install all the built executables in $(SCRIPT_DIR)
 install: $(BUILD_NAMES)
+	$(INSTALL) -d $(SCRIPT_DIR)
 	$(INSTALL) -m 555 $^ $(SCRIPT_DIR)
 
 

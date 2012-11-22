@@ -17,9 +17,11 @@ fa_zoomer: fa_zoomer.m fa_load.m fa_zoomer.sh
 	chmod +x $@_bin $@
 
 install: fa_zoomer install_m_files
+	install -d $(SCRIPT_DIR)
 	install fa_zoomer fa_zoomer_bin $(SCRIPT_DIR)
 
 install_m_files: $(MATLAB_FILES)
+	install -d $(MATLAB_DIR)
 	install -m444 $^ $(MATLAB_DIR)
 
 .PHONY: default install install_m_files
