@@ -521,6 +521,20 @@ static void index_minor_block(const void *block, uint64_t timestamp)
 }
 
 
+/* Called after the index has been updated to ensure that changes are written to
+ * disk.  If we omit this and power is lost then it is quite likely that the
+ * header and index can be very behind! */
+static void flush_index(uint32_t current_block)
+{
+    uintptr_t page_mask = ~((uintptr_t) page_size - 1);
+    void *index_address = (void *) (
+        (uintptr_t) &data_index[current_block] & page_mask);
+    IGNORE(
+        TEST_IO(msync(header, DISK_HEADER_SIZE, MS_ASYNC))  &&
+        TEST_IO(msync(index_address, page_size, MS_ASYNC)));
+}
+
+
 /* Called when a major block is complete, complete the index entry. */
 static void advance_index(void)
 {
@@ -560,9 +574,13 @@ static void advance_index(void)
         header->last_duration * (1 - header->timestamp_iir));
 
     /* All done, advance the block index and reset our index. */
+    uint32_t current_block = header->current_major_block;
     header->current_major_block =
         (header->current_major_block + 1) % header->major_block_count;
     timestamp_index = 0;
+
+    /* Flush index and header to disk. */
+    flush_index(current_block);
 }
 
 
