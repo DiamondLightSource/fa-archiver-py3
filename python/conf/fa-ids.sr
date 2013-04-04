@@ -3,7 +3,7 @@
 # ID 0 is reserved
 0       
 
-# IDs 1-180 are reserved for standard BPMs
+# IDs 1-172 are reserved for standard BPMs
 1       SR01C-DI-EBPM-01
 2       SR01C-DI-EBPM-02
 3       SR01C-DI-EBPM-03
@@ -176,36 +176,36 @@
 170     SR24C-DI-EBPM-05
 171     SR24C-DI-EBPM-06
 172     SR24C-DI-EBPM-07
+
+# IDs 173-200 are available for PBPMs and other miscellaneous items
 173     
 174     
 175     
 176     
 177     
 178     
-179     
-180     
-
-# IDs 181-200 are reserved for miscellanous items on the feedback network
+179     FE09J-DI-PBPM-01
+180     FE09J-DI-PBPM-02
 181     SR21C-DI-EBPM-08
 182     FE10I-DI-PBPM-01
 183     FE10I-DI-PBPM-02
-184     
-185     SR-RF-PM-01
-186     SR-RF-PM-02
+184     SR-RF-PM-01
+185     SR-RF-PM-02
+186     SR-RF-PM-03
 187     SR10S-DI-EBPM-01
 188     SR10S-DI-EBPM-02
 189     FE02I-DI-PBPM-01
 190     FE02I-DI-PBPM-02
 191     FE19I-DI-PBPM-01
 192     FE19I-DI-PBPM-02
-193     
-194     
-195     
-196     
-197     
-198     
-199     
-200     
+193     FE03I-DI-PBPM-01
+194     FE03I-DI-PBPM-02
+195     FE04I-DI-PBPM-01
+196     FE04I-DI-PBPM-02
+197     FE04J-DI-PBPM-01
+198     FE04J-DI-PBPM-02
+199     FE16B-DI-PBPM-01
+200     FE16B-DI-PBPM-02
 
 # IDs 201-224 are reserved for feedback control nodes (PMC receivers)
 201     SR01A-CS-FOFB-01
@@ -233,35 +233,35 @@
 223     SR23A-CS-FOFB-01
 224     SR24A-CS-FOFB-01
 
-# IDs 225-255 are reserved for future expansion
-225     
-226     
-227     
-228     
-229     
-230     
-231     
-232     
-233     
-234     
-235     
+# IDs 225-255 are available for PBPMs and other miscellaneous items
+225     SR09S-CS-FOFB-01
+226     SR10I-CS-FOFB-01
+227     FE16I-DI-PBPM-01
+228     FE16I-DI-PBPM-02
+229     FE21B-DI-PBPM-01
+230     FE21B-DI-PBPM-02
+231     FE07I-DI-PBPM-01
+232     FE07I-DI-PBPM-02
+233     FE11I-DI-PBPM-01
+234     FE11I-DI-PBPM-02
+235     FE13I-DI-PBPM-01
 236     
-237     
-238     
-239     
-240     
-241     
-242     
-243     
-244     
-245     
-246     
-247     
-248     
-249     
-250     
-251     
-252     
-253     
-254     
+237     FE10I-DI-CHIC-01
+238     FE10I-DI-CHIC-02
+239     FE22I-DI-PBPM-01
+240     FE22I-DI-PBPM-02
+241     FE09I-DI-PBPM-01
+242     FE09I-DI-PBPM-02
+243     FE20I-DI-ACCL-01
+244     FE20I-DI-ACCL-02
+245     FE23I-DI-PBPM-01
+246     FE23I-DI-PBPM-02
+247     FE18I-DI-PBPM-01
+248     FE18I-DI-PBPM-02
+249     FE18B-DI-PBPM-01
+250     FE18B-DI-PBPM-02
+251     FE06I-DI-PBPM-01
+252     FE06I-DI-PBPM-02
+253     FE24I-DI-PBPM-01
+254     FE24I-DI-PBPM-02
 255     
