@@ -28,8 +28,10 @@
 #      OX11 0DE
 #      michael.abbott@diamond.ac.uk
 
-from pkg_resources import require
-require('cothread==2.8')
+if __name__ == '__main__':
+    from pkg_resources import require
+    require('cothread')
+    require('numpy')
 
 import optparse
 import subprocess
@@ -207,7 +209,6 @@ class Player:
                     print 'Unknown command.  Possible commands are:'
                     self.command_h(arg)
 
-
 parser = optparse.OptionParser(usage = '''\
 fa-audio [options] [location]
 
@@ -232,10 +233,16 @@ elif args:
     location = args[0]
 else:
     location = DEFAULT_LOCATION
+
 falib.load_location_file(
     globals(), location, options.full_path, options.server)
 
 
 server = falib.Server(server = FA_SERVER, port = FA_PORT)
 player = Player(options.bpm_id, server, options.volume)
-player.shell()
+
+def main():
+    player.shell()
+
+if __name__ == '__main__':
+    main()

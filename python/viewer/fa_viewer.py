@@ -26,8 +26,10 @@
 #      OX11 0DE
 #      michael.abbott@diamond.ac.uk
 
-from pkg_resources import require
-require('cothread==2.8')
+if __name__ == '__main__':
+    from pkg_resources import require
+    require('cothread')
+    require('numpy')
 
 import os, sys
 import optparse
@@ -395,13 +397,17 @@ F_S = server.sample_frequency
 decimation_factor = server.decimation
 
 
-qapp = cothread.iqt()
-key_filter = KeyFilter()
-qapp.installEventFilter(key_filter)
+def main():
+    qapp = cothread.iqt()
+    key_filter = KeyFilter()
+    qapp.installEventFilter(key_filter)
 
-# create and show form
-ui_viewer = uic.loadUi(os.path.join(os.path.dirname(__file__), 'viewer.ui'))
-# Bind code to form
-s = Viewer(ui_viewer, server)
+    # create and show form
+    ui_viewer = uic.loadUi(os.path.join(os.path.dirname(__file__), 'viewer.ui'))
+    # Bind code to form
+    s = Viewer(ui_viewer, server)
 
-cothread.WaitForQuit()
+    cothread.WaitForQuit()
+
+if __name__ == '__main__':
+    main()

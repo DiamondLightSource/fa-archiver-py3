@@ -14,6 +14,8 @@ BUILD_DIR = $(CURDIR)/build
 #    PREFIX         Root of installation
 #    SCRIPT_DIR     Where the executables should be installed
 #    PYTHON         Path to Python executable
+PREFIX = $(shell pwd)/prefix
+PYTHON = dls-python
 -include $(TOP)/Makefile.private
 PYTHON ?= python
 SCRIPT_DIR ?= $(PREFIX)/bin
@@ -42,6 +44,7 @@ BIN_TARGETS = $(filter-out $(NON_BIN_TARGETS) $(BIN_BUILD_DIR),$(MAKECMDGOALS))
 
 
 default $(BIN_TARGETS): $(BIN_BUILD_DIR)
+	make -C $(TOP)/python
 	$(BIN_BUILD) $@
 
 docs: $(DOCS_BUILD_DIR)
@@ -54,7 +57,8 @@ $(BUILD_DIR)/%:
 	mkdir -p $@
 
 clean:
-	rm -rf $(BUILD_DIR)
+	rm -rf $(BUILD_DIR) prefix
+	make -C $(TOP)/python clean
 
 install: $(BIN_BUILD_DIR) $(DOCS_BUILD_DIR) $(MATLAB_BUILD_DIR)
 ifndef PREFIX
@@ -63,6 +67,6 @@ endif
 	$(BIN_BUILD) install
 	$(DOCS_BUILD) install
 	make -C $(TOP)/python install
-	$(MATLAB_BUILD) install
+#	$(MATLAB_BUILD) install
 
 .PHONY: $(NON_BIN_TARGETS)
