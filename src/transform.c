@@ -66,6 +66,11 @@ static struct data_index *data_index;
 /* Area to write DD data. */
 static struct decimated_data *dd_area;
 
+/* EVR events are handled completely differently, if present.  Only active if
+ * positive value assigned. */
+static unsigned int events_fa_id;           // Input id or -1
+static unsigned int events_fa_id_output;    // Output id or -1
+
 /* Numbers of normal and decimated samples in a single input block. */
 static unsigned int input_frame_count;
 static unsigned int input_decimation_count;
@@ -364,6 +369,49 @@ static void compute_result(
 
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+/* Event set decimation. */
+
+/* For an (x,y) pair representing a bit mask of events we use a different
+ * approach to decimation.  For the moment we'll just compute the bit-wise or of
+ * all the bits. */
+
+/* Converts a column of event codes into an aggregated event code.  For the
+ * moment all we do is accumulate into the mean. */
+static void decimate_events(
+    const struct fa_entry *input, struct decimated_data *output,
+    struct fa_accum *double_accum, unsigned int N_log2)
+{
+    memset(output, 0, sizeof(*output));
+    for (unsigned int i = 0; i < 1U << N_log2; i ++)
+    {
+        output->mean.x |= input->x;
+        output->mean.y |= input->y;
+        input += header->fa_entry_count;
+    }
+
+    /* Duplicate result to other fields for now to avoid confusion. */
+    output->min = output->mean;
+    output->max = output->mean;
+    output->std = output->mean;
+
+    /* Accumulate result into fa_accum, using bottom bits of sumx, sumy. */
+    double_accum->sumx |= output->mean.x;
+    double_accum->sumy |= output->mean.y;
+}
+
+static void compute_events_result(
+    struct fa_accum *acc, struct decimated_data *result)
+{
+    result->mean.x = (int32_t) acc->sumx;
+    result->mean.y = (int32_t) acc->sumy;
+
+    result->min = result->mean;
+    result->max = result->mean;
+    result->std = result->mean;
+}
+
+
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /* Single data decimation. */
 
 
@@ -390,14 +438,20 @@ static void decimate_column_one(
     accum_accum(double_accum, &accum);
 }
 
+
 static void decimate_column(
+    unsigned int id,
     const struct fa_entry *input, struct decimated_data *output,
     struct fa_accum *double_accums)
 {
     for (unsigned int i = 0; i < input_decimation_count; i ++)
     {
-        decimate_column_one(
-            input, output, double_accums, header->first_decimation_log2);
+        if (id == events_fa_id)
+            decimate_events(
+                input, output, double_accums, header->first_decimation_log2);
+        else
+            decimate_column_one(
+                input, output, double_accums, header->first_decimation_log2);
         input += header->fa_entry_count << header->first_decimation_log2;
         output += 1;
     }
@@ -411,7 +465,7 @@ static void decimate_block(const void *read_block)
         if (test_mask_bit(&header->archive_mask, id))
         {
             decimate_column(
-                read_block + FA_ENTRY_SIZE * id, d_block(written),
+                id, read_block + FA_ENTRY_SIZE * id, d_block(written),
                 &double_accumulators[written]);
             written += 1;
         }
@@ -442,7 +496,10 @@ static void double_decimate_block(void)
 
     for (unsigned int i = 0; i < output_id_count; i ++)
     {
-        compute_result(&double_accumulators[i], decimation_log2, output);
+        if (i == events_fa_id_output)
+            compute_events_result(&double_accumulators[i], output);
+        else
+            compute_result(&double_accumulators[i], decimation_log2, output);
         initialise_accum(&double_accumulators[i]);
         output += header->dd_total_count;
     }
@@ -479,10 +536,28 @@ static void madvise_double_decimation(void)
 }
 
 
+/* Helper function to compute offset into output structure corresponding to
+ * given input id.  Returns 0 if no entry found. */
+static unsigned int input_id_to_output(
+    const struct filter_mask *mask, unsigned int input_id)
+{
+    unsigned int output_id = (unsigned int) -1;
+    for (unsigned int id = 0; id < header->fa_entry_count; id ++)
+    {
+        if (test_mask_bit(mask, id))
+            output_id += 1;
+        if (id == input_id)
+            return output_id;
+    }
+    return (unsigned int) -1;
+}
+
 static void initialise_double_decimation(void)
 {
     output_id_count =
         count_mask_bits(&header->archive_mask, header->fa_entry_count);
+    events_fa_id_output =
+        input_id_to_output(&header->archive_mask, events_fa_id);
     double_accumulators = calloc(output_id_count, sizeof(struct fa_accum));
     madvise_array = calloc(output_id_count, sizeof(void *));
     reset_double_decimation();
@@ -840,11 +915,13 @@ void process_block(const void *block, uint64_t timestamp)
 
 void initialise_transform(
     struct disk_header *header_, struct data_index *data_index_,
-    struct decimated_data *dd_area_)
+    struct decimated_data *dd_area_, unsigned int events_fa_id_)
 {
     header = header_;
     data_index = data_index_;
     dd_area = dd_area_;
+    events_fa_id = events_fa_id_;
+
     input_frame_count =
         header->input_block_size / header->fa_entry_count / FA_ENTRY_SIZE;
     input_decimation_count = input_frame_count >> header->first_decimation_log2;

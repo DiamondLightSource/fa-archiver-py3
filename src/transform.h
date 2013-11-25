@@ -65,7 +65,7 @@ const struct disk_header *__const_ get_header(void);
 
 void initialise_transform(
     struct disk_header *header, struct data_index *data_index,
-    struct decimated_data *dd_area);
+    struct decimated_data *dd_area, unsigned int events_fa_id);
 
 // !!!!!!
 // Not right.  Returns DD data area.

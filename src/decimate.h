@@ -30,7 +30,7 @@
 
 bool initialise_decimation(
     const char *config_file, struct buffer *fa_buffer, struct buffer **buffer,
-    unsigned int fa_entry_count);
+    unsigned int fa_entry_count, unsigned int events_fa_id);
 /* Starting decimation is separated from initialisation so that we can report
  * initialisation errors as soon as possible. */
 bool start_decimation(void);

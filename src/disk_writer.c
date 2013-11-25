@@ -74,7 +74,8 @@ static struct decimated_data *dd_data;  // Double decimated data
  * regions directly into memory.  Returns the configured input block size and
  * number of FA ids per capture frame. */
 bool initialise_disk_writer(
-    const char *file_name, uint32_t *input_block_size, uint32_t *fa_entry_count)
+    const char *file_name, uint32_t *input_block_size, uint32_t *fa_entry_count,
+    unsigned int events_fa_id)
 {
     uint64_t disk_size;
     return
@@ -102,7 +103,7 @@ bool initialise_disk_writer(
             dd_data = mmap(NULL, (size_t) header->dd_data_size,
                 PROT_READ | PROT_WRITE, MAP_SHARED, disk_fd,
                 (off_t) header->dd_data_start))  &&
-        DO_(initialise_transform(header, data_index, dd_data));
+        DO_(initialise_transform(header, data_index, dd_data, events_fa_id));
 }
 
 static void close_disk(void)

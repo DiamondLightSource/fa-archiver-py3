@@ -57,6 +57,10 @@ static size_t fa_block_size;
 static unsigned int fa_entry_count;
 static size_t sizeof_row_int64;
 
+/* Used for event mask accumulation, only active if events_fa_id != -1. */
+static unsigned int events_fa_id;
+static struct fa_entry accumulated_events;
+
 /* Buffer of decimated blocks. */
 static struct buffer *decimation_buffer;
 
@@ -287,6 +291,24 @@ static void update_t0(struct fa_row *row_out, const struct fa_entry *t0)
     row_out->row[0].y = t0->y - (int) group_delay;
 }
 
+static void combine_events(const struct fa_row *row_in)
+{
+    if (events_fa_id < fa_entry_count)
+    {
+        accumulated_events.x |= row_in->row[events_fa_id].x;
+        accumulated_events.y |= row_in->row[events_fa_id].y;
+    }
+}
+
+static void update_events(struct fa_row *row_out)
+{
+    if (events_fa_id < fa_entry_count)
+    {
+        row_out->row[events_fa_id] = accumulated_events;
+        accumulated_events = (struct fa_entry) { 0, 0 };
+    }
+}
+
 
 static struct fa_row *block_out;
 static unsigned int out_pointer;
@@ -317,6 +339,7 @@ static void decimate_block(const struct fa_row *block_in, uint64_t timestamp)
     {
         const struct fa_entry *t0 = &block_in->row[0];
         const struct fa_row_int64 *row = accumulate(block_in);
+        combine_events(block_in);
         block_in = INDEX_ROW(const, block_in, 1);
 
         if (advance_index(&decimation_counter, decimation_factor))
@@ -329,6 +352,7 @@ static void decimate_block(const struct fa_row *block_in, uint64_t timestamp)
                 struct fa_row *row_out = INDEX_ROW(, block_out, out_pointer);
                 filter_output(row_out);
                 update_t0(row_out, t0);
+                update_events(row_out);
                 advance_write_block(false, timestamp);
             }
         }
@@ -369,10 +393,11 @@ unsigned int get_decimation_factor(void)
 
 bool initialise_decimation(
     const char *config_file, struct buffer *fa_buffer, struct buffer **buffer,
-    unsigned int _fa_entry_count)
+    unsigned int _fa_entry_count, unsigned int _events_fa_id)
 {
     fa_block_size = buffer_block_size(fa_buffer);
     fa_entry_count = _fa_entry_count;
+    events_fa_id = _events_fa_id;
     sizeof_row_int64  = sizeof(struct fa_entry_int64) * fa_entry_count;
 
     return

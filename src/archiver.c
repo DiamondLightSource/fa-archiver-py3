@@ -106,6 +106,8 @@ static bool verbose = true;
 static bool reuseaddr = false;
 /* Specify address to bind server socket to. */
 static char *server_bind_address = NULL;
+/* If non zero, identifies FA id used for event stream. */
+static unsigned int events_fa_id = (unsigned int) -1;
 
 
 static void usage(void)
@@ -127,6 +129,7 @@ static void usage(void)
 "    -s:  Specify server socket (default 8888)\n"
 "    -B:  Bind server socket to specified address (otherwise listens on all)\n"
 "    -F:  Run dummy sniffer with canned data.\n"
+"    -E:  Specify event code FA id\n"
 "    -X   Enable extra commands (debug only)\n"
 "    -R   Set SO_REUSEADDR on listening socket, debug use only\n"
 "    -G   Use gigabit ethernet as data source\n"
@@ -150,7 +153,7 @@ static bool process_options(int *argc, char ***argv)
     bool ok = true;
     while (ok)
     {
-        switch (getopt(*argc, *argv, "+hc:d:rb:qtDp:s:F:B:XRGN"))
+        switch (getopt(*argc, *argv, "+hc:d:rb:qtDp:s:F:E:B:XRGN"))
         {
             case 'h':   usage();                                    exit(0);
             case 'c':   decimation_config = optarg;                 break;
@@ -168,6 +171,10 @@ static bool process_options(int *argc, char ***argv)
                         ok = set_sniffer_source(SNIFFER_REPLAY);    break;
             case 'G':   ok = set_sniffer_source(SNIFFER_GIGABIT);   break;
             case 'N':   ok = set_sniffer_source(SNIFFER_NONE);      break;
+            case 'E':
+                ok = DO_PARSE("event code id",
+                    parse_uint, optarg, &events_fa_id);
+                break;
             case 'b':
                 ok = DO_PARSE("buffer blocks",
                     parse_uint, optarg, &buffer_blocks);
@@ -348,12 +355,16 @@ int main(int argc, char **argv)
     bool ok =
         process_args(argc, argv)  &&
         initialise_disk_writer(
-            output_filename, &input_block_size, &fa_entry_count)  &&
+            output_filename, &input_block_size, &fa_entry_count,
+            events_fa_id)  &&
         create_buffer(&fa_block_buffer, input_block_size, buffer_blocks)  &&
+        TEST_OK_(
+            events_fa_id == (unsigned int) -1 || events_fa_id < fa_entry_count,
+            "Event id out of range")  &&
         IF_(decimation_config,
             initialise_decimation(
                 decimation_config, fa_block_buffer, &decimated_buffer,
-                fa_entry_count))  &&
+                fa_entry_count, events_fa_id))  &&
         initialise_sniffer(fa_block_buffer, fa_entry_count)  &&
         initialise_server(
             fa_block_buffer, decimated_buffer,

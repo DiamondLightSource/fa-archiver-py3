@@ -95,6 +95,11 @@ Options
 -F matfile
     Run dummy sniffer with canned data.  See `Canned Data Format`_ for details.
 
+-E event-id
+    Specify that event-id should be decimated and filtered as a bit mask.  This
+    is used to specify an FA id being used to inject events as a bit mask rather
+    than as a pair of numbers.
+
 -X
     Enable extra commands (debug only), see `Debug Command (D)`_.
 

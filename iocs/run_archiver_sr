@@ -5,7 +5,7 @@
 ARCHIVE_FILE=/dev/sr_archive
 SNIFFER_DEV=/dev/fa_sniffer/pci-0000:04:00.0
 
-ARCHIVE_ARGS='-X -c filters/decimate.config'
+ARCHIVE_ARGS='-X -c filters/decimate.config -E255'
 
 cd "$(dirname "$0")"/..
 exec build/$(uname -m)/fa-archiver \
