@@ -1,0 +1,12 @@
+#!/bin/sh
+
+# Runs the FA archiver for the lab.  This runs on pc0035, see TS.conf
+
+ARCHIVE_FILE=/scratch/fa-sniffer.bin
+SNIFFER_DEV=/dev/fa_sniffer0
+
+ARCHIVE_ARGS='-t -X -c filters/decimate.config'
+
+cd "$(dirname "$0")"/..
+exec build/$(uname -m)/fa-archiver \
+    $* $ARCHIVE_ARGS -d "$SNIFFER_DEV" "$ARCHIVE_FILE"

@@ -1,7 +1,7 @@
 #!/bin/sh
 
-# Runs the FA archiver for the booster ring.  This runs on the booster archiver,
-# server cs03r-cs-serv-03
+# Runs the FA archiver for the booster ring.  This runs on the fa-archiver
+# server in parallel with the SR archiver, but servers on port 8889.
 
 ARCHIVE_FILE=/dev/br_archive
 SNIFFER_DEV=/dev/fa_sniffer/pci-0000:03:00.0
