@@ -276,6 +276,9 @@ K
     Returns the configured number of FA samples configured to be captured.
     Determines the maximum legal FA id that can be requested.
 
+E
+    Returns the configured event mask FA id or -1 if no event id configured.
+
 I
     Returns a list of all currently connected clients, one client per line.
     This command is an exception to the rule of one response line per command,

@@ -367,7 +367,7 @@ int main(int argc, char **argv)
                 fa_entry_count, events_fa_id))  &&
         initialise_sniffer(fa_block_buffer, fa_entry_count)  &&
         initialise_server(
-            fa_block_buffer, decimated_buffer,
+            fa_block_buffer, decimated_buffer, events_fa_id,
             server_bind_address, server_socket, extra_commands, reuseaddr)  &&
         initialise_reader(output_filename)  &&
 

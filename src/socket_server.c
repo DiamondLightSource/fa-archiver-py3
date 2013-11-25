@@ -73,6 +73,9 @@ static struct buffer *fa_block_buffer;
  * control over the server. */
 static bool debug_commands;
 
+/* Just for reporting with the CE command. */
+static unsigned int events_fa_id;
+
 
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
@@ -372,6 +375,7 @@ static bool write_status(int scon, const char *client_name)
  *          hard error count
  *          run state                   1 => Currently fetching data
  *          overrun                     1 => Halted due to buffer overrun
+ *  E   Returns event mask FA id or -1 if not specied
  *  I   Returns list of all conected clients, one client per line.
  */
 static bool process_command(int scon, const char *client_name, const char *buf)
@@ -416,6 +420,9 @@ static bool process_command(int scon, const char *client_name, const char *buf)
                 break;
             case 'K':
                 ok = write_string(scon, "%u\n", header->fa_entry_count);
+                break;
+            case 'E':
+                ok = write_string(scon, "%d\n", events_fa_id);
                 break;
             default:
                 ok = report_error(scon, client_name, "Unknown command");
@@ -600,10 +607,12 @@ static int server_socket;
 
 bool initialise_server(
     struct buffer *fa_buffer, struct buffer *decimated,
+    unsigned int _events_fa_id,
     const char *bind_address, int port, bool extra, bool reuseaddr)
 {
     initialise_subscribe(fa_buffer, decimated);
     fa_block_buffer = fa_buffer;
+    events_fa_id = _events_fa_id;
     debug_commands = extra;
 
     struct sockaddr_in sin = {
