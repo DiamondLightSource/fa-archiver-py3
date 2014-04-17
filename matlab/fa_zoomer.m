@@ -242,7 +242,7 @@ end
 % either data(xy, id, t) or data(ix, id, seln, t); in the first case we can
 % treat all dimensions equally, but in the latter case we have to take careful
 % account of seln, which is one of: 1 - mean, 2 - min, 3 - max, 4 - std.
-function [data, units, annotation] = scale_data(data, units, annotation)
+function [data, scaled] = scale_data(data)
     s = size(data);
     time_ix = length(s);
     if s(time_ix - 1) > 1
@@ -260,9 +260,9 @@ function [data, units, annotation] = scale_data(data, units, annotation)
         low   = repmat(low,   [ones(1, time_ix-1) s(time_ix)]);
         range = repmat(range, [ones(1, time_ix-1) s(time_ix)]);
         data = 1e3 * (data - low) ./ range;
-
-        units = 'a.u.';
-        annotation = '(Common vertical scale)';
+        scaled = true;
+    else
+        scaled = false;
     end
 end
 
@@ -273,10 +273,12 @@ function data = centre_data(data)
     time_ix = length(s);
     middle = mean(data, time_ix);
 
-    % For min and max data need to centre on common mean
+    % For min and max data need to centre on common mean, and mean subtraction
+    % for std data is just silly
     if time_ix == 4
         middle(:, 2, :) = mean(middle(:, 2:3, :), 2);
         middle(:, 3, :) = middle(:, 2, :);
+        middle(:, 4, :) = 0;
     end
 
     data = data - repmat(middle, [ones(1, time_ix-1) s(time_ix)]);
@@ -291,6 +293,7 @@ function plotfa(h, d)
 
     set_ylim = [];
     annotation = '';
+    scaled = false;
     switch get(h.ylim, 'Value')
         case 1
             % Fixed Y axes
@@ -306,10 +309,16 @@ function plotfa(h, d)
         case 2
             % No action needed
         case 3
-            [data, units, annotation] = scale_data(data, units, annotation);
+            [data, scaled] = scale_data(data);
+            if scaled
+                annotation = '(Common vertical scale)';
+                units = 'a.u.';
+            end
         case 4
             data = centre_data(data);
-            annotation = '(Mean subtracted)';
+            if data_type ~= 2 && length(size(data)) == 4
+                annotation = '(Mean subtracted)';
+            end
     end
 
     for n = 1:2
@@ -336,6 +345,7 @@ function plotfa(h, d)
             ylim(set_ylim);
         end
         label_axis(n, units, annotation)
+        if scaled; set(gca, 'YTick', []); end
     end
 end
 
