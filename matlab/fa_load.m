@@ -183,7 +183,7 @@ function [sample_count, block_size, initial_offset] = ...
         sample_count = tse(1);
     else
         % For historical data get the sample count at the head of the response.
-        sample_count = read_long_array(sc, 1);
+        sample_count = double(read_long_array(sc, 1));
     end
 
     % Read the timestamp header with block size and initial offset.
@@ -223,8 +223,9 @@ function [ ...
         block_offset = initial_offset;
         read_block_size = block_size;
 
-        % Prepare timestamps buffers, we guess a sensible initial size
-        timestamps = zeros(round(sample_count / block_size) + 2, 1);
+        % Prepare timestamps buffers, we guess a sensible initial size.  We use
+        % 64 bit integers for timestamps to avoid premature loss of accuracy.
+        timestamps = zeros(round(sample_count / block_size) + 2, 1, 'int64');
         durations  = zeros(round(sample_count / block_size) + 2, 1);
         if save_id0
             id_zeros = int32(zeros(round(sample_count / block_size) + 2, 1));
@@ -481,7 +482,7 @@ function a = read_long_array(sc, count)
     buf = read_bytes(sc, 8 * count, true);
     longs = LongBuffer.allocate(count);
     longs.put(buf.asLongBuffer());
-    a = double(longs.array());
+    a = longs.array();
 end
 
 function s = read_string(sc)
@@ -521,21 +522,41 @@ end
 
 
 % Computes timebase from timestamps and offsets.
-% Note that we could avoid converting timestamps to doubles until subtracting
-% ts_offset below, but in fact we have just enough precision for microseconds.
 function [day, start_time, ts] = process_timestamps( ...
         timestamps, durations, ...
         tz_offset, sample_count, block_size, initial_offset)
 
-    scaling = 1 / (1e6 * 3600 * 24);    % Archiver time in microseconds
-    epoch = 719529;                     % 1970-01-01 in matlab time
-    start_time = timestamps(1) * scaling + epoch + tz_offset;
-    day = floor(start_time);
+    us_per_day = 1e6 * 3600 * 24;       % Scaling from archiver to Matlab time
+    unix_epoch = 719529;                % 1970-01-01 in Matlab time
 
-    ts_offset = (day - epoch - tz_offset) / scaling;
-    timestamps = scaling * (timestamps - ts_offset);
-    durations = (scaling * durations) * (0 : block_size - 1) / block_size;
+    % At this point we have to tread a little carefully.  The timestamps are in
+    % microseconds in Unix epoch; as soon as we scale to Matlab time we will
+    % lose precision -- there aren't enough bits in a double to represent
+    % current time in Matlab format to microsecond precision, which is why ts is
+    % returned as an offset relative to the starting day.
+    %   This means we need to find the timestamp of the first point ... which
+    % turns out to be not so straightforward because of initial_offset.  Also,
+    % we need to take care about when we're working with integers and when
+    % we're not.
 
+    % First compute the start time in archiver units, and from this we can
+    % compute the day and start time.
+    start_time_us = ...
+        timestamps(1) + (initial_offset * durations(1)) / block_size;
+
+    raw_start_time = double(start_time_us) / us_per_day + tz_offset;
+    raw_day = floor(raw_start_time);
+
+    start_time = raw_start_time + unix_epoch;
+    day = raw_day + unix_epoch;
+
+    % Convert timestamps in archiver format into relative timestamps in Matlab
+    % format.
+    day_us = raw_day * us_per_day;
+    timestamps = double(timestamps - day_us) / us_per_day + tz_offset;
+
+    % Convert durations into corrections for timestamps.
+    durations = durations * (0 : block_size - 1) / block_size / us_per_day;
     ts = repmat(timestamps, 1, block_size) + durations;
     ts = reshape(ts', [], 1);
     ts = ts(initial_offset + 1:initial_offset + sample_count);
