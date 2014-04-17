@@ -62,8 +62,8 @@ function fa_zoomer(server)
         'Error message or [bpm count] samples/decimation');
     h.maxpts = control('edit', num2str(1e6), 80, ...
         'Maximum number of sample points');
-    h.ylim = control('checkbox', 'Zoomed', 70, ...
-        'Limit vertical scale to +-100um', 'Value', 1, ...
+    h.ylim = control('popup', {'Zoomed', 'Auto', 'Scaled', 'Centre'}, 70, ...
+        'Control limits of vertical scale', 'Value', 1, ...
         'Callback', protect(@reload_plot));
     h.data_type = control('popup', {'min/max', 'std', 'mean'}, 90, ...
         'Choose decimated data type to display', 'Value', 1, ...
@@ -238,47 +238,109 @@ function spectrogram_callback(fig, event)
 end
 
 
-function plotfa(h, d)
-    data_type = get(h.data_type, 'Value');
-    if get(h.ylim, 'Value')
-        if length(size(d.data)) == 4
-            switch data_type
-                case 1;     set_ylim = [-100 100];
-                case 2;     set_ylim = [0 10];
-                case 3;     set_ylim = [-10 10];
-            end
-        else
-            set_ylim = [-100 100];
-        end
-    else
-        set_ylim = [];
-    end
+% Fudge the data to a common scale (kind of freaky to be honest!).  The data is
+% either data(xy, id, t) or data(ix, id, seln, t); in the first case we can
+% treat all dimensions equally, but in the latter case we have to take careful
+% account of seln, which is one of: 1 - mean, 2 - min, 3 - max, 4 - std.
+function [data, units, annotation] = scale_data(data, units, annotation)
+    s = size(data);
+    time_ix = length(s);
+    if s(time_ix - 1) > 1
+        low  = min(data, [], time_ix);
+        high = max(data, [], time_ix);
 
-    if isunix; mum = 'µm'; else mum = '\mu m'; end  % UTF-8 mu not for Windows!
-    for n = 1:2
-        subplot(2, 1, n)
-        if length(size(d.data)) == 4
-            switch data_type
-                case 1
-                    plot(d.t, 1e-3 * squeeze(d.data(n, 2, :, :))); hold on
-                    plot(d.t, 1e-3 * squeeze(d.data(n, 3, :, :))); hold off
-                case 2
-                    plot(d.t, 1e-3 * squeeze(d.data(n, 4, :, :)));
-                case 3
-                    plot(d.t, 1e-3 * squeeze(d.data(n, 1, :, :)));
-            end
-        else
-            plot(d.t, 1e-3 * squeeze(d.data(n, :, :)))
+        % Special fudge for min & max data, ensure data ranges set together
+        if time_ix == 4
+            low (:, 3, :) = low (:, 2, :);      % low(max) = low(min)
+            high(:, 2, :) = high(:, 3, :);      % high(min) = high(max)
         end
 
-        xlim([d.t(1) d.t(end)]);
-        if length(set_ylim) > 0; ylim(set_ylim); end
-        label_axis(n, mum)
+        range = high - low;
+        range(find(range == 0)) = 0;    % Avoid division by zero
+        low   = repmat(low,   [ones(1, time_ix-1) s(time_ix)]);
+        range = repmat(range, [ones(1, time_ix-1) s(time_ix)]);
+        data = 1e3 * (data - low) ./ range;
+
+        units = 'a.u.';
+        annotation = '(Common vertical scale)';
     end
 end
 
 
-function label_axis(n, yname)
+% Fudge the data by subtracting a common centre from both data sets
+function data = centre_data(data)
+    s = size(data);
+    time_ix = length(s);
+    middle = mean(data, time_ix);
+
+    % For min and max data need to centre on common mean
+    if time_ix == 4
+        middle(:, 2, :) = mean(middle(:, 2:3, :), 2);
+        middle(:, 3, :) = middle(:, 2, :);
+    end
+
+    data = data - repmat(middle, [ones(1, time_ix-1) s(time_ix)]);
+end
+
+
+function plotfa(h, d)
+    if isunix; units = 'µm'; else units = '\mu m'; end  % UTF-8 not for Windows!
+
+    data = d.data;
+    data_type = get(h.data_type, 'Value');
+
+    set_ylim = [];
+    annotation = '';
+    switch get(h.ylim, 'Value')
+        case 1
+            % Fixed Y axes
+            if length(size(data)) == 4
+                switch data_type
+                    case 1;     set_ylim = [-100 100];
+                    case 2;     set_ylim = [0 10];
+                    case 3;     set_ylim = [-10 10];
+                end
+            else
+                set_ylim = [-100 100];
+            end
+        case 2
+            % No action needed
+        case 3
+            [data, units, annotation] = scale_data(data, units, annotation);
+        case 4
+            data = centre_data(data);
+            annotation = '(Mean subtracted)';
+    end
+
+    for n = 1:2
+        subplot(2, 1, n)
+        if length(size(data)) == 4
+            switch data_type
+                case 1
+                    plot(d.t, 1e-3 * squeeze(data(n, 2, :, :))); hold on
+                    plot(d.t, 1e-3 * squeeze(data(n, 3, :, :))); hold off
+                case 2
+                    plot(d.t, 1e-3 * squeeze(data(n, 4, :, :)));
+                case 3
+                    plot(d.t, 1e-3 * squeeze(data(n, 1, :, :)));
+            end
+        else
+            plot(d.t, 1e-3 * squeeze(data(n, :, :)))
+        end
+
+        xlim([d.t(1) d.t(end)]);
+        if isempty(set_ylim)
+            % Stretch ylim by 10% to avoid hitting upper and lower limits
+            ylim(ylim + [-0.1 0.1] * diff(ylim));
+        else
+            ylim(set_ylim);
+        end
+        label_axis(n, units, annotation)
+    end
+end
+
+
+function label_axis(n, yname, annotation)
     axes = {'X'; 'Y'};
     global data;
     ylabel(gca, yname);
@@ -287,7 +349,7 @@ function label_axis(n, yname)
         set(gca, 'XTickLabel', num2str( ...
             get(gca,'XTick').'*24*3600-60*floor(data.t(1)*24*60),'%.4f'))
     else
-        title([datestr(data.day) ' ' axes{n}])
+        title([datestr(data.day) ' ' axes{n} ' ' annotation])
         datetick('keeplimits')
     end
 end

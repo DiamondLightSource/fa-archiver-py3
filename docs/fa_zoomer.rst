@@ -86,9 +86,23 @@ Maximum number of samples
     Obviously forcing this number too large can cause Matlab to run out of
     memory and long delays while fetching data.
 
-Zoomed
-    If this is selected then the vertical scale is automatically forced to +-100
-    microns -- this is useful for normal stored beam with position feedback.
+Zoomed or Auto or Scaled or Centre
+    This determines one of four possible options for the vertical scaling:
+
+    Zoomed:
+        If this is selected then the vertical scale is automatically forced to
+        +-100 microns -- this is useful for normal stored beam with position
+        feedback.
+
+    Auto:
+        Auto-scaling vertical scale so that all values are visible.
+
+    Scaled:
+        If more than one FA id is displayed they are all scaled to a common
+        vertical scale in the range 0 to 1.
+
+    Centre:
+        The mean value of each curve is subtracted before display.
 
 min/max or std or mean
     When decimated data is on display this selects which data to show.  Has no
