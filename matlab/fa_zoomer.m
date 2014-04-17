@@ -231,7 +231,7 @@ function spectrogram_callback(fig, event)
 
             set(gca, 'Ydir', 'normal');
             colorbar
-            label_axis(n, 'Hz')
+            label_axis(n, 'Hz', 'Spectrogram')
         end
         describe;
     else
@@ -348,7 +348,19 @@ function plotfa(h, d)
         end
         label_axis(n, units, annotation)
         if scaled; set(gca, 'YTick', []); end
+        zoom reset;
     end
+
+
+    % Called when zooming is done: refresh the display
+    function refresh_ticks(obj, event_obj)
+        label_axis(1, units, annotation);
+        label_axis(2, units, annotation);
+    end
+
+    z = zoom(gcf);
+    set(z, 'Enable', 'on');
+    set(z, 'ActionPostCallback', @refresh_ticks);
 end
 
 
@@ -358,9 +370,10 @@ function label_axis(n, yname, annotation)
     ylabel(gca, yname);
 
     msecs_per_day = 1e3 * 24 * 3600;
-    ms_interval = diff(fa_data.t([1 end])) * msecs_per_day;
+    range = xlim;
+    ms_interval = diff(range) * msecs_per_day;
     if ms_interval <= 5000
-        title([datestr(fa_data.day + fa_data.t(1)) ' ' axes{n}])
+        title([datestr(fa_data.day + range(1)) ' ' axes{n}])
 
         % If the data spans less than a handful of seconds we need to get cute
         % and smart about computing ticks.  The placement Matlab has done for us
@@ -372,13 +385,13 @@ function label_axis(n, yname, annotation)
         tick_interval = tick_intervals(ix(1));
 
         % Compute the corresponding tick positions and their labels.
-        start_tick = ceil(fa_data.t(1) * msecs_per_day / tick_interval);
-        end_tick = floor(fa_data.t(end) * msecs_per_day / tick_interval);
+        start_tick = ceil(range(1) * msecs_per_day / tick_interval);
+        end_tick = floor(range(2) * msecs_per_day / tick_interval);
         ticks_ms = tick_interval * (start_tick:end_tick);
 
         % Label the computed ticks in seconds and milliseconds into the current
         % minute.
-        minute = 1e3 * 60 * floor(fa_data.t(1) * 24 * 60);
+        minute = 1e3 * 60 * floor(range(1) * 24 * 60);
         set(gca, 'XTick', ticks_ms / msecs_per_day);
         set(gca, 'XTickLabel', num2str(1e-3 * (ticks_ms - minute)', '%.3f'));
     else
