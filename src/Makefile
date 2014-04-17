@@ -32,11 +32,13 @@ CFLAGS += -Wmissing-prototypes
 CFLAGS += -Wmissing-declarations
 CFLAGS += -Wstrict-prototypes
 CFLAGS += -Wcast-qual
+CFLAGS += -Woverflow
 
 # For some versions of gcc the conversion flag works, for others it's retarded
 # and generates warnings when formal parameters are smaller than int.  Add the
 # appropriate definition here if it's ok.
 CFLAGS_cc-4.4.6 += -Wconversion
+CFLAGS_cc-4.4.7 += -Wconversion
 
 CFLAGS += -msse
 CFLAGS += -msse2
