@@ -105,6 +105,8 @@ end
 
 % Process decimation request in light of server parameters.  This involves an
 % initial parameter request to the server.
+%   Note that the ts_at_end flag for DD data is an important optimisation;
+% without this, data capture takes an unreasonably long time.
 function [decimation, frequency, typestr, ts_at_end, save_id0, max_id] = ...
         process_type(server, type)
 
@@ -193,8 +195,9 @@ end
 
 % Prepares arrays and flags for reading data from server.
 function [ ...
-    field_count, block_offset, read_block_size, ...
-    data, timestamps, durations, id_zeros] = prepare_data( ...
+        field_count, block_offset, read_block_size, ...
+        data, timestamps, durations, id_zeros] = ...
+    prepare_data( ...
         sample_count, id_count, simple_data, initial_offset, block_size, ...
         ts_at_end, save_id0)
 
@@ -233,51 +236,65 @@ end
 
 
 % Reads data from server.
-function [data, timestamps, durations, id_zeros, sample_count ...
-    ] = read_data( ...
+function [data, timestamps, durations, id_zeros, sample_count] = ...
+    read_data( ...
         sc, sample_count, id_count, block_size, initial_offset, ...
         ts_at_end, save_id0, simple_data)
 
-    [field_count, block_offset, read_block_size, ...
-     data, timestamps, durations, id_zeros] = prepare_data( ...
-        sample_count, id_count, simple_data, initial_offset, block_size, ...
-        ts_at_end, save_id0);
-    if save_id0; ts_buf_size = 16; else ts_buf_size = 12; end
-
-    % Read the requested data block by block
-    samples_read = 0;
-    ts_read = 0;
-    while samples_read < sample_count
-        if ~ts_at_end
-            % Timestamp buffer first unless we've put it off until the end.
-            try
-                timestamp_buf = read_bytes(sc, ts_buf_size, true);
-            catch me
-                if ~strcmp(me.identifier, 'fa_load:read_bytes')
-                    rethrow(me)
-                end
-
-                % If we suffer from FA archiver buffer underrun it will be the
-                % timestamp buffer that fails to be read.  If this occurs,
-                % truncate sample_count and break -- we'll return what we have
-                % in hand.
-                warning('Data truncated');
-                sample_count = samples_read;
-                if simple_data
-                    data = data(:, :, 1:samples_read);
-                else
-                    data = data(:, :, :, 1:samples_read);
-                end
-                break
-            end
-            timestamps(ts_read + 1) = timestamp_buf.getLong();
-            durations (ts_read + 1) = timestamp_buf.getInt();
-            if save_id0
-                id_zeros(ts_read + 1) = timestamp_buf.getInt();
-            end
-            ts_read = ts_read + 1;
+    function truncate_data()
+        warning('Data truncated');
+        sample_count = samples_read;
+        if simple_data
+            data = data(:, :, 1:samples_read);
+        else
+            data = data(:, :, :, 1:samples_read);
         end
+    end
 
+    % Reads one block of timestamp, returns false if early end of data
+    % encountered.  Normal case when timestamps are interleaved with the data
+    % stream.
+    function ok = read_timestamp_block()
+        ok = true;
+        try
+            timestamp_buf = read_bytes(sc, ts_buf_size, true);
+        catch me
+            if ~strcmp(me.identifier, 'fa_load:read_bytes')
+                rethrow(me)
+            end
+
+            % If we suffer from FA archiver buffer underrun it will be the
+            % timestamp buffer that fails to be read.  If this occurs,
+            % truncate sample_count and break -- we'll return what we have
+            % in hand.
+            ok = false;
+            return
+        end
+        timestamps(ts_read + 1) = timestamp_buf.getLong();
+        durations (ts_read + 1) = timestamp_buf.getInt();
+        if save_id0
+            id_zeros(ts_read + 1) = timestamp_buf.getInt();
+        end
+        ts_read = ts_read + 1;
+    end
+
+
+    % Reads timestamp block at end of data.  Special case for DD data when
+    % interleaved timestamps slow us down too much.
+    function read_timestamp_at_end()
+        % Timestamps at end are sent as a count followed by all the timestamps
+        % together followed by all the durations together.
+        ts_read = read_int_array(sc, 1);
+        timestamps = read_long_array(sc, ts_read);
+        durations  = read_int_array(sc, ts_read);
+        if save_id0
+            id_zeros = read_int_array(sc, ts_read);
+        end
+    end
+
+
+    % Reads data and converts to target format
+    function read_data_block()
         % Work out how many samples in the next block
         block_count = read_block_size - block_offset;
         if samples_read + block_count > sample_count
@@ -298,15 +315,51 @@ function [data, timestamps, durations, id_zeros, sample_count ...
         samples_read = samples_read + block_count;
     end
 
-    if ts_at_end
-        % Timestamps at end are sent as a count followed by all the timestamps
-        % together followed by all the durations together.
-        ts_read = read_int_array(sc, 1);
-        timestamps = read_long_array(sc, ts_read);
-        durations  = read_int_array(sc, ts_read);
-        if save_id0
-            id_zeros = read_int_array(sc, ts_read);
+
+    % Support for cancellable waiting
+    function [wh, cleanup] = create_waitbar(title)
+        wh = waitbar(0, 'Fetching data', ...
+            'CreateCancelBtn', 'setappdata(gcbf,''cancelling'',1)');
+        cleanup = onCleanup(@() delete(wh));
+        setappdata(wh, 'cancelling', 0);
+    end
+
+    function ok = advance_waitbar(fraction)
+        waitbar(fraction, wh);
+        ok = ~getappdata(wh, 'cancelling');
+    end
+
+
+    [field_count, block_offset, read_block_size, ...
+     data, timestamps, durations, id_zeros] = prepare_data( ...
+        sample_count, id_count, simple_data, initial_offset, block_size, ...
+        ts_at_end, save_id0);
+    if save_id0; ts_buf_size = 16; else ts_buf_size = 12; end
+
+    % If possible create the wait bar
+    if ~ts_at_end
+        [wh, cleanup] = create_waitbar('Fetching data');
+    end
+
+    % Read the requested data block by block
+    samples_read = 0;
+    ts_read = 0;
+    while samples_read < sample_count
+        if ~ts_at_end
+            % Advance the progress bar and read the next timestamp block.  If
+            % either of these fails then truncate the data and we're done.
+            if ~advance_waitbar(samples_read / sample_count)  ||  ...
+               ~read_timestamp_block()
+                truncate_data();
+                break
+            end
         end
+
+        read_data_block();
+    end
+
+    if ts_at_end
+        read_timestamp_at_end();
     end
 end
 
