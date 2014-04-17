@@ -36,9 +36,9 @@ the loaded data is automatically adjusted to avoid trying to fetch too much data
 from the archiver.
 
 All the data loaded into the zoomer window is stored in a global Matlab variable
-called `data`, so this can be accessed by typing the Matlab command ::
+called `fa_data`, so this can be accessed by typing the Matlab command ::
 
-    global data
+    global fa_data
 
 and accessing the fields of this structure.  The format of this structure is
 described in fa_load_\(7).

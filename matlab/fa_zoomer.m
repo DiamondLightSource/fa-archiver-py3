@@ -41,8 +41,8 @@ function fa_zoomer(server)
     % Create figure with the standard toolbar but no menubar
     fig = figure('MenuBar', 'none', 'Toolbar', 'figure', ...
         'Position', [0 0 900 600]);
-    global data;
-    data = {};
+    global fa_data;
+    fa_data = {};
 
     % Create the controls.
     global h_pos v_pos;
@@ -146,7 +146,7 @@ end
 % Loads data enclosed by the current zoom selection, returned by xlim.
 function zoom_in_callback(fig, event)
     h = guidata(fig);
-    global data;
+    global fa_data;
 
     maxdata = str2num(get(h.maxpts,   'String'));
     pvs     = str2num(get(h.bpm_list, 'String'));
@@ -161,14 +161,14 @@ function zoom_in_callback(fig, event)
         end
     end
 
-    load_data(fig, xlim + data.day, type, true);
+    load_data(fig, xlim + fa_data.day, type, true);
 end
 
 
 function reload_plot(fig, event)
     h = guidata(fig);
-    global data;
-    plotfa(h, data);
+    global fa_data;
+    plotfa(h, fa_data);
 end
 
 
@@ -179,23 +179,23 @@ function load_data(fig, range, type, save)
         h.history(end+1, :) = {range, type};
         guidata(fig, h)
     end
-    global data;
+    global fa_data;
 
     pvs = str2num(get(h.bpm_list, 'String'));
 
     busy;
-    data = fa_load(range, pvs, type, h.server);
-    plotfa(h, data);
+    fa_data = fa_load(range, pvs, type, h.server);
+    plotfa(h, fa_data);
     describe;
 end
 
 
 % Saves data to file
 function save_data(fig, event)
-    global data;
+    global fa_data;
     [file, path] = uiputfile('*.mat', 'Save archive data');
     if ~isequal(file, 0) & ~isequal(path, 0)
-        save(fullfile(path, file), '-struct', 'data');
+        save(fullfile(path, file), '-struct', 'fa_data');
     end
 end
 
@@ -213,19 +213,19 @@ end
 
 % Plot spectrogram
 function spectrogram_callback(fig, event)
-    global data;
+    global fa_data;
     len = 1024;
 
-    scale = 1e-3 * sqrt(2 / (len * data.f_s));
-    if length(size(data.data)) == 3
+    scale = 1e-3 * sqrt(2 / (len * fa_data.f_s));
+    if length(size(fa_data.data)) == 3
         busy;
         for n = 1:2
         subplot(2, 1, n)
-            e = squeeze(data.data(n, 1, :));
+            e = squeeze(fa_data.data(n, 1, :));
             cols = floor(length(e)/len);
             sg = log10(scale * abs(fft( ...
                 reshape(e(1:(len*cols)), len, cols) .* hannwin(len, cols))));
-            imagesc(data.t, [0 data.f_s/5], sg(1:(round(len/5)), :));
+            imagesc(fa_data.t, [0 fa_data.f_s/5], sg(1:(round(len/5)), :));
 
             set(gca, 'Ydir', 'normal');
             colorbar
@@ -342,14 +342,14 @@ end
 
 function label_axis(n, yname, annotation)
     axes = {'X'; 'Y'};
-    global data;
+    global fa_data;
     ylabel(gca, yname);
-    if diff(data.t([1 end])) <= 2/(24*3600)
-        title([datestr(data.timestamp) ' ' axes{n}])
+    if diff(fa_data.t([1 end])) <= 2/(24*3600)
+        title([datestr(fa_data.timestamp) ' ' axes{n}])
         set(gca, 'XTickLabel', num2str( ...
-            get(gca,'XTick').'*24*3600-60*floor(data.t(1)*24*60),'%.4f'))
+            get(gca,'XTick').'*24*3600-60*floor(fa_data.t(1)*24*60),'%.4f'))
     else
-        title([datestr(data.day) ' ' axes{n} ' ' annotation])
+        title([datestr(fa_data.day) ' ' axes{n} ' ' annotation])
         datetick('keeplimits')
     end
 end
@@ -366,7 +366,7 @@ end
 
 % Prints description of currently plotted data
 function describe
-    global data;
+    global fa_data;
     message(sprintf('[%d] %d/%d', ...
-        length(data.ids), length(data.data), data.decimation))
+        length(fa_data.ids), length(fa_data.data), fa_data.decimation))
 end
