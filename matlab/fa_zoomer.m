@@ -179,13 +179,15 @@ function load_data(fig, range, type, save)
         h.history(end+1, :) = {range, type};
         guidata(fig, h)
     end
-    global fa_data;
 
     pvs = str2num(get(h.bpm_list, 'String'));
 
     busy;
+
+    global fa_data;
     fa_data = fa_load(range, pvs, type, h.server);
     plotfa(h, fa_data);
+
     describe;
 end
 
@@ -354,10 +356,31 @@ function label_axis(n, yname, annotation)
     axes = {'X'; 'Y'};
     global fa_data;
     ylabel(gca, yname);
-    if diff(fa_data.t([1 end])) <= 2/(24*3600)
-        title([datestr(fa_data.timestamp) ' ' axes{n}])
-        set(gca, 'XTickLabel', num2str( ...
-            get(gca,'XTick').'*24*3600-60*floor(fa_data.t(1)*24*60),'%.4f'))
+
+    msecs_per_day = 1e3 * 24 * 3600;
+    ms_interval = diff(fa_data.t([1 end])) * msecs_per_day;
+    if ms_interval <= 5000
+        title([datestr(fa_data.day + fa_data.t(1)) ' ' axes{n}])
+
+        % If the data spans less than a handful of seconds we need to get cute
+        % and smart about computing ticks.  The placement Matlab has done for us
+        % really isn't good enough.
+
+        % Start by figuring out a tick interval we're going to be happy with.
+        tick_intervals = [1 2 5 10 20 50 100 200 500 1000];
+        ix = find(ms_interval ./ tick_intervals < 8);
+        tick_interval = tick_intervals(ix(1));
+
+        % Compute the corresponding tick positions and their labels.
+        start_tick = ceil(fa_data.t(1) * msecs_per_day / tick_interval);
+        end_tick = floor(fa_data.t(end) * msecs_per_day / tick_interval);
+        ticks_ms = tick_interval * (start_tick:end_tick);
+
+        % Label the computed ticks in seconds and milliseconds into the current
+        % minute.
+        minute = 1e3 * 60 * floor(fa_data.t(1) * 24 * 60);
+        set(gca, 'XTick', ticks_ms / msecs_per_day);
+        set(gca, 'XTickLabel', num2str(1e-3 * (ticks_ms - minute)', '%.3f'));
     else
         title([datestr(fa_data.day) ' ' axes{n} ' ' annotation])
         datetick('keeplimits')
