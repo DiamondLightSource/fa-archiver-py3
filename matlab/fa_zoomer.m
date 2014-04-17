@@ -32,12 +32,10 @@ function fa_zoomer(server)
     % data.
     h = {};
 
-    if nargin == 0
-        h.server = 'fa-archiver.diamond.ac.uk';
-    elseif strcmp(server, 'booster')
-        h.server = 'fa-archiver.diamond.ac.uk:8889';
-    else
+    if exist('server', 'var')
         h.server = server;
+    else
+        h.server = '';
     end
 
     % Create figure with the standard toolbar but no menubar

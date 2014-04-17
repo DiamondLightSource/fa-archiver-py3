@@ -58,11 +58,13 @@
 
 function d = fa_load(tse, mask, type, server)
     % Assign defaults
-    if nargin < 3
+    if ~exist('type', 'var')
         type = 'F';
     end
-    if nargin < 4
+    if ~exist('server', 'var')  ||  strcmp(server, '')
         server = 'fa-archiver.diamond.ac.uk';
+    elseif strcmp(server, 'booster')
+        server = 'fa-archiver.diamond.ac.uk:8889';
     end
 
     % Parse arguments
