@@ -390,11 +390,12 @@ else:
 falib.load_location_file(
     globals(), location, options.full_path,
     server = options.server, port = options.port)
-BPM_list = falib.compute_bpm_groups(BPM_LIST, GROUPS, PATTERNS)
 
 server = falib.Server(server = FA_SERVER, port = FA_PORT)
 F_S = server.sample_frequency
 decimation_factor = server.decimation
+FA_ID_list = server.get_fa_ids(missing = True)
+BPM_list = falib.compute_bpm_groups(FA_ID_list, GROUPS, PATTERNS)
 
 
 def main():

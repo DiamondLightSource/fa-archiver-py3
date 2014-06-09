@@ -12,7 +12,7 @@ setup(
     author_email = 'Michael.Abbott@diamond.ac.uk',
     packages = ['audio', 'falib', 'viewer', 'conf'],
     package_data = {
-        'conf' : ['BR.conf', 'SR.conf', 'TEST.conf', 'TS.conf'],
+        'conf' : ['BR.conf', 'SR.conf', 'TS.conf'],
         'viewer' : ['viewer.ui']},
     install_requires = ['cothread', 'numpy'],
     entry_points = {

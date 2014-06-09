@@ -33,26 +33,18 @@ import glob
 import falib
 
 
-__all__ = ['load_location_file', 'compute_bpm_groups', 'load_bpm_list']
+__all__ = ['load_location_file', 'compute_bpm_groups']
 
 
-def load_bpm_list(filename):
-    '''Loads list of ids and bpms from given file.'''
-    for line in file(filename).readlines():
-        if line and line[0] != '#':
-            id_bpm = line.split()
-            if len(id_bpm) == 2:
-                id, bpm = id_bpm
-                yield (int(id), bpm)
 
-def compute_bpm_groups(filename, groups, patterns):
+def compute_bpm_groups(fa_id_list, groups, patterns):
     '''Computes the list of groups and BPM/FA mappings to be presented to the
     user.  The format of the computed list is:
         [(group_name, [(bpm_name, bpm_id)])]
     Ie, a list of group names, and for each group a list of bpm name and id
     pairs.'''
     group_dict = dict((group, []) for group in groups)
-    for id, bpm in load_bpm_list(filename):
+    for id, bpm in fa_id_list:
         for match, pattern, replace in patterns:
             if re.match(match, bpm):
                 key = re.sub(pattern, replace, bpm)

@@ -29,10 +29,10 @@
 DEFAULT_SERVER = 'fa-archiver.diamond.ac.uk'
 DEFAULT_PORT = 8888
 
-import socket
-import struct
+import re
 import numpy
 import cothread
+from cothread import cosocket
 
 
 __all__ = [
@@ -71,18 +71,17 @@ class connection:
     class Error(Exception):
         pass
 
-    def __init__(self, server = DEFAULT_SERVER, port = DEFAULT_PORT):
-        self.sock = socket.create_connection((server, port))
-        self.sock.setblocking(0)
+    def __init__(self,
+            server = DEFAULT_SERVER, port = DEFAULT_PORT, timeout = 1):
+        self.sock = cosocket.socket()
+        self.sock.connect((server, port))
+        self.sock.settimeout(timeout)
         self.buf = []
 
     def close(self):
         self.sock.close()
 
-    def recv(self, block_size = 65536, timeout = 1):
-        if not cothread.poll_list(
-                [(self.sock.fileno(), cothread.POLLIN)], timeout):
-            raise socket.timeout('Receive timeout')
+    def recv(self, block_size = 65536):
         chunk = self.sock.recv(block_size)
         if not chunk:
             raise self.EOF('Connection closed by server')
@@ -156,6 +155,24 @@ def get_sample_frequency(**kargs):
 def get_decimation(**kargs):
     return int(server_command('CC\n', **kargs))
 
+def get_fa_ids(**kargs):
+    '''Connects to server to retrieve FA id list, returns a list of 3-tuples
+    containing the following fields:
+        (fa_id, description, archived)
+    '''
+    raw_list = server_command('CL\n', **kargs)
+    result = []
+    line_match = re.compile('^( |\*)([0-9]+) (.*)$')
+    for line in raw_list.split('\n')[:-1]:
+        match = line_match.match(line)
+        assert match, 'Invalid response to FA ids request: %s' % line
+        match = match.groups()
+        archived = match[0] == '*'
+        fa_id = int(match[1])
+        description = match[2]
+        result.append((fa_id, description, archived))
+    return result
+
 
 class Server:
     '''A simple helper class to gather together the information required to
@@ -165,6 +182,7 @@ class Server:
     def __init__(self, server = DEFAULT_SERVER, port = DEFAULT_PORT):
         self.server = server
         self.port = port
+        self.fa_ids = None
 
         response = self.server_command('CFCK\n').split('\n')
         self.sample_frequency = float(response[0])
@@ -180,3 +198,27 @@ class Server:
     def subscription(self, mask, **kargs):
         return subscription(
             mask, server = self.server, port = self.port, **kargs)
+
+    def get_fa_ids(self, stored = False, missing = False):
+        '''Retrieves list of BPM FA ids from server.  If stored is set then the
+        list is filtered to return only archived ids.  If missing is set then
+        names are synthesised where they are missing.'''
+        if self.fa_ids is None:
+            self.fa_ids = get_fa_ids(server = self.server, port = self.port)
+
+        if stored:
+            # Filter out only the ids which are archived
+            result = [(fa_id, desc)
+                for (fa_id, desc, archived) in self.fa_ids if archived]
+        else:
+            # Return all the ids
+            result = [(fa_id, desc) for (fa_id, desc, _) in self.fa_ids]
+
+        if missing:
+            # Synthesise new names for any missing entries.
+            for ix in range(len(result)):
+                fa_id, desc = result[ix]
+                if not desc:
+                    print 'Synthesising name for', fa_id
+                    result[ix] = (fa_id, 'FA-ID-%d' % fa_id)
+        return result
