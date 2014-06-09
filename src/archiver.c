@@ -107,7 +107,9 @@ static bool verbose = true;
 /* Enable SO_REUSEADDR option on listening socket. */
 static bool reuseaddr = false;
 /* Specify address to bind server socket to. */
-static char *server_bind_address = NULL;
+static const char *server_bind_address = NULL;
+/* Specify server name announced to clients. */
+static const char *server_name = "";
 /* If non zero, identifies FA id used for event stream. */
 static unsigned int events_fa_id = (unsigned int) -1;
 
@@ -121,7 +123,8 @@ static void usage(void)
 "Options:\n"
 "    -c:  Specify decimation configuration file.  If this is specified then\n"
 "         streaming decimated data will be available for subscription.\n"
-"    -l:  Specify list of FA ids for reporting to subscribers\n"
+"    -l:  Specify list of FA ids for reporting to clients\n"
+"    -n:  Specify server name to announce to clients\n"
 "    -d:  Specify device to use for FA sniffer (default /dev/fa_sniffer0)\n"
 "    -r   Run sniffer thread at boosted priority.  Needs real time support\n"
 "    -b:  Specify number of buffered input blocks (default %u)\n"
@@ -156,10 +159,11 @@ static bool process_options(int *argc, char ***argv)
     bool ok = true;
     while (ok)
     {
-        switch (getopt(*argc, *argv, "+hc:l:d:rb:qtDp:s:F:E:B:XRGN"))
+        switch (getopt(*argc, *argv, "+hc:l:n:d:rb:qtDp:s:F:E:B:XRGN"))
         {
             case 'h':   usage();                                    exit(0);
             case 'c':   decimation_config = optarg;                 break;
+            case 'n':   server_name = optarg;                       break;
             case 'l':   fa_id_list = optarg;                        break;
             case 'r':   boost_priority = true;                      break;
             case 'q':   verbose = false;                            break;
@@ -372,7 +376,7 @@ int main(int argc, char **argv)
                 fa_entry_count, events_fa_id))  &&
         initialise_sniffer(fa_block_buffer, fa_entry_count)  &&
         initialise_server(
-            fa_block_buffer, decimated_buffer, events_fa_id,
+            fa_block_buffer, decimated_buffer, events_fa_id, server_name,
             server_bind_address, server_socket, extra_commands, reuseaddr)  &&
         initialise_reader(output_filename)  &&
 

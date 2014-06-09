@@ -63,6 +63,11 @@ Options
 -d device
     Specify device to use for FA sniffer (default `/dev/fa_sniffer0`).
 
+-n server-name
+    Specifies server name announced to clients on request.  Designed to provide
+    a unique server specific key so clients can distinguish between multiple
+    servers.
+
 -r
     Run sniffer thread at boosted priority.  Needs real time support.  This can
     help to reduce the risk of dropping updates from the communication network.
@@ -281,6 +286,9 @@ K
 
 E
     Returns the configured event mask FA id or -1 if no event id configured.
+
+N
+    Returns the server name configured with the `-n` option on startup.
 
 I
     Returns a list of all currently connected clients, one client per line.

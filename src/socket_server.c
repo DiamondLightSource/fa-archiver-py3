@@ -76,6 +76,9 @@ static bool debug_commands;
 /* Just for reporting with the CE command. */
 static unsigned int events_fa_id;
 
+/* Name annouced to clients for C? command. */
+static const char *server_name;
+
 
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
@@ -376,6 +379,7 @@ static bool write_status(int scon, const char *client_name)
  *          run state                   1 => Currently fetching data
  *          overrun                     1 => Halted due to buffer overrun
  *  E   Returns event mask FA id or -1 if not specied
+ *  N   Returns server name configured on startup
  *  I   Returns list of all conected clients, one client per line.
  *  L   Returns list of FA ids and their descriptions
  */
@@ -424,6 +428,9 @@ static bool process_command(int scon, const char *client_name, const char *buf)
                 break;
             case 'E':
                 ok = write_string(scon, "%d\n", events_fa_id);
+                break;
+            case 'N':
+                ok = write_string(scon, "%s\n", server_name);
                 break;
             case 'L':
                 ok = write_fa_ids(scon, &header->archive_mask);
@@ -611,12 +618,13 @@ static int server_socket;
 
 bool initialise_server(
     struct buffer *fa_buffer, struct buffer *decimated,
-    unsigned int _events_fa_id,
+    unsigned int _events_fa_id, const char *_server_name,
     const char *bind_address, int port, bool extra, bool reuseaddr)
 {
     initialise_subscribe(fa_buffer, decimated);
     fa_block_buffer = fa_buffer;
     events_fa_id = _events_fa_id;
+    server_name = _server_name;
     debug_commands = extra;
 
     struct sockaddr_in sin = {
