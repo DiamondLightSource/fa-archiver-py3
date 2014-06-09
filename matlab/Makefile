@@ -5,7 +5,17 @@ endif
 
 MATLAB_DIR ?= $(PREFIX)/matlab
 MCC ?= /dls_sw/prod/tools/RHEL5/bin/mcc
+
+# Substitutions for fa_zoomer.sh
 MCRROOT ?= /dls_sw/prod/tools/RHEL5/opt/matlab2008b
+GLN_ARCH ?= glnxa64
+ARCH ?= amd64
+
+define ZOOMER_SUBST
+s:@MCRROOT@:$(MCRROOT):; \
+s:@GLN_ARCH@:$(GLN_ARCH):; \
+s:@ARCH@:$(ARCH):
+endef
 
 MATLAB_FILES = fa_zoomer.m fa_load.m fa_id2name.m fa_name2id.m fa_getids.m
 
@@ -13,7 +23,7 @@ default: fa_zoomer
 
 fa_zoomer: fa_zoomer.m fa_load.m fa_zoomer.sh
 	$(MCC) -I $(srcdir) -o fa_zoomer_bin -m $@
-	sed 's:@MCRROOT@:$(MCRROOT):' $(srcdir)/fa_zoomer.sh >$@
+	sed '$(ZOOMER_SUBST)' $(srcdir)/fa_zoomer.sh >$@
 	chmod +x $@_bin $@
 
 install: fa_zoomer install_m_files
