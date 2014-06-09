@@ -377,6 +377,7 @@ static bool write_status(int scon, const char *client_name)
  *          overrun                     1 => Halted due to buffer overrun
  *  E   Returns event mask FA id or -1 if not specied
  *  I   Returns list of all conected clients, one client per line.
+ *  L   Returns list of FA ids and their descriptions
  */
 static bool process_command(int scon, const char *client_name, const char *buf)
 {
@@ -423,6 +424,9 @@ static bool process_command(int scon, const char *client_name, const char *buf)
                 break;
             case 'E':
                 ok = write_string(scon, "%d\n", events_fa_id);
+                break;
+            case 'L':
+                ok = write_fa_ids(scon, &header->archive_mask);
                 break;
             default:
                 ok = report_error(scon, client_name, "Unknown command");

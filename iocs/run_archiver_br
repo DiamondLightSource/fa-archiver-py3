@@ -5,10 +5,11 @@
 
 ARCHIVE_FILE=/dev/br_archive
 SNIFFER_DEV=/dev/fa_sniffer/pci-0000:03:00.0
+FA_ID_LIST=/home/ops/diagnostics/config/fa-ids.br
 ARCHIVE_PORT=8889
 
 ARCHIVE_ARGS="-X -c filters/decimate.config -s $ARCHIVE_PORT"
 
 cd "$(dirname "$0")"/..
 exec build/$(uname -m)/fa-archiver \
-    $* $ARCHIVE_ARGS -d "$SNIFFER_DEV" "$ARCHIVE_FILE"
+    $* $ARCHIVE_ARGS -d "$SNIFFER_DEV" -l "$FA_ID_LIST" "$ARCHIVE_FILE"

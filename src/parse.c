@@ -34,7 +34,6 @@
 #include <stdarg.h>
 #include <time.h>
 #include <errno.h>
-#include <ctype.h>
 
 #include "error.h"
 #include "parse.h"
@@ -54,7 +53,7 @@ bool parse_whitespace(const char **string)
 bool skip_whitespace(const char **string)
 {
     bool seen = false;
-    while (isspace((unsigned char) **string))
+    while (**string == ' '  ||  **string == '\t')
     {
         *string += 1;
         seen = true;

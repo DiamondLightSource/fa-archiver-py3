@@ -57,6 +57,9 @@ Options
     decimated data will be available for subscription.  See `Filter
     Configuration File`_ below.
 
+-l fa-ids-file
+    Specify file containing list of available FA ids and their descriptions.
+
 -d device
     Specify device to use for FA sniffer (default `/dev/fa_sniffer0`).
 
@@ -287,6 +290,18 @@ I
     Each line returned has three fields showing the time the client connected,
     the IP address and socket number of the connection, and the command sent to
     the server by the client.
+
+L
+    Returns a list of all available FA ids and their descriptions (if provided
+    on startup using the `-l` option), one id per line, in the following format
+    per line::
+
+        description = archive-state fa-id " " description
+        archive-state = "*" | " "
+
+    If the FA id is stored in the archive then the line starts with `*`,
+    otherwise it starts with a space.  The description can contain any
+    characters apart from newline and null.
 
 Unrecognised commands or any command generating an error cause a one line error
 message, per command letter, to be returned instead of the response described

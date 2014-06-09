@@ -90,6 +90,8 @@ static unsigned int buffer_blocks = BUFFER_BLOCKS;
 static int server_socket = 8888;
 /* Decimation configuration file. */
 static const char *decimation_config = NULL;
+/* File from which to load list of FA ids. */
+static const char *fa_id_list = NULL;
 /* Selects data source. */
 static enum sniffer_source {
     SNIFFER_UNSET,          // Default unset value
@@ -119,6 +121,7 @@ static void usage(void)
 "Options:\n"
 "    -c:  Specify decimation configuration file.  If this is specified then\n"
 "         streaming decimated data will be available for subscription.\n"
+"    -l:  Specify list of FA ids for reporting to subscribers\n"
 "    -d:  Specify device to use for FA sniffer (default /dev/fa_sniffer0)\n"
 "    -r   Run sniffer thread at boosted priority.  Needs real time support\n"
 "    -b:  Specify number of buffered input blocks (default %u)\n"
@@ -153,10 +156,11 @@ static bool process_options(int *argc, char ***argv)
     bool ok = true;
     while (ok)
     {
-        switch (getopt(*argc, *argv, "+hc:d:rb:qtDp:s:F:E:B:XRGN"))
+        switch (getopt(*argc, *argv, "+hc:l:d:rb:qtDp:s:F:E:B:XRGN"))
         {
             case 'h':   usage();                                    exit(0);
             case 'c':   decimation_config = optarg;                 break;
+            case 'l':   fa_id_list = optarg;                        break;
             case 'r':   boost_priority = true;                      break;
             case 'q':   verbose = false;                            break;
             case 't':   timestamp_logging(true);                    break;
@@ -357,6 +361,7 @@ int main(int argc, char **argv)
         initialise_disk_writer(
             output_filename, &input_block_size, &fa_entry_count,
             events_fa_id)  &&
+        load_fa_ids(fa_id_list, fa_entry_count)  &&
         create_buffer(&fa_block_buffer, input_block_size, buffer_blocks)  &&
         TEST_OK_(
             events_fa_id == (unsigned int) -1 || events_fa_id < fa_entry_count,

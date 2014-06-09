@@ -218,3 +218,100 @@ unsigned int format_mask(
         return format_raw_mask(mask, fa_entry_count, buffer + 1);
     }
 }
+
+
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+/* Support for list of FA ids. */
+
+struct fa_id_list {
+    const char *description;
+};
+
+static struct fa_id_list *fa_id_list;
+static uint32_t id_list_length;
+
+
+static bool parse_fa_id_line(const char **line, bool seen[])
+{
+    int id;
+    bool ok =
+        parse_int(line, &id)  &&
+        TEST_OK_(0 <= id  &&  (uint32_t) id < id_list_length,
+            "FA id %d out of range", id)  &&
+        TEST_OK_(!seen[id], "FA id %u repeated", id)  &&
+        DO_(seen[id] = true);
+    if (ok  &&  skip_whitespace(line))
+    {
+        size_t length = strlen(*line);
+        if (length > 0)
+        {
+            /* Description field found. */
+            char *description = malloc(length + 1);
+            memcpy(description, *line, length);
+            description[length] = '\0';
+            fa_id_list[id].description = description;
+            *line += length;
+        }
+    }
+    return ok;
+}
+
+static bool load_fa_ids_file(const char *filename)
+{
+    FILE *input;
+    bool ok = TEST_NULL_(input = fopen(filename, "r"),
+        "Unable to open IDs file \"%s\"", filename);
+    if (ok)
+    {
+        bool seen[id_list_length];
+        memset(seen, 0, id_list_length * sizeof(bool));
+
+        char line[1024];
+        while (ok  &&  fgets(line, sizeof(line), input))
+        {
+            /* Check the line hasn't been truncated.  This also complains if the
+             * file ends without a newline, but that's too bad. */
+            char *eol;
+            ok =
+                TEST_NULL_(eol = strchr(line, '\n'),
+                    "Line truncated or missing newline at end of file")  &&
+                DO_(*eol = '\0')  &&
+                /* Fixed format: blank lines or lines beginning with # are
+                 * ignored, all other lines must be a number followed by
+                 * optional whitespace followed by an optional description. */
+                IF_(line[0] != '\0'  &&  line[0] != '#',
+                    DO_PARSE("FA ID file", parse_fa_id_line, line, seen));
+        }
+        fclose(input);
+    }
+    return ok;
+}
+
+bool load_fa_ids(const char *filename, uint32_t fa_entry_count)
+{
+    fa_id_list = calloc(fa_entry_count, sizeof(struct fa_id_list));
+    id_list_length = fa_entry_count;
+    return IF_(filename, load_fa_ids_file(filename));
+}
+
+
+bool write_fa_ids(int output, const struct filter_mask *archive_mask)
+{
+    bool ok = true;
+    for (uint32_t id = 0; ok  &&  id < id_list_length; id ++)
+    {
+        struct fa_id_list *entry = &fa_id_list[id];
+        bool archived = test_mask_bit(archive_mask, id);
+        if (archived  ||  entry->description)
+        {
+            char *buffer = NULL;
+            ok =
+                TEST_IO(asprintf(&buffer, "%c%u %s\n",
+                    archived ? '*' : ' ', id, entry->description ?: ""))  &&
+                TEST_write_(
+                    output, buffer, strlen(buffer), "Unable to write response");
+            free(buffer);
+        }
+    }
+    return ok;
+}

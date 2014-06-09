@@ -83,3 +83,11 @@ bool format_readable_mask(
  * Prints error message and returns false if parsing fails or mask is empty. */
 bool parse_mask(
     const char **string, unsigned int fa_entry_count, struct filter_mask *mask);
+
+
+/* Loads table of FA ids from given file.  Can be called with NULL file name, in
+ * which case the table is initialised to empty. */
+bool load_fa_ids(const char *filename, uint32_t fa_entry_count);
+
+/* Sends list of FA ids and descriptions to the given output file. */
+bool write_fa_ids(int output, const struct filter_mask *archive_mask);

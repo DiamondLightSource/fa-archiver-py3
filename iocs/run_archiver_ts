@@ -4,9 +4,10 @@
 
 ARCHIVE_FILE=/scratch/fa-sniffer.bin
 SNIFFER_DEV=/dev/fa_sniffer0
+FA_ID_LIST=/home/ops/diagnostics/config/fa-ids.ts
 
 ARCHIVE_ARGS='-t -X -c filters/decimate.config'
 
 cd "$(dirname "$0")"/..
 exec build/$(uname -m)/fa-archiver \
-    $* $ARCHIVE_ARGS -d "$SNIFFER_DEV" "$ARCHIVE_FILE"
+    $* $ARCHIVE_ARGS -d "$SNIFFER_DEV" -l "$FA_ID_LIST" "$ARCHIVE_FILE"
