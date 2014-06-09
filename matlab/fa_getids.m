@@ -87,9 +87,9 @@ function [names, ids, stored] = get_names_ids(server, port)
     response = c.read_string(65536);
 
     if strcmp(response, ['Unknown command' 10])
-        warning('Loading names from file for server %s:%d', ...
+        warning('Synthesising FA id names for server %s:%d', ...
             server, port);
-        [names, ids, stored] = load_names();
+        [names, ids, stored] = synthesise_names(server, port);
     else
         fields = textscan(response, ['%c%d%*c%[^' 10 ']'], 'Whitespace', '');
         stored = fields{1} == '*';  % * marks fields stored in archiver database
@@ -99,10 +99,16 @@ function [names, ids, stored] = get_names_ids(server, port)
 end
 
 
-% Temporary function to load names directly from id file.
-function [names, ids, stored] = load_names()
-    [ids, names] = textread( ...
-        '/home/ops/diagnostics/concentrator/fa-ids.sr', ...
-        '%n %s', 'commentstyle', 'shell');
-    stored = ~strcmp(names, '');
+% Fallback action if server doesn't provide names, instead synthesise names
+% covering the available range of ids.
+function [names, ids, stored] = synthesise_names(server, port)
+    c = tcp_connect(server, port);
+    c.write_string(['CK' 10]);
+    id_count = textscan(c.read_string(), '%d');
+    id_count = id_count{1};
+
+    ids = (1:id_count-1)';
+    names = textscan(sprintf('FA-ID-%d\n', ids), '%s');
+    names = names{1};
+    stored = boolean(ones(id_count-1, 1));
 end
