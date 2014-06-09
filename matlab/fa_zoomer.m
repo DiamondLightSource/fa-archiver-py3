@@ -285,13 +285,12 @@ end
 
 
 function plotfa(h, d)
-    if isunix; units = 'µm'; else units = '\mu m'; end  % UTF-8 not for Windows!
-
     data = d.data;
     data_type = get(h.data_type, 'Value');
 
     set_ylim = [];
     annotation = '';
+    units = '\mu m';
     scaled = false;
     switch get(h.ylim, 'Value')
         case 1
@@ -320,6 +319,7 @@ function plotfa(h, d)
             end
     end
 
+    xy_names = axis_names(h, d);
     for n = 1:2
         subplot(2, 1, n)
         if length(size(data)) == 4
@@ -343,7 +343,7 @@ function plotfa(h, d)
         else
             ylim(set_ylim);
         end
-        label_axis(n, units, annotation)
+        label_axis(n, xy_names, units, annotation);
         if scaled; set(gca, 'YTick', []); end
         zoom reset;
     end
@@ -351,8 +351,8 @@ function plotfa(h, d)
 
     % Called when zooming is done: refresh the display
     function refresh_ticks(obj, event_obj)
-        label_axis(1, units, annotation);
-        label_axis(2, units, annotation);
+        label_axis(1, xy_names, units, annotation);
+        label_axis(2, xy_names, units, annotation);
     end
 
     z = zoom(gcf);
@@ -361,8 +361,38 @@ function plotfa(h, d)
 end
 
 
-function label_axis(n, yname, annotation)
-    axes = {'X'; 'Y'};
+% Compute sensible axis names for the data to plot.
+function xy_names = axis_names(h, d)
+    [names, x_names, y_names] = fa_id2name(d.ids, h.server_name);
+    if length(d.ids) == 1
+        % Easy case
+        xy_names = { ...
+            sprintf('%s %s', names, x_names);
+            sprintf('%s %s', names, y_names) };
+    else
+        % In the mixed case only return our best stab at unique axis names
+        xy_names = { ...
+            if_unique(x_names, '(mixed)');
+            if_unique(y_names, '(mixed)') };
+    end
+end
+
+
+% If all values in cells are the same returns the unique value, otherwise
+% returns the mixed value
+function result = if_unique(cells, mixed)
+    result = cells{1};
+    for c = cells(2:end)
+        if ~strcmp(c, result)
+            result = mixed;
+            return
+        end
+    end
+end
+
+
+% Label axes
+function label_axis(n, axes, yname, annotation)
     global fa_data;
     ylabel(gca, yname);
 
