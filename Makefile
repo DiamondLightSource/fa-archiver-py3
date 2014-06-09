@@ -72,6 +72,6 @@ install: $(BIN_BUILD_DIR) $(DOCS_BUILD_DIR) $(MATLAB_BUILD_DIR) python
 	$(BIN_BUILD) install
 	$(DOCS_BUILD) install
 	$(PYTHON_BUILD) install
-# 	$(MATLAB_BUILD) install
+	$(MATLAB_BUILD) install
 
 .PHONY: $(NON_BIN_TARGETS)
