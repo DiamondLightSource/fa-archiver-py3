@@ -1,26 +1,23 @@
-# Specify defaults for testing
-PREFIX := $(shell pwd)/../prefix
-PYTHON = dls-python
-MODULEVER=0.0
+# This make file is designed to be called from the top level make file
+ifndef PYTHON_BUILD_DIR
+$(error Do not call this make file directly)
+endif
 
-# Override with any release info
--include ../Makefile.private
+DIST_DIR = $(PYTHON_BUILD_DIR)/dist
+
 
 # This is run when we type make
-# It can depend on other targets e.g. the .py files produced by pyuic4 
-dist: setup.py $(wildcard */*.py)
-	MODULEVER=$(MODULEVER) $(PYTHON) setup.py bdist_egg
-	touch dist
+dist: setup.py $(shell find -name \*.py)
+	$(PYTHON) setup.py bdist_egg --dist-dir $(DIST_DIR)
+	rm -rf build
 
 # Clean the module
 clean:
-	$(PYTHON) setup.py clean
-	-rm -rf build dist *egg-info installed.files
-	-find -name '*.pyc' -exec rm {} \;
-#	$(MAKE) -C documentation clean
+	find -name '*.pyc' -exec rm {} \;
+	rm -rf build fa_archiver.egg-info installed.files
 
 # Install the built egg and keep track of what was installed
-install: dist
+install: $(DIST_DIR)
 	$(PYTHON) setup.py easy_install -m \
-		--record=installed.files \
-		--prefix=$(PREFIX) dist/*.egg
+            --record=installed.files \
+            --prefix=$(PREFIX) $(DIST_DIR)/*.egg

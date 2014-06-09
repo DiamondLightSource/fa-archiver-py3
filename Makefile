@@ -14,19 +14,23 @@ BUILD_DIR = $(CURDIR)/build
 #    PREFIX         Root of installation
 #    SCRIPT_DIR     Where the executables should be installed
 #    PYTHON         Path to Python executable
-PREFIX = $(shell pwd)/prefix
+#    MODULEVER      Module version for versioned Python install
+PREFIX = $(BUILD_DIR)/prefix
 PYTHON = dls-python
+MODULEVER = 0.0
 -include $(TOP)/Makefile.private
-PYTHON ?= python
 SCRIPT_DIR ?= $(PREFIX)/bin
+
 export PYTHON
 export PREFIX
 export SCRIPT_DIR
+export MODULEVER
 
 
 BIN_BUILD_DIR = $(BUILD_DIR)/$(shell uname -m)
 DOCS_BUILD_DIR = $(BUILD_DIR)/docs
 MATLAB_BUILD_DIR = $(BUILD_DIR)/matlab
+PYTHON_BUILD_DIR = $(BUILD_DIR)/python
 
 VPATH_BUILD = \
     VPATH=$(CURDIR)/$1 $(MAKE) TOP=$(TOP) srcdir=$(CURDIR)/$1 \
@@ -37,14 +41,15 @@ DOCS_BUILD = \
     $(call VPATH_BUILD,docs,$(DOCS_BUILD_DIR))
 MATLAB_BUILD = \
     $(call VPATH_BUILD,matlab,$(MATLAB_BUILD_DIR))
+PYTHON_BUILD = \
+    make -C python PYTHON_BUILD_DIR=$(PYTHON_BUILD_DIR)
 
 # Targets other than these are redirected to building the binary tools
-NON_BIN_TARGETS = default clean install docs matlab
+NON_BIN_TARGETS = default clean install docs matlab python
 BIN_TARGETS = $(filter-out $(NON_BIN_TARGETS) $(BIN_BUILD_DIR),$(MAKECMDGOALS))
 
 
 default $(BIN_TARGETS): $(BIN_BUILD_DIR)
-	make -C $(TOP)/python
 	$(BIN_BUILD) $@
 
 docs: $(DOCS_BUILD_DIR)
@@ -53,20 +58,20 @@ docs: $(DOCS_BUILD_DIR)
 matlab: $(MATLAB_BUILD_DIR)
 	$(MATLAB_BUILD)
 
+python: $(PYTHON_BUILD_DIR)
+	$(PYTHON_BUILD)
+
 $(BUILD_DIR)/%:
 	mkdir -p $@
 
 clean:
-	rm -rf $(BUILD_DIR) prefix
-	make -C $(TOP)/python clean
+	rm -rf $(BUILD_DIR)
+	$(PYTHON_BUILD) clean
 
-install: $(BIN_BUILD_DIR) $(DOCS_BUILD_DIR) $(MATLAB_BUILD_DIR)
-ifndef PREFIX
-	@echo >&2 Must define PREFIX; false
-endif
+install: $(BIN_BUILD_DIR) $(DOCS_BUILD_DIR) $(MATLAB_BUILD_DIR) python
 	$(BIN_BUILD) install
 	$(DOCS_BUILD) install
-	make -C $(TOP)/python install
-#	$(MATLAB_BUILD) install
+	$(PYTHON_BUILD) install
+# 	$(MATLAB_BUILD) install
 
 .PHONY: $(NON_BIN_TARGETS)

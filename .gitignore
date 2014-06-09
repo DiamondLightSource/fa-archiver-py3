@@ -1,4 +1,6 @@
 /build
+/python/fa_archiver.egg-info
+/python/installed.files
 *.pyc
 *~
 /docs/papers/*/*.aux
