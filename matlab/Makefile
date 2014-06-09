@@ -17,12 +17,12 @@ s:@GLN_ARCH@:$(GLN_ARCH):; \
 s:@ARCH@:$(ARCH):
 endef
 
-MATLAB_FILES = fa_zoomer.m fa_load.m fa_id2name.m fa_name2id.m fa_getids.m
+MATLAB_FILES = $(wildcard *.m) fa_server_names
 
 default: fa_zoomer
 
-fa_zoomer: fa_zoomer.m fa_load.m fa_zoomer.sh
-	$(MCC) -I $(srcdir) -o fa_zoomer_bin -m $@
+fa_zoomer: $(MATLAB_FILES) fa_zoomer.sh
+	$(MCC) -I $(srcdir) -a $(srcdir)/fa_server_names -o fa_zoomer_bin -m $@
 	sed '$(ZOOMER_SUBST)' $(srcdir)/fa_zoomer.sh >$@
 	chmod +x $@_bin $@
 

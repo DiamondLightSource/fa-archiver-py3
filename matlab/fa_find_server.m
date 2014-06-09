@@ -38,7 +38,7 @@ function [name, server, port] = fa_find_server(server)
         % Load default server names from external file.  This makes name
         % maintenance easier by avoiding buring defaults in the middle of code.
         fa_ids_file = ...
-            fullfile(fileparts(mfilename('fullpath')), 'server_names');
+            fullfile(fileparts(mfilename('fullpath')), 'fa_server_names');
         [names, servers, ports] = ...
             textread(fa_ids_file, '%s %s %d', 'commentstyle', 'shell');
         for ix = 1:length(names)
@@ -76,5 +76,7 @@ function name = server_name(server, port)
     c = tcp_connect(server, port);
     c.write_string(['CN' 10]);
     name = strtok(c.read_string(), char(10));
-    if strcmp(name, 'Unknown command'); name = ''; end
+    % For limited backwards compatibility, if the server doesn't support the CN
+    % command assume that the only server is called SR.
+    if strcmp(name, 'Unknown command'); name = 'SR'; end
 end
