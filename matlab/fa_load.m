@@ -13,7 +13,7 @@
 %          'CD' for continuous decimated data, and similarly tse must specify
 %              number of samples
 %          Use 'Z' suffix to select ID0 capture as well.
-%   server = IP address of FA archiver
+%   server = IP address of FA archiver or one of 'SR', 'BR', 'TS'.
 %
 % Output:
 %   d = object containing all of the data, containing the following fields:
@@ -56,20 +56,18 @@
 %      OX11 0DE
 %      michael.abbott@diamond.ac.uk
 
-function d = fa_load(tse, mask, type, server)
+function d = fa_load(tse, mask, type, varargin)
     % Assign defaults
     if ~exist('type', 'var')
         type = 'F';
     end
-    if ~exist('server', 'var')  ||  strcmp(server, '')
-        server = 'fa-archiver.diamond.ac.uk';
-    elseif strcmp(server, 'booster')
-        server = 'fa-archiver.diamond.ac.uk:8889';
-    end
+
+    % Start by normalising the server name
+    [name, server, port] = fa_find_server(varargin{:});
 
     % Parse arguments
     [decimation, frequency, typestr, ts_at_end, save_id0, max_id] = ...
-        process_type(server, type);
+        process_type(server, port, type);
 
     % Compute unique sorted list from id mask and remember the permuation.
     [request_mask, dummy, perm] = unique(mask);
@@ -81,7 +79,7 @@ function d = fa_load(tse, mask, type, server)
 
     % Send formatted request to server.  This returns open connection to server
     % for reading response and returned datastream.
-    [sc, cleanup] = send_request(server, request);                  %#ok<NASGU>
+    sc = send_request(server, port, request);                  %#ok<NASGU>
 
     % Parse response including initial header.
     [sample_count, block_size, initial_offset] = ...
@@ -108,11 +106,11 @@ end
 %   Note that the ts_at_end flag for DD data is an important optimisation;
 % without this, data capture takes an unreasonably long time.
 function [decimation, frequency, typestr, ts_at_end, save_id0, max_id] = ...
-        process_type(server, type)
+        process_type(server, port, type)
 
     % Read decimation and frequency parameters from server
-    [sock, cleanup] = send_request(server, 'CdDFKC');               %#ok<NASGU>
-    params = textscan(read_string(sock), '%f');
+    sc = send_request(server, port, 'CdDFKC');               %#ok<NASGU>
+    params = textscan(sc.read_string(), '%f');
     first_dec  = params{1}(1);
     second_dec = params{1}(2);
     frequency  = params{1}(3);
@@ -171,11 +169,11 @@ function [sample_count, block_size, initial_offset] = ...
         read_server_response(sc, typestr, tse)
 
     % Check the error code response and raise an error if failed
-    buf = read_bytes(sc, 1, true);
+    buf = sc.read_bytes(1, true);
     rc = buf.get();
     if rc ~= 0
         % On error the entire response is the error message.
-        error([char(rc) read_string(sc)]);
+        error([char(rc) sc.read_string()]);
     end
 
     if typestr == 'C'
@@ -183,11 +181,11 @@ function [sample_count, block_size, initial_offset] = ...
         sample_count = tse(1);
     else
         % For historical data get the sample count at the head of the response.
-        sample_count = double(read_long_array(sc, 1));
+        sample_count = double(sc.read_long_array(1));
     end
 
     % Read the timestamp header with block size and initial offset.
-    header = read_int_array(sc, 2);
+    header = sc.read_int_array(2);
     block_size = header(1);             % Number of samples per block
     initial_offset = header(2);         % Offset into first block read
 end
@@ -258,7 +256,7 @@ function [data, timestamps, durations, id_zeros, sample_count] = ...
     function ok = read_timestamp_block()
         ok = true;
         try
-            timestamp_buf = read_bytes(sc, ts_buf_size, true);
+            timestamp_buf = sc.read_bytes(ts_buf_size, true);
         catch me
             if ~strcmp(me.identifier, 'fa_load:read_bytes')
                 rethrow(me)
@@ -285,11 +283,11 @@ function [data, timestamps, durations, id_zeros, sample_count] = ...
     function read_timestamp_at_end()
         % Timestamps at end are sent as a count followed by all the timestamps
         % together followed by all the durations together.
-        ts_read = read_int_array(sc, 1);
-        timestamps = read_long_array(sc, ts_read);
-        durations  = read_int_array(sc, ts_read);
+        ts_read = sc.read_int_array(1);
+        timestamps = sc.read_long_array(ts_read);
+        durations  = sc.read_int_array(ts_read);
         if save_id0
-            id_zeros = read_int_array(sc, ts_read);
+            id_zeros = sc.read_int_array(ts_read);
         end
     end
 
@@ -303,7 +301,7 @@ function [data, timestamps, durations, id_zeros, sample_count] = ...
         end
 
         % Read the data and convert to matlab format.
-        int_buf = read_int_array(sc, 2 * field_count * id_count * block_count);
+        int_buf = sc.read_int_array(2 * field_count * id_count * block_count);
         if simple_data
             data(:, :, samples_read + 1:samples_read + block_count) = ...
                 reshape(int_buf, 2, id_count, block_count);
@@ -420,75 +418,10 @@ function result = format_mask(mask, max_id)
 end
 
 
-% Opens socket channel to given server and sends request.  Both the opened
-% socket and a cleanup handler are returned, the socket will be closed when
-% cleanup is discarded.
-function [channel, cleanup] = send_request(server, request)
-    import java.nio.channels.SocketChannel;
-    import java.net.InetSocketAddress;
-    import java.lang.String;
-    import java.nio.ByteBuffer;
-
-    % Allow for a non standard port to be specified as part of the server name.
-    [server, port] = strtok(server, ':');
-    if port; port = str2double(port(2:end)); else port = 8888; end
-
-    % Open the channel and connect to the server.
-    channel = SocketChannel.open();
-    channel.connect(InetSocketAddress(server, port));
-
-    % Ensure that the socket is closed when no longer needed.
-    socket = channel.socket();
-    cleanup = onCleanup(@() socket.close());
-
-    % Send request with newline termination.
-    request = ByteBuffer.wrap(String([request 10]).getBytes('US-ASCII'));
-    channel.write(request);
-end
-
-
-% Reads a block of the given number of bytes from the socket
-function [buf, pos] = read_bytes(sc, count, require)
-    import java.nio.ByteBuffer;
-    import java.nio.ByteOrder;
-
-    buf = ByteBuffer.allocate(count);
-    buf.order(ByteOrder.LITTLE_ENDIAN);
-    while buf.remaining() ~= 0
-        if sc.read(buf) < 0
-            break
-        end
-    end
-    pos = buf.position();
-    if require && pos ~= count
-        throw(MException( ...
-            'fa_load:read_bytes', 'Too few bytes received from server'))
-    end
-    buf.flip();
-end
-
-function a = read_int_array(sc, count)
-    import java.nio.IntBuffer;
-
-    buf = read_bytes(sc, 4 * count, true);
-    ints = IntBuffer.allocate(count);
-    ints.put(buf.asIntBuffer());
-    a = double(ints.array());
-end
-
-function a = read_long_array(sc, count)
-    import java.nio.LongBuffer;
-
-    buf = read_bytes(sc, 8 * count, true);
-    longs = LongBuffer.allocate(count);
-    longs.put(buf.asLongBuffer());
-    a = longs.array();
-end
-
-function s = read_string(sc)
-    [buf, len] = read_bytes(sc, 4096, false);
-    bytes = buf.array();
-    s = char(bytes(1:len))';
+% Opens socket channel to given server and sends request.
+function channel = send_request(server, port, request)
+    channel = fa_connect(server, port);
+    channel.send_command(request);
 end
 
 

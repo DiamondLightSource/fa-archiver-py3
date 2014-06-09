@@ -1,6 +1,7 @@
-% ids = fa_name2id(names)
+% ids = fa_name2id(names, [args])
 %
 % Returns FA ids for names (either one string or a cell array of strings)
+% See fa_getids for the possible optional arguments.
 
 % Copyright (c) 2011 Michael Abbott, Diamond Light Source Ltd.
 %
@@ -27,8 +28,8 @@
 %      Oxfordshire,
 %      OX11 0DE
 %      michael.abbott@diamond.ac.uk
-function ids = fa_name2id(names)
-    [allnames, allids] = fa_getids();
+function ids = fa_name2id(names, varargin)
+    [allnames, allids] = fa_getids(varargin{:});
 
     % Unfortunately, a single string will be a 'char array' while multiple
     % strings will come as a cell array, so to make sure we can live with both,

@@ -1,6 +1,7 @@
 % fa_zoomer([server])
 %
-% Investigate and zoom into archive data for the last day.
+% Investigate and zoom into archive data for the last day.  The server argument
+% can be a server name or one of SR, BR, or TS.
 
 % Copyright (c) 2011 Michael Abbott, Diamond Light Source Ltd.
 %
@@ -27,16 +28,12 @@
 %      Oxfordshire,
 %      OX11 0DE
 %      michael.abbott@diamond.ac.uk
-function fa_zoomer(server)
+function fa_zoomer(varargin)
     % h is used to store all persistent state that is not part of the generated
     % data.
     h = {};
 
-    if exist('server', 'var')
-        h.server = server;
-    else
-        h.server = '';
-    end
+    h.server_name = fa_find_server(varargin{:});
 
     % Create figure with the standard toolbar but no menubar
     fig = figure('MenuBar', 'none', 'Toolbar', 'figure', ...
@@ -73,8 +70,8 @@ function fa_zoomer(server)
 
     % Some extra controls on the line above
     h_pos = 10; v_pos = v_pos + 30;
-    control('popup', fa_getids(), 150, 'Valid BPM names', ...
-        'Value', 4, 'Callback', protect(@set_bpm_list));
+    control('popup', fa_getids(h.server_name, 'stored', 'missing'), 150, ...
+        'Valid BPM names', 'Value', 4, 'Callback', protect(@set_bpm_list));
 
     clear global h_pos v_pos;
     h.history = cell(0, 2);
@@ -115,7 +112,7 @@ function set_bpm_list(fig, event)
     names = get(fig, 'String');
     index = get(fig, 'Value');
     name = names{index};
-    id = fa_name2id(name);
+    id = fa_name2id(name, h.server_name);
     set(h.bpm_list, 'String', id)
 end
 
@@ -185,7 +182,7 @@ function load_data(fig, range, type, save)
     busy;
 
     global fa_data;
-    fa_data = fa_load(range, pvs, type, h.server);
+    fa_data = fa_load(range, pvs, type, h.server_name);
     plotfa(h, fa_data);
 
     describe;

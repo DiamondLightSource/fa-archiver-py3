@@ -1,7 +1,18 @@
-% [names, ids] = fa_getids([all_names])
+% [names, ids, stored] = fa_getids([server,] ['stored',] ['missing'])
 %
 % Returns device names and corresponding communication controller ids.  Used
-% internally for all name <-> id conversion.
+% internally for all name <-> id conversion.  The stored array records for each
+% id whether it is stored in the archiver database.
+%
+% The server argument can be omitted (in which case the default is 'SR'), can be
+% a physical server address with an optional port, or can be one of 'SR', 'BR'
+% or 'TS'.
+%
+% If 'stored' is passed as an argument then IDs with names but which are not
+% stored in the archiver will be filtered out.
+%
+% If 'missing' is passed as an argument then names will be synthesised for any
+% ids for which a name was not given.
 
 % Copyright (c) 2012 Michael Abbott, Diamond Light Source Ltd.
 %
@@ -28,20 +39,70 @@
 %      Oxfordshire,
 %      OX11 0DE
 %      michael.abbott@diamond.ac.uk
-function [names, ids] = fa_getids(all_names)
-    if isunix
-        fa_ids_file = '/home/ops/diagnostics/concentrator/fa-ids.sr';
-    else
-        fa_ids_file = fullfile(fileparts(mfilename('fullpath')), 'fa-ids.sr');
-    end
-    [ids, names] = textread(fa_ids_file, '%n %s', 'commentstyle', 'shell');
+function [names, ids, stored] = fa_getids(varargin)
+    % Create a persistent table mapping server names to FA id lookup lists.
+    % This will avoid a visit to the server for every name lookup.
+    persistent names_table;
+    if isempty(names_table); names_table = containers.Map(); end
 
-    % Unless all names requested filter out both names and IDs with no name
-    % assigned.
-    if nargin == 0; all_names = false; end
-    if ~all_names
-        valid = ~strcmp(names, '');
-        ids = ids(valid);
-        names = names(valid);
+    % Consume the keyword arguments so we can pass what's left to fa_find_server
+    do_stored  = strmatch('stored', varargin, 'exact');
+    varargin(do_stored) = [];
+    do_missing = strmatch('missing', varargin, 'exact');
+    varargin(do_missing) = [];
+
+    [name, server, port] = fa_find_server(varargin{:});
+    if isKey(names_table, name)
+        % If we've already seen this request then return our cached table.
+        entry = names_table(name);
+        names = entry{1};
+        ids = entry{2};
+        stored = entry{3};
+    else
+        [names, ids, stored] = get_names_ids(server, port);
+        names_table(name) = { names, ids, stored };
     end
+
+    % If requested only return names for stored ids
+    if do_stored
+        names = names(stored);
+        ids = ids(stored);
+    end
+
+    % If requested synthesise missing names
+    if do_missing
+        missing = strmatch('', names, 'exact');
+        % Alas it doesn't seem to be possible to format directly into an array,
+        % so we need to use textscan() to prepare the new names.
+        new_names = textscan(sprintf('FA-ID-%d\n', ids(missing)), '%s');
+        names(missing) = new_names{1};
+    end
+end
+
+
+% Go to given server for list of names and ids.
+function [names, ids, stored] = get_names_ids(server, port)
+    c = fa_connect(server, port);
+    c.send_command('CL');
+    response = c.read_string(65536);
+
+    if strcmp(response, ['Unknown command' 10])
+        warning('Loading names from file for server %s:%d', ...
+            server, port);
+        [names, ids, stored] = load_names();
+    else
+        fields = textscan(response, ['%c%d%*c%[^' 10 ']'], 'Whitespace', '');
+        stored = fields{1} == '*';  % * marks fields stored in archiver database
+        ids    = fields{2};
+        names  = fields{3};
+    end
+end
+
+
+% Temporary function to load names directly from id file.
+function [names, ids, stored] = load_names()
+    [ids, names] = textread( ...
+        '/home/ops/diagnostics/concentrator/fa-ids.sr', ...
+        '%n %s', 'commentstyle', 'shell');
+    stored = ~strcmp(names, '');
 end

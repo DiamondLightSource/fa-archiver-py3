@@ -1,0 +1,12 @@
+# This file contains server name definitions.  Each line consists of a short
+# name (which should match the server's own reported name), a fully qualified
+# server name or IP address, and a port number.
+
+# Storage ring server, default server source.
+SR  fa-archiver.diamond.ac.uk   8888
+
+# Booster server, running on same server as SR but on a different port.
+BR  fa-archiver.diamond.ac.uk   8889
+
+# Test server in the lab.
+TS  pc0044.cs.diamond.ac.uk     8888
