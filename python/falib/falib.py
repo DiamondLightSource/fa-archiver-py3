@@ -162,14 +162,14 @@ def get_fa_ids(**kargs):
     '''
     raw_list = server_command('CL\n', **kargs)
     result = []
-    line_match = re.compile('^( |\*)([0-9]+) (.*)$')
+    line_match = re.compile('^( |\*)([0-9]+) (.*) (.*) (.*)$')
     for line in raw_list.split('\n')[:-1]:
         match = line_match.match(line)
         assert match, 'Invalid response to FA ids request: %s' % line
         match = match.groups()
         archived = match[0] == '*'
         fa_id = int(match[1])
-        description = match[2]
+        description = match[4]
         result.append((fa_id, description, archived))
     return result
 
@@ -219,6 +219,5 @@ class Server:
             for ix in range(len(result)):
                 fa_id, desc = result[ix]
                 if not desc:
-                    print 'Synthesising name for', fa_id
                     result[ix] = (fa_id, 'FA-ID-%d' % fa_id)
         return result

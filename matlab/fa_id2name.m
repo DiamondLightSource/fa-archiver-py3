@@ -1,4 +1,4 @@
-% names = fa_id2name(ids, [args])
+% [names, x_names, y_names] = fa_id2name(ids, [args])
 %
 % Returns corresponding EPICS names for a vector of FA ids
 % See fa_getids for the possible optional arguments.
@@ -28,15 +28,23 @@
 %      Oxfordshire,
 %      OX11 0DE
 %      michael.abbott@diamond.ac.uk
-function names = fa_id2name(ids, varargin)
-    [allnames, allids] = fa_getids(varargin{:});
+function [names, x_names, y_names] = fa_id2name(ids, varargin)
+    [all_names, all_ids, s, all_x_names, all_y_names] = fa_getids(varargin{:});
 
-    ix(1:max(ids)+1) = {''};
-    ix(allids+1) = allnames;
-    names = ix(ids+1);
+    names   = lookup_names(ids, all_ids, all_names, '');
+    x_names = lookup_names(ids, all_ids, all_x_names, 'X');
+    y_names = lookup_names(ids, all_ids, all_y_names, 'Y');
 
     % An annoying little hack: handling cells for single values causes trouble.
     if length(names) == 1
         names = cell2mat(names);
+        x_names = cell2mat(x_names);
+        y_names = cell2mat(y_names);
     end
+end
+
+function result = lookup_names(ids, all_ids, values, default)
+    index(1:max(ids)+1) = {default};
+    index(all_ids+1) = values;
+    result = index(ids+1);
 end

@@ -304,7 +304,7 @@ L
     on startup using the `-l` option), one id per line, in the following format
     per line::
 
-        description = archive-state fa-id " " description
+        description = archive-state fa-id " " x_name " " y_name " " description
         archive-state = "*" | " "
 
     If the FA id is stored in the archive then the line starts with `*`,

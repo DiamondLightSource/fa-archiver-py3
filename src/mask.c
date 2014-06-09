@@ -225,12 +225,40 @@ unsigned int format_mask(
 
 struct fa_id_list {
     const char *description;
+    const char *x_name;
+    const char *y_name;
 };
 
 static struct fa_id_list *fa_id_list;
 static uint32_t id_list_length;
 
 
+/* Parses a white-space delimited word if present, returns false if nothing
+ * found and assigns NULL to result. */
+static bool maybe_parse_word(const char **string, const char **result)
+{
+    const char *start = *string;
+    const char *end = strchrnul(start, ' ');
+    if (end == start)
+    {
+        *result = NULL;
+        return false;
+    }
+    else
+    {
+        size_t length = (size_t) (end - start);
+        char *word = malloc(length + 1);
+        memcpy(word, start, length);
+        word[length] = '\0';
+        *string = end;
+        *result = word;
+        return true;
+    }
+}
+
+/* Each line in the file consists of up to four whitespace separated fields:
+ *  id [description] [x_name] [y_name]
+ */
 static bool parse_fa_id_line(const char **line, bool seen[])
 {
     int id;
@@ -238,20 +266,18 @@ static bool parse_fa_id_line(const char **line, bool seen[])
         parse_int(line, &id)  &&
         TEST_OK_(0 <= id  &&  (uint32_t) id < id_list_length,
             "FA id %d out of range", id)  &&
-        TEST_OK_(!seen[id], "FA id %u repeated", id)  &&
-        DO_(seen[id] = true);
-    if (ok  &&  skip_whitespace(line))
+        TEST_OK_(!seen[id], "FA id %u repeated", id);
+    if (ok)
     {
-        size_t length = strlen(*line);
-        if (length > 0)
-        {
-            /* Description field found. */
-            char *description = malloc(length + 1);
-            memcpy(description, *line, length);
-            description[length] = '\0';
-            fa_id_list[id].description = description;
-            *line += length;
-        }
+        seen[id] = true;
+        struct fa_id_list *entry = &fa_id_list[id];
+        IGNORE(
+            skip_whitespace(line)  &&
+            maybe_parse_word(line, &entry->description)  &&
+            skip_whitespace(line)  &&
+            maybe_parse_word(line, &entry->x_name)  &&
+            skip_whitespace(line)  &&
+            maybe_parse_word(line, &entry->y_name));
     }
     return ok;
 }
@@ -306,8 +332,10 @@ bool write_fa_ids(int output, const struct filter_mask *archive_mask)
         {
             char *buffer = NULL;
             ok =
-                TEST_IO(asprintf(&buffer, "%c%u %s\n",
-                    archived ? '*' : ' ', id, entry->description ?: ""))  &&
+                TEST_IO(asprintf(&buffer, "%c%u %s %s %s\n",
+                    archived ? '*' : ' ', id,
+                    entry->x_name ?: "X", entry->y_name ?: "Y",
+                    entry->description ?: ""))  &&
                 TEST_write_(
                     output, buffer, strlen(buffer), "Unable to write response");
             free(buffer);
