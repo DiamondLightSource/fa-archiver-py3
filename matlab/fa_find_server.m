@@ -73,8 +73,8 @@ function [name, server, port] = fa_find_server(server)
 end
 
 function name = server_name(server, port)
-    c = fa_connect(server, port);
-    c.send_command('CN');
+    c = tcp_connect(server, port);
+    c.write_string(['CN' 10]);
     name = strtok(c.read_string(), char(10));
     if strcmp(name, 'Unknown command'); name = ''; end
 end

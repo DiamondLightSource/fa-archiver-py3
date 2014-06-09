@@ -1,12 +1,13 @@
-% c = fa_connect(server)
+% c = tcp_connect(server, port, [timeout])
 %
 % Makes socket connection to server and provides functions for sending commands
-% and receiving a response.
+% and receiving a response.  If a timeout is specified the socket will be
+% configured into non blocking mode and reads will end when timeout occurs.
 %
 % The following methods can be called once a connection has been established:
 %
-%   c.send_command(command)
-%       Sends command string terminated with newline character to server
+%   c.write_string(command)
+%       Sends command string to server.  No termination is added.
 %   c.read_bytes(count, require)
 %       Reads up to count bytes from server, fails if require is set and fewer
 %       bytes are received.
@@ -42,56 +43,84 @@
 %      Oxfordshire,
 %      OX11 0DE
 %      michael.abbott@diamond.ac.uk
-
-function c = fa_connect(server, port)
+function sock = tcp_connect(server, port, timeout)
     import java.nio.channels.SocketChannel;
     import java.net.InetSocketAddress;
+    import java.nio.channels.Selector;
+    import java.nio.channels.SelectionKey;
 
-    if ~exist('port', 'var'); port = 8888; end
-
-    c = {};
+    sock = {};
 
     % Open the channel and connect to the server.
-    c.channel = SocketChannel.open();
-    c.channel.connect(InetSocketAddress(server, port));
+    sock.channel = SocketChannel.open();
+    sock.channel.connect(InetSocketAddress(server, port));
 
     % Ensure that the socket is closed when no longer needed.
-    socket = c.channel.socket();
-    c.cleanup = onCleanup(@() socket.close());
+    sock.cleanup = onCleanup(@() close_socket(sock));
 
-    % Populate the structure with all the functions we're going to provide.
-    c.send_command = @(request) send_command(c, request);
-    c.read_bytes = @(count, require) read_bytes(c, count, require);
-    c.read_int_array = @(count) read_int_array(c, count);
-    c.read_long_array = @(count) read_long_array(c, count);
-    c.read_string = @(varargin) read_string(c, varargin{:});
+    if exist('timeout', 'var')
+        sock.timeout = timeout;
+
+        % Enable use of select so we can detect timeouts
+        sock.selector = Selector.open();
+        sock.channel.configureBlocking(false);
+        sock.key = sock.channel.register(sock.selector, SelectionKey.OP_READ);
+    else
+        sock.timeout = [];
+    end
+
+    % Assign bound functions
+    sock.write_string   = @(varargin) write_string(sock, varargin{:});
+    sock.read_string    = @(varargin) read_string(sock, varargin{:});
+    sock.read_bytes     = @(varargin) read_bytes(sock, varargin{:});
+    sock.read_int_array = @(varargin) read_int_array(sock, varargin{:});
+    sock.read_long_array = @(varargin) read_long_array(sock, varargin{:});
 end
 
-function send_command(c, request)
+
+% Called when parent sock object is released
+function close_socket(sock)
+    socket = sock.channel.socket();
+    socket.close()
+end
+
+
+function write_string(sock, string)
     import java.lang.String;
     import java.nio.ByteBuffer;
 
-    % Send request with newline termination.
-    request = ByteBuffer.wrap(String([request 10]).getBytes('US-ASCII'));
-    c.channel.write(request);
+    message = ByteBuffer.wrap(String(string).getBytes('US-ASCII'));
+    sock.channel.write(message);
 end
 
+
 % Reads a block of the given number of bytes from the socket
-function [buf, pos] = read_bytes(c, count, require)
+function [buf, pos] = read_bytes(sock, count, require, timeout)
     import java.nio.ByteBuffer;
     import java.nio.ByteOrder;
+
+    if exist('timeout', 'var')
+        assert(~isempty(sock.timeout), 'Connection not configured for timeout');
+    else
+        timeout = sock.timeout;
+    end
+
+    sc = sock.channel;
 
     buf = ByteBuffer.allocate(count);
     buf.order(ByteOrder.LITTLE_ENDIAN);
     while buf.remaining() ~= 0
-        if c.channel.read(buf) < 0
+        if ~isempty(timeout)
+            sock.selector.select(timeout);
+        end
+        rx = sc.read(buf);
+        if rx <= 0
             break
         end
     end
     pos = buf.position();
     if require && pos ~= count
-        throw(MException( ...
-            'fa_load:read_bytes', 'Too few bytes received from server'))
+        error('Too few bytes received from server');
     end
     buf.flip();
 end
@@ -114,9 +143,9 @@ function a = read_long_array(c, count)
     a = longs.array();
 end
 
-function s = read_string(c, count)
+function string = read_string(sock, count, varargin)
     if ~exist('count', 'var'); count = 4096; end
-    [buf, len] = read_bytes(c, count, false);
+    [buf, len] = read_bytes(sock, count, false, varargin{:});
     bytes = buf.array();
-    s = char(bytes(1:len))';
+    string = char(bytes(1:len))';
 end

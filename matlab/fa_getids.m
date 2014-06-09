@@ -82,8 +82,8 @@ end
 
 % Go to given server for list of names and ids.
 function [names, ids, stored] = get_names_ids(server, port)
-    c = fa_connect(server, port);
-    c.send_command('CL');
+    c = tcp_connect(server, port);
+    c.write_string(['CL' 10]);
     response = c.read_string(65536);
 
     if strcmp(response, ['Unknown command' 10])

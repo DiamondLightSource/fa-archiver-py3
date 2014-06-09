@@ -79,7 +79,8 @@ function d = fa_load(tse, mask, type, varargin)
 
     % Send formatted request to server.  This returns open connection to server
     % for reading response and returned datastream.
-    sc = send_request(server, port, request);                  %#ok<NASGU>
+    sc = tcp_connect(server, port);
+    sc.write_string([request 10]);
 
     % Parse response including initial header.
     [sample_count, block_size, initial_offset] = ...
@@ -109,7 +110,8 @@ function [decimation, frequency, typestr, ts_at_end, save_id0, max_id] = ...
         process_type(server, port, type)
 
     % Read decimation and frequency parameters from server
-    sc = send_request(server, port, 'CdDFKC');               %#ok<NASGU>
+    sc = tcp_connect(server, port);
+    sc.write_string(['CdDFKC' 10]);
     params = textscan(sc.read_string(), '%f');
     first_dec  = params{1}(1);
     second_dec = params{1}(2);
@@ -415,13 +417,6 @@ function result = format_mask(mask, max_id)
         mask_array(ix) = bitor(mask_array(ix), bitshift(1, mod(id, 32)));
     end
     result = ['R' sprintf('%08X', mask_array(end:-1:1))];
-end
-
-
-% Opens socket channel to given server and sends request.
-function channel = send_request(server, port, request)
-    channel = fa_connect(server, port);
-    channel.send_command(request);
 end
 
 
