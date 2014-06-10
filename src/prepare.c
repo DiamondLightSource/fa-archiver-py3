@@ -405,7 +405,7 @@ static bool prepare_read_only(void)
             IF_(dump_index, do_dump_index(file_fd, &header)),
 
             // Close opened file
-            TEST_IO(file_fd));
+            TEST_IO(close(file_fd)));
 }
 
 
