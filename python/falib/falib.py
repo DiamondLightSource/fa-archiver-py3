@@ -220,4 +220,8 @@ class Server:
                 fa_id, desc = result[ix]
                 if not desc:
                     result[ix] = (fa_id, 'FA-ID-%d' % fa_id)
+        else:
+            # Discard any entries with no name
+            result = [(fa_id, desc) for fa_id, desc in result if desc]
+
         return result
