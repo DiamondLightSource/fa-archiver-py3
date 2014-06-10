@@ -31,9 +31,10 @@ BIN_BUILD_DIR = $(BUILD_DIR)/$(shell uname -m)
 DOCS_BUILD_DIR = $(BUILD_DIR)/docs
 MATLAB_BUILD_DIR = $(BUILD_DIR)/matlab
 PYTHON_BUILD_DIR = $(BUILD_DIR)/python
+COVERITY_BUILD_DIR = $(BUILD_DIR)/coverity
 
 VPATH_BUILD = \
-    VPATH=$(CURDIR)/$1 $(MAKE) TOP=$(TOP) srcdir=$(CURDIR)/$1 \
+    $(MAKE) VPATH=$(CURDIR)/$1 TOP=$(TOP) srcdir=$(CURDIR)/$1 \
         -C $2 -f $(CURDIR)/$1/Makefile
 BIN_BUILD = \
     $(call VPATH_BUILD,src,$(BIN_BUILD_DIR)) DEVICE_DIR=$(DEVICE_DIR)
@@ -45,7 +46,7 @@ PYTHON_BUILD = \
     make -C python PYTHON_BUILD_DIR=$(PYTHON_BUILD_DIR)
 
 # Targets other than these are redirected to building the binary tools
-NON_BIN_TARGETS = default clean install docs matlab python
+NON_BIN_TARGETS = default clean install docs matlab python coverity
 BIN_TARGETS = $(filter-out $(NON_BIN_TARGETS) $(BIN_BUILD_DIR),$(MAKECMDGOALS))
 
 
@@ -60,6 +61,15 @@ matlab: $(MATLAB_BUILD_DIR)
 
 python: $(PYTHON_BUILD_DIR)
 	$(PYTHON_BUILD)
+
+coverity:
+	rm -rf $(COVERITY_BUILD_DIR)
+	mkdir -p $(COVERITY_BUILD_DIR)
+	$(COVERITY_BUILD)
+	cd $(COVERITY_BUILD_DIR)  &&  cov-build --dir cov-int \
+            $(call VPATH_BUILD,src,.) DEVICE_DIR=$(DEVICE_DIR)
+	tar czf fa-archiver.coverity.tgz -C $(COVERITY_BUILD_DIR) cov-int
+	echo 'Upload to https://scan.coverity.com/projects/2415/builds/new'
 
 $(BUILD_DIR)/%:
 	mkdir -p $@

@@ -4,6 +4,8 @@ ifndef TOP
 $(error Do not call this make file directly)
 endif
 
+override VPATH += $(DEVICE_DIR)
+
 CC_NAME = $(shell $(CC) --version | sed 's/ .*//;q')
 CC_VERSION = $(shell $(CC) --version | sed -r 's/[^ ]* [^ ]* ([^ ]*) .*/\1/;q')
 
@@ -125,8 +127,6 @@ LAYOUT_DEPENDS = $(shell sed '/^\#/d; s/^[^ ]*//' $(srcdir)/layout-list)
 layout.new: make-layout layout-list show-layout.c $(LAYOUT_DEPENDS)
 	CC="$(CC)" CPPFLAGS="$(CPPFLAGS)" CFLAGS="$(CFLAGS)" \
             srcdir="$(srcdir)" $< >$@
-
-VPATH += $(DEVICE_DIR)
 
 .PHONY: default install check_alignment
 .DELETE_ON_ERROR:
