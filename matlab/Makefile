@@ -4,20 +4,27 @@ $(error Do not call this make file directly)
 endif
 
 MATLAB_DIR ?= $(PREFIX)/matlab
-MCC ?= /dls_sw/prod/tools/RHEL5/bin/mcc
 
 # Substitutions for fa_zoomer.sh
-MCRROOT ?= /dls_sw/prod/tools/RHEL5/opt/matlab2008b
-GLN_ARCH ?= glnxa64
-ARCH ?= amd64
+MCRROOT ?= /dls_sw/work/tools/RHEL6-x86_64/matlab
+ARCH ?= glnxa64
+
+MCC ?= $(MCRROOT)/bin/mcc
 
 define ZOOMER_SUBST
 s:@MCRROOT@:$(MCRROOT):; \
-s:@GLN_ARCH@:$(GLN_ARCH):; \
 s:@ARCH@:$(ARCH):
 endef
 
-MATLAB_FILES = $(wildcard *.m) fa_server_names
+MATLAB_FILES += fa_capture.m        # Wrapper around fa-capture command
+MATLAB_FILES += fa_find_server.m    # Connects to specified FA archiver server
+MATLAB_FILES += fa_getids.m         # Reads data stream metadata from server
+MATLAB_FILES += fa_id2name.m        # Converts FA id to name etc
+MATLAB_FILES += fa_load.m           # Reads requested data set from server
+MATLAB_FILES += fa_name2id.m        # Converts name to FA id
+MATLAB_FILES += fa_zoomer.m         # Interactive tool for exploring stored data
+MATLAB_FILES += tcp_connect.m       # Generic Matlab TCP interface
+MATLAB_FILES += fa_server_names     # Table of server locations and short names
 
 default: fa_zoomer
 
