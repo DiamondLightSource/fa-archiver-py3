@@ -325,6 +325,7 @@ static bool fill_zeros(int file_fd, size_t written)
     if (ok  &&  size_left > 0)
         ok = TEST_write(file_fd, zeros, (size_t) size_left);
     printf("\n");
+    free(zeros);
     return ok;
 }
 

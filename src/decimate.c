@@ -141,7 +141,7 @@ static bool initialise_configuration(void)
     for (unsigned int i = 0; i < comb_orders.count; i ++)
         comb_histories[i] = calloc(
             comb_orders.data[i] * (i + 1), sizeof_row_int64);
-    comb_history_index = calloc(comb_orders.count, sizeof(int));
+    comb_history_index = calloc(comb_orders.count, sizeof(unsigned int));
     /* History buffer for compensation filter. */
     filter_buffer = calloc(compensation_filter.count, sizeof_row_int64);
 

@@ -175,7 +175,7 @@ static void prepare_data_array(
 
     /* Create a default column index by just cycling through the available
      * columns. */
-    column_index = calloc(sizeof(int), fa_entry_count);
+    column_index = calloc(fa_entry_count, sizeof(unsigned int));
     for (unsigned int i = 1; i < fa_entry_count; i ++)
         column_index[i] = i % *columns;
 

@@ -33,22 +33,22 @@ CFLAGS += -Wmissing-declarations
 CFLAGS += -Wstrict-prototypes
 CFLAGS += -Wcast-qual
 CFLAGS += -Woverflow
+CFLAGS += -Wconversion
 
-# For some versions of gcc the conversion flag works, for others it's retarded
-# and generates warnings when formal parameters are smaller than int.  Add the
-# appropriate definition here if it's ok.
-CFLAGS_cc-4.4.6 += -Wconversion
-CFLAGS_cc-4.4.7 += -Wconversion
+CFLAGS_clang += -Wstrict-overflow=5
+CFLAGS_clang += -Wmost -Weverything
+CFLAGS_clang += -Wno-variadic-macros
 
 CFLAGS += -msse
 CFLAGS += -msse2
-CFLAGS += -mfpmath=sse
+CFLAGS_cc += -mfpmath=sse
 CFLAGS += -ffast-math
 CFLAGS += -funsigned-char
 # This configures flags as necessary for large file support on 32-bit.
 CFLAGS += $(shell getconf LFS_CFLAGS)
 
 # Compiler specific flags.
+CFLAGS += $(CFLAGS_$(CC_NAME))
 CFLAGS += $(CFLAGS_$(CC_NAME)-$(CC_VERSION))
 
 
