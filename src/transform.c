@@ -537,7 +537,7 @@ static void madvise_double_decimation(void)
 
 
 /* Helper function to compute offset into output structure corresponding to
- * given input id.  Returns 0 if no entry found. */
+ * given input id.  Returns -1 if no entry found. */
 static unsigned int input_id_to_output(
     const struct filter_mask *mask, unsigned int input_id)
 {

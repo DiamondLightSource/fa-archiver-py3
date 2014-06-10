@@ -183,6 +183,7 @@ void log_message(const char *message, ...)
         va_list args;
         va_start(args, message);
         vlog_message(LOG_INFO, message, args);
+        va_end(args);
     }
 }
 
@@ -191,6 +192,7 @@ void log_error(const char *message, ...)
     va_list args;
     va_start(args, message);
     vlog_message(LOG_ERR, message, args);
+    va_end(args);
 }
 
 
@@ -229,6 +231,8 @@ void print_error(const char *format, ...)
     va_start(args, format);
     char *message;
     IGNORE(vasprintf(&message, format, args));
+    va_end(args);
+
     message = add_strerror(message, last_errno);
     if (!save_message(message))
     {

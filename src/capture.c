@@ -128,10 +128,14 @@ static bool connect_server(FILE **stream)
             &s_in.sin_addr.s_addr, hostent->h_addr,
             (size_t) hostent->h_length))  &&
         TEST_IO(sock = socket(AF_INET, SOCK_STREAM, 0))  &&
-        TEST_IO_(
-            connect(sock, (struct sockaddr *) &s_in, sizeof(s_in)),
-            "Unable to connect to server %s:%d", server_name, port)  &&
-        TEST_NULL(*stream = fdopen(sock, "r+"));
+        UNLESS(
+            TEST_IO_(
+                connect(sock, (struct sockaddr *) &s_in, sizeof(s_in)),
+                "Unable to connect to server %s:%d", server_name, port)  &&
+            TEST_NULL(*stream = fdopen(sock, "r+")),
+
+            // Close sock if connect or fdopen failed
+            TEST_IO(close(sock)));
 }
 
 
@@ -186,8 +190,8 @@ static bool read_archive_parameters(void)
     char buffer[64];
     return
         connect_server(&stream)  &&
-        TEST_OK(fprintf(stream, "CFdDVKC\n") > 0)  &&
         FINALLY(
+            TEST_OK(fprintf(stream, "CFdDVKC\n") > 0)  &&
             read_response(stream, buffer, sizeof(buffer)),
             // Finally, whether read_response succeeds
             TEST_OK(fclose(stream) == 0))  &&

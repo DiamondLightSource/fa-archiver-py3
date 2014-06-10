@@ -298,7 +298,7 @@ static bool maybe_daemonise(void)
 {
     int pid_file = -1;
     char pid[32];
-    return
+    bool ok =
         /* The logic here is a little odd: we want to check that we can write
          * the PID file before daemonising, to ensure that the caller gets the
          * error message if daemonising fails, but we need to write the PID file
@@ -313,8 +313,10 @@ static bool maybe_daemonise(void)
             DO_(start_logging("FA archiver")))  &&
         IF_(pid_filename,
             DO_(sprintf(pid, "%d", getpid()))  &&
-            TEST_IO(write(pid_file, pid, strlen(pid)))  &&
-            TEST_IO(close(pid_file)));
+            TEST_IO(write(pid_file, pid, strlen(pid))));
+    if (pid_file != -1)
+        TEST_IO(close(pid_file));
+    return ok;
 }
 
 

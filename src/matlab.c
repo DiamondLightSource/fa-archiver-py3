@@ -188,6 +188,7 @@ unsigned int place_matrix_header(
         (size_t) (ensure_buffer(buffer, 0) - (void *) l) -
         sizeof(int32_t) + data_length + padding);
 
+    va_end(dims);
     return padding;
 }
 

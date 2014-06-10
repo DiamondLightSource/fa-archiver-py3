@@ -162,6 +162,7 @@ static bool __attribute__((format(printf, 2, 3)))
         TEST_write_(
             sock, buffer, strlen(buffer), "Unable to write response");
     free(buffer);
+    va_end(args);
     return ok;
 }
 

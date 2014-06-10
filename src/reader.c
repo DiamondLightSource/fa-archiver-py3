@@ -522,7 +522,7 @@ static bool read_data(
     release_write_buffer(&out_buffer);
     unlock_buffers(&read_buffers);
     if (archive != -1)
-        close(archive);
+        TEST_IO(close(archive));
 
     return write_ok;
 }

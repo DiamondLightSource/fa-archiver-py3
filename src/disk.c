@@ -194,12 +194,16 @@ bool validate_header(struct disk_header *header, uint64_t file_size)
         (uint32_t) (header->input_block_size / fa_frame_size);
     uint32_t first_decimation  = 1U << header->first_decimation_log2;
     uint32_t second_decimation = 1U << header->second_decimation_log2;
-    unsigned int archive_mask_count =
-        count_mask_bits(&header->archive_mask, header->fa_entry_count);
+    unsigned int archive_mask_count;
     errno = 0;      // Suppresses invalid error report from TEST_OK_ failures
     return
         /* Basic header validation. */
         validate_version(header)  &&
+
+        TEST_OK_(header->fa_entry_count <= MAX_FA_ENTRY_COUNT,
+            "FA entry count %"PRIu32" too large", header->fa_entry_count)  &&
+        DO_(archive_mask_count =
+            count_mask_bits(&header->archive_mask, header->fa_entry_count))  &&
 
         /* Data capture parameter validation. */
         TEST_OK_(
