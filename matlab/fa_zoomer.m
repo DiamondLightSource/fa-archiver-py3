@@ -212,9 +212,11 @@ end
 
 % Plot spectrogram
 function spectrogram_callback(fig, event)
+    h = guidata(fig);
     global fa_data;
     len = 1024;
 
+    xy_names = axis_names(h, fa_data);
     scale = 1e-3 * sqrt(2 / (len * fa_data.f_s));
     if length(size(fa_data.data)) == 3
         busy;
@@ -228,7 +230,7 @@ function spectrogram_callback(fig, event)
 
             set(gca, 'Ydir', 'normal');
             colorbar
-            label_axis(n, 'Hz', 'Spectrogram')
+            label_axis(n, xy_names, 'Hz', 'Spectrogram')
         end
         describe;
     else
