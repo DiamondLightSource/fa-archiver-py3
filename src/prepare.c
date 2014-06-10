@@ -396,12 +396,16 @@ static bool prepare_read_only(void)
     return
         TEST_IO_(file_fd = open(file_name, O_RDONLY),
             "Unable to read file \"%s\"", file_name)  &&
-        TEST_read(file_fd, &header, sizeof(header))  &&
-        IF_(do_validate,
-            get_filesize(file_fd, &file_size)  &&
-            validate_header(&header, file_size))  &&
-        IF_(dump_header, DO_(print_header(stdout, &header)))  &&
-        IF_(dump_index, do_dump_index(file_fd, &header));
+        FINALLY(
+            TEST_read(file_fd, &header, sizeof(header))  &&
+            IF_(do_validate,
+                get_filesize(file_fd, &file_size)  &&
+                validate_header(&header, file_size))  &&
+            IF_(dump_header, DO_(print_header(stdout, &header)))  &&
+            IF_(dump_index, do_dump_index(file_fd, &header)),
+
+            // Close opened file
+            TEST_IO(file_fd));
 }
 
 
@@ -416,6 +420,7 @@ static bool prepare_dry_run(void)
                 "Unable to open archive \"%s\"", file_name)  &&
             FINALLY(
                 get_filesize(file_fd, &file_size),
+
                 TEST_IO(close(file_fd))))  &&
         prepare_new_header(&header);
 }
@@ -433,20 +438,22 @@ static bool prepare_create(void)
     return
         TEST_IO_(file_fd = open(file_name, open_flags, 0664),
             "Unable to write to file \"%s\"", file_name)  &&
-        lock_archive(file_fd)  &&
-        IF_(!file_size_given,
-            get_filesize(file_fd, &file_size))  &&
-        write_new_header(file_fd, &written)  &&
-        IF_(file_size_given,
-            IF_ELSE(quiet_allocate,
-                /* posix_fallocate is marginally faster but shows no sign of
-                 * progress. */
-                TEST_0(posix_fallocate(
-                    file_fd, (off64_t) written,
-                    (off64_t) (file_size - written))),
-                /* If we use full_zeros we can show progress to the user. */
-                fill_zeros(file_fd, written)))  &&
-        TEST_IO(close(file_fd));
+        FINALLY(
+            lock_archive(file_fd)  &&
+            IF_(!file_size_given,
+                get_filesize(file_fd, &file_size))  &&
+            write_new_header(file_fd, &written)  &&
+            IF_(file_size_given,
+                IF_ELSE(quiet_allocate,
+                    /* posix_fallocate is marginally faster but shows no sign of
+                     * progress. */
+                    TEST_0(posix_fallocate(
+                        file_fd, (off64_t) written,
+                        (off64_t) (file_size - written))),
+                    /* If we use full_zeros we can show progress to the user. */
+                    fill_zeros(file_fd, written))),
+
+        TEST_IO(close(file_fd)));
 }
 
 int main(int argc, char **argv)
