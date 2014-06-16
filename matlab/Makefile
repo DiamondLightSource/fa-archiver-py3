@@ -33,9 +33,10 @@ fa_zoomer: $(MATLAB_FILES) fa_zoomer.sh
 	sed '$(ZOOMER_SUBST)' $(srcdir)/fa_zoomer.sh >$@
 	chmod +x $@_bin $@
 
-install: fa_zoomer
+install: $(MATLAB_FILES) fa_zoomer
+	install -d $(MATLAB_DIR)
+	install -m444 $(MATLAB_FILES:%=$(srcdir)/%) $(MATLAB_DIR)
 	install -d $(SCRIPT_DIR)
-	install -m444 $^ $(MATLAB_DIR)
 	install fa_zoomer fa_zoomer_bin $(SCRIPT_DIR)
 
 .PHONY: default install install_m_files

@@ -87,6 +87,16 @@ class connection:
             raise self.EOF('Connection closed by server')
         return chunk
 
+    def recv_all(self):
+        result = []
+        while True:
+            chunk = self.sock.recv(65536)
+            if chunk:
+                result.append(chunk)
+            else:
+                break
+        return ''.join(result)
+
     def read_block(self, length):
         result = numpy.empty(length, dtype = numpy.int8)
         rx = 0
@@ -144,7 +154,7 @@ class subscription(connection):
 def server_command(command, **kargs):
     server = connection(**kargs)
     server.sock.send(command)
-    result = server.recv()
+    result = server.recv_all()
     server.close()
     return result
 

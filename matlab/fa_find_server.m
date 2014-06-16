@@ -76,7 +76,5 @@ function name = server_name(server, port)
     c = tcp_connect(server, port);
     c.write_string(['CN' 10]);
     name = strtok(c.read_string(), char(10));
-    % For limited backwards compatibility, if the server doesn't support the CN
-    % command assume that the only server is called SR.
-    if strcmp(name, 'Unknown command'); name = 'SR'; end
+    if strcmp(name, 'Unknown command'); name = ''; end
 end
