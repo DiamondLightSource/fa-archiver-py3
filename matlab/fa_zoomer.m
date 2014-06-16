@@ -41,10 +41,21 @@ function fa_zoomer(varargin)
     global fa_data;
     fa_data = {};
 
+    % Figure out sensible starting point for initial display.
+    initial_id = 4;
+    ids = sort(fa_getids(h.server_name, 'stored', 'missing'));
+    id_ix = strmatch(fa_id2name(initial_id), ids, 'exact');
+    if isempty(id_ix)
+        id_ix = 1;
+        initial_id = fa_name2id(ids(id_ix), h.server_name, 'missing');
+    else
+        id_ix = id_ix(1);
+    end
+
     % Create the controls.
     global h_pos v_pos;
     h_pos = 10; v_pos = 10;
-    h.bpm_list = control('edit', '4', 60, 'List of BPM FA ids');
+    h.bpm_list = control('edit', initial_id, 60, 'List of BPM FA ids');
     control('pushbutton', 'Back', 40, 'Return to previous zoom', ...
         'Callback', protect(@back_callback));
     control('pushbutton', 'Full', 40, 'View entire archive history', ...
@@ -67,11 +78,13 @@ function fa_zoomer(varargin)
         'Callback', protect(@reload_plot));
     control('pushbutton', 'Save', 40, 'Save data to file', ...
         'Callback', protect(@save_data));
+    control('pushbutton', 'Legend', 60, 'Show legend', ...
+        'Callback', protect(@show_legend));
 
     % Some extra controls on the line above
     h_pos = 10; v_pos = v_pos + 30;
-    control('popup', fa_getids(h.server_name, 'stored', 'missing'), 150, ...
-        'Valid BPM names', 'Value', 4, 'Callback', protect(@set_bpm_list));
+    control('popup', ids, 150, ...
+        'Valid BPM names', 'Value', id_ix, 'Callback', protect(@set_bpm_list));
 
     clear global h_pos v_pos;
     h.history = cell(0, 2);
@@ -112,7 +125,7 @@ function set_bpm_list(fig, event)
     names = get(fig, 'String');
     index = get(fig, 'Value');
     name = names{index};
-    id = fa_name2id(name, h.server_name);
+    id = fa_name2id(name, h.server_name, 'missing');
     set(h.bpm_list, 'String', id)
 end
 
@@ -226,7 +239,7 @@ function spectrogram_callback(fig, event)
             cols = floor(length(e)/len);
             sg = log10(scale * abs(fft( ...
                 reshape(e(1:(len*cols)), len, cols) .* hannwin(len, cols))));
-            imagesc(fa_data.t, [0 fa_data.f_s/5], sg(1:(round(len/5)), :));
+            imagesc(fa_data.t, [0 fa_data.f_s/2], sg(1:(round(len/2)), :));
 
             set(gca, 'Ydir', 'normal');
             colorbar
@@ -428,6 +441,17 @@ function label_axis(n, axes, yname, annotation)
         datetick('keeplimits')
     end
 end
+
+
+function show_legend(fig, event)
+    h = guidata(fig);
+    global fa_data;
+    for n = 1:2
+        subplot(2, 1, n)
+        legend(fa_id2name(fa_data.ids, h.server_name));
+    end
+end
+
 
 function message(msg)
     h = guidata(gcf);
