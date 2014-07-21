@@ -198,8 +198,8 @@ void interrupt_reader(struct reader_state *reader)
     struct buffer *buffer = reader->buffer;
     LOCK(buffer->lock);
     reader->running = false;
-    UNLOCK(buffer->lock);
     pbroadcast(&reader->buffer->lock);
+    UNLOCK(buffer->lock);
 }
 
 
@@ -296,8 +296,8 @@ bool release_write_block(struct buffer *buffer, bool gap, uint64_t timestamp)
                 buffer->cycle_count += 1;
         }
     }
-    UNLOCK(buffer->lock);
     pbroadcast(&buffer->lock);
+    UNLOCK(buffer->lock);
 
     return !blocked;
 }

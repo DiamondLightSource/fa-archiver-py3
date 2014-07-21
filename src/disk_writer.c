@@ -165,8 +165,8 @@ static void *writer_thread(void *context)
 
         LOCK(writer_lock);
         writing_active = false;
-        UNLOCK(writer_lock);
         pbroadcast(&writer_lock);
+        UNLOCK(writer_lock);
     }
     return NULL;
 }
@@ -175,8 +175,8 @@ static void stop_writer_thread(void)
 {
     LOCK(writer_lock);
     writer_running = false;
-    UNLOCK(writer_lock);
     pbroadcast(&writer_lock);
+    UNLOCK(writer_lock);
 }
 
 void schedule_write(off64_t offset, void *block, size_t length)
@@ -188,8 +188,8 @@ void schedule_write(off64_t offset, void *block, size_t length)
     writing_block = block;
     writing_length = length;
     writing_active = true;
-    UNLOCK(writer_lock);
     pbroadcast(&writer_lock);
+    UNLOCK(writer_lock);
 }
 
 void request_read(void)
