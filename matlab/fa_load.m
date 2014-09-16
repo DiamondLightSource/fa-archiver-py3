@@ -317,20 +317,6 @@ function [data, timestamps, durations, id_zeros, sample_count] = ...
     end
 
 
-    % Support for cancellable waiting
-    function [wh, cleanup] = create_waitbar(title)
-        wh = waitbar(0, 'Fetching data', ...
-            'CreateCancelBtn', 'setappdata(gcbf,''cancelling'',1)');
-        cleanup = onCleanup(@() delete(wh));
-        setappdata(wh, 'cancelling', 0);
-    end
-
-    function ok = advance_waitbar(fraction)
-        waitbar(fraction, wh);
-        ok = ~getappdata(wh, 'cancelling');
-    end
-
-
     [field_count, block_offset, read_block_size, ...
      data, timestamps, durations, id_zeros] = prepare_data( ...
         sample_count, id_count, simple_data, initial_offset, block_size, ...
@@ -339,7 +325,7 @@ function [data, timestamps, durations, id_zeros, sample_count] = ...
 
     % If possible create the wait bar
     if ~ts_at_end
-        [wh, cleanup] = create_waitbar('Fetching data');
+        wh = progress_bar('Fetching data');
     end
 
     % Read the requested data block by block
@@ -349,7 +335,7 @@ function [data, timestamps, durations, id_zeros, sample_count] = ...
         if ~ts_at_end
             % Advance the progress bar and read the next timestamp block.  If
             % either of these fails then truncate the data and we're done.
-            if ~advance_waitbar(samples_read / sample_count)  ||  ...
+            if ~wh.advance(samples_read / sample_count)  ||  ...
                ~read_timestamp_block()
                 truncate_data();
                 break
@@ -499,4 +485,33 @@ function id0 = process_id0( ...
     id0 = repmat(id_zeros, 1, block_size) + repmat(offsets, size(id_zeros), 1);
     id0 = reshape(id0', [], 1);
     id0 = id0(initial_offset + 1:initial_offset + sample_count);
+end
+
+
+% Support for cancellable waiting
+function bar = progress_bar(title)
+    function ok = advance_waitbar(bar, fraction)
+        waitbar(fraction, bar.wb);
+        ok = ~getappdata(bar.wb, 'cancelling');
+    end
+
+    function ok = show_advance(fraction)
+        fprintf(2, '%5.2f%%\r', 100 * fraction)
+        ok = true;
+    end
+
+    bar = {};
+    if usejava('desktop')
+        bar.wb = waitbar(0, title, ...
+            'CreateCancelBtn', 'setappdata(gcbf,''cancelling'',1)');
+        bar.cleanup = onCleanup(@() delete(bar.wb));
+        setappdata(bar.wb, 'cancelling', 0);
+
+        bar.advance = @(fraction) advance_waitbar(bar, fraction);
+        bar.cancelled = @() bar.cancelling;
+    else
+        bar.cleanup = onCleanup(@() fprintf(2, 'Done   \n'));
+        bar.advance = @show_advance;
+        bar.cancelled = @() false;
+    end
 end
