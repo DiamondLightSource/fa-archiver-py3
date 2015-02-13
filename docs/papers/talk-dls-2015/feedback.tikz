@@ -1,0 +1,48 @@
+\begin{tikzpicture}
+
+\tikzset{every node/.style={align=center}}
+
+\node (sr) [draw, ellipse, very thick, minimum width=30mm]
+    {Storage\\Ring};
+\node (bpm) [draw, rectangle, highlight fill, inner sep=2.5mm,
+    label={above left:BPMs},
+    label={below:\tiny 172~}] at (sr.west) {};
+\node (mag) [draw, circle, highlight fill, inner sep=2mm,
+    label={above right:Correctors},
+    label={below:\tiny ~172}] at (sr.east) {};
+
+\matrix [minimum height=15mm, column sep=6mm, row sep=10mm] at (0,-40mm) {
+    \node (libera) [draw, rectangle] {Libera\\EBPM}; &
+    \node (cc) [draw, cloud, aspect=2, highlight fill, inner sep=0pt]
+        {CC\\Network}; &
+    \node (ff) [draw, rectangle] {Feedback\\Controller}; &
+    \node (psc) [draw, rectangle] {PSC}; &
+    \node (psu) [draw, rectangle] {PSU};
+\\
+    \node (epics1) [minimum height=0] {EPICS}; &
+    \node (fa) [draw, rectangle] {FA\\Archiver}; &
+    \node (epics2) [minimum height=0] {EPICS};
+\\
+};
+
+\node [anchor=north east, inner sep=2pt] at (libera.south east) {\tiny 172};
+\node [anchor=north east, inner sep=2pt] at (ff.south east) {\tiny 24};
+\node [anchor=north east, inner sep=2pt] at (psc.south east) {\tiny 344};
+\node [anchor=north east, inner sep=2pt] at (psu.south east) {\tiny 344};
+
+
+\draw [->] (bpm) -| (libera);
+\draw [->] (libera) -- (cc);
+\draw [->] (cc) -- (ff);
+\draw [->] (ff) -- (psc);
+\draw [->] (psc) -- (psu);
+\draw [->] (psu) |- (mag);
+
+\draw [->] (libera) -- (epics1);
+\draw [->] (cc) -- (fa);
+\draw [->] (epics2) -- (ff);
+\draw [->] (epics2) -- (psc);
+
+\end{tikzpicture}
+
+% vim: set filetype=tex:

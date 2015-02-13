@@ -1,0 +1,101 @@
+\begin{tikzpicture}[
+    single arrow head extend=1.5mm]
+\scriptsize
+
+% Draws a circular buffer with name #1 east of #2 with top label #3 and centre
+% label #4
+\newcommand{\buffer}[3]{
+\begin{pgfonlayer}{foreground}
+\path
+    node [draw, thick, circle, background fill,
+        minimum width=12mm, anchor=west,
+        label={above:#3}] (#1) at (#2.east) {}
+    node [draw, thick, fill=white, circle, minimum width=5mm] at (#1) {};
+\end{pgfonlayer}
+}
+
+% Sniffer device and its connections
+\node [draw, thick, anchor=west, minimum height=12mm] (fpga) {FPGA};
+\node [draw, single arrow, anchor=west, fill=white]
+    (dma) at ($(fpga.east)-(0.2mm,0)$) {DMA};
+
+% Device driver
+\buffer{device buffer}{dma}{Driver buffer}
+\node [draw, single arrow, anchor=west, fill=white]
+    at ($(device buffer.east)-(0.4mm,0)$)
+    (device) {\tiny\texttt{read()}};
+
+\begin{pgfonlayer}{background}
+\draw [orange, very thick] ($(device buffer)+(-12mm,11mm)$)
+    rectangle ($(device buffer)+(10mm,-10mm)$);
+\node [orange, anchor=south east, font=\tiny]
+    at ($(device buffer)+(10mm,-10mm)$) {Kernel};
+\end{pgfonlayer}
+
+
+% Central raw circular buffer and decimated buffer
+\buffer{raw buffer}{device}{User space buffer}
+\node [draw, single arrow, anchor=west] at ($(raw buffer.east)-(0.4mm,0)$)
+    (decimate) {Decimate};
+\buffer{decimated buffer}{decimate}{Decimated buffer}
+
+
+% Transposing to in-memory disk buffer
+\node [draw, thick, anchor=north west, inner sep=2mm, align=center]
+    at (15mm, -15mm)
+    (transpose) {Transpose\\and bin};
+\path [draw, line width=5pt, color=gray, ->] (raw buffer) |- (transpose);
+\node [draw, single arrow, rotate=-90, anchor=west, minimum height=8mm]
+    (transpose arrow) at ($(transpose.south)+(0,0.2mm)$) {};
+\begin{pgfonlayer}{foreground}
+\node [draw, thick, fill=white,
+    minimum height=20mm, minimum width=15mm, anchor=north, align=center,
+    left delimiter=\{, copy shadow={
+        shadow xshift=1.5mm, shadow yshift=-1.5mm, highlight fill},
+    label={[align=right, xshift=-3mm]left:Major\\Block\\double\\buffers}]
+    (major block) at (transpose arrow.east) {FA and D};
+\end{pgfonlayer}
+
+
+% Archive on disk and in memory
+\node [draw, single arrow, anchor=west, minimum width=1mm, minimum height=12mm,
+    highlight fill]
+    (archive arrow) at (major block.325) {};
+\node [disk icon, anchor=west, label={below:Archive}]
+    (archive) at (archive arrow.east) {};
+
+\node [draw, thick, inner sep=1.5mm]
+    (index) at ($(archive)+(-5mm,14mm)$) {Index};
+\node [draw, thick, inner sep=1.5mm] (dd) at ($(archive)+(+5mm,14mm)$) {DD};
+
+\draw [->, thick] (transpose arrow) -| (index);
+\draw [->, thick] (transpose arrow) -| (dd);
+\node [inner sep=0pt, line width=0] (via) at ($(archive.north)+(0,3mm)$) {};
+\draw [<-, thick] (index) |- (via);
+\draw [<->, thick] (dd) |- (via.center) -- (archive);
+
+\node [right=5mm of via, align=center, font=\tiny] {Memory\\mapped};
+
+
+% Socket Server
+\path [draw, thick]
+    (\linewidth, -40mm) rectangle ++(-5mm,22mm) coordinate (a)
+    node [rotate=90, pos=0.5] {Socket Server}
+    rectangle ++(-20mm,-11mm) coordinate (b)
+    node [pos=0.5, align=center] {Subscription\\Server}
+    rectangle ++(20mm,-11mm) coordinate (c)
+    node [pos=0.5, align=center] {Archive\\Server}
+    node [tight fit=(a) (b), align=center] (subscription server) {}
+    node [tight fit=(b) (c), align=center] (archive server) {};
+
+\draw [<-] ($(subscription server.west)+(0,-2mm)$)
+    -- +(-4mm,0) -- (raw buffer);
+\draw [<-] ($(subscription server.west)+(0,2mm)$)
+    -- +(-4mm,0) -- (decimated buffer);
+\draw [<-] (archive server.west) -- +(-10mm,0) |- (archive);
+\draw [<-] (archive server.west) -- +(-10mm,0) |- (dd);
+
+
+\end{tikzpicture}
+
+% vim: filetype=tex:

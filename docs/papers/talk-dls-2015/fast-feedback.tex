@@ -1,0 +1,434 @@
+\documentclass{beamer}
+% \documentclass[notes]{beamer}
+
+\usepackage{graphicx}       % Extended support for \includegraphics
+\usepackage{tikz}           % Powerful drawing package, part of pgf
+\usepackage{url}            % \url command for decent line breaks in urls
+\usepackage{array}          % Improved array support
+\usepackage{textcomp}       % Extra symbols
+
+% Enable this for summary printout
+% \usepackage{pgfpages}\pgfpagesuselayout{4 on 1}[
+%     a4paper, landscape, border shrink=2mm]
+
+
+\usetikzlibrary{matrix}             % Grid placement
+\usetikzlibrary{positioning}        % Anchor placement support
+\usetikzlibrary{calc}               % Coordinate calculations
+\usetikzlibrary{shapes.geometric}   % cylinder
+\usetikzlibrary{shapes.symbols}     % cloud
+\usetikzlibrary{shapes.arrows}      % arrow shapes
+\usetikzlibrary{shapes.multipart}
+\usetikzlibrary{fit}                % Fitting outline to shape
+\usetikzlibrary{shadows}
+\usetikzlibrary{arrows}
+\usetikzlibrary{chains}
+
+% Common TikZ definitions
+\tikzset{
+    % This seems a reasonably comfortable arrow shape
+    >=stealth,
+%
+    % Used for creating an exact fit to an existing list of objects
+    tight fit/.style={fit=#1, inner sep=0, line width=0},
+%
+    % Draws a reasonably sensible looking disk icon
+    disk icon/.style={
+        draw, thick, cylinder, shape border rotate=90,
+        minimum width=1cm, minimum height=.75cm},
+%
+    % A moderate highlighting fill
+    background fill/.style={fill=black!15},
+    % A gentle highlighing fill
+    highlight fill/.style={fill=green!60!blue!20},
+    % A rather darker fill for shadows
+    shadow fill/.style={fill=gray}}
+
+% It's handy to have a foreground and background layer available.
+\pgfdeclarelayer{background}
+\pgfdeclarelayer{foreground}
+\pgfsetlayers{background,main,foreground}
+
+
+\usetheme{dlstalk}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{items}[circle]
+
+\hyphenpenalty 4000 \sloppy
+
+% \title{A new Fast Data Logger and Viewer at Diamond:\\the FA Archiver}
+\title[Fast Feedback]{A Technical Description of\\Fast Feedback}
+\author{Michael Abbott}
+\date{Software Developers Away Day\\ 12th February 2015}
+
+
+
+
+\begin{document}
+
+
+\begin{frame}
+\titlepage
+\end{frame}
+
+% Place date discreetely on every slide.
+\setbeamertemplate{footline}{\hspace*{\fill}\insertdate}
+
+
+% ------------------------------------------------------------------------------
+%
+\begin{frame}\frametitle{Fast Orbit Feedback}
+
+The purpose of Fast Orbit Feedback is to stabilise the electron beam so that the
+optical beam delivered to beamlines does not move too much.
+
+\medskip
+
+Current target is to limit motion to $\pm 3\%$ beam size for frequencies up to
+100\,Hz.
+
+\medskip
+
+Higher frequency motion enlarges the beam seen by users and is not controllable
+by the current feedback implementation.
+
+\end{frame}
+
+
+% ------------------------------------------------------------------------------
+%
+\begin{frame}\frametitle{Impact of Orbit Feedback by Frequency}
+\includegraphics[width=\linewidth]{fb-on-off}
+\end{frame}
+
+
+% ------------------------------------------------------------------------------
+%
+\begin{frame}\frametitle{Integrated Impact of Orbit Feedback}
+\includegraphics[width=\linewidth]{fb-on-off-integ}
+\end{frame}
+
+
+% ------------------------------------------------------------------------------
+%
+\begin{frame}\frametitle{Feedback Signal Processing}
+
+172 beam position monitors are used to control 344 corrector magnets:
+
+\begin{itemize}
+\item 500\,MHz signal picked up from beam by 172 button blocks
+\item Signal sampled at 117\,MHz (32\,MHz intermediate frequency)
+\item Signal filtered down to 10\,kHz signal and $X,Y$ computed
+\item Position communicated to each of 24 feedback processors
+\item Position error used to compute magnet correction
+\item Correction communicated to each of 344 power supply controllers
+\item Power supply drives correction coils in focusing magnets
+\item Beam is steered back into position
+\end{itemize}
+
+\end{frame}
+
+
+% ------------------------------------------------------------------------------
+%
+\begin{frame}\frametitle{Electron Beam Fast Feedback}
+\begin{center}
+\input{feedback.tikz}
+\end{center}
+\end{frame}
+
+
+% ------------------------------------------------------------------------------
+%
+\begin{frame}\frametitle{A Quick Detailed Look}
+
+We'll now take a quick detailed look at three corners of this system:
+
+\begin{itemize}
+\item Communication controller.
+\item Feedback controller.
+\item Fast Archiver.
+\end{itemize}
+
+\end{frame}
+
+
+% ------------------------------------------------------------------------------
+%
+\begin{frame}\frametitle{Communication Controller}
+
+\begin{itemize}
+
+\item
+The challenge: to communicate 172 beam position $X, Y$ pairs to 24 feedback
+controllers every 100\,\textmu s.
+
+\item
+The technology: fiber optical connections runnng at 1\,Gbit per second
+connecting all Beam Position Monitors and Feedback Controllers in a complex
+redundant network.
+
+\item
+The algorithm:
+
+\begin{enumerate}
+\item At the start of every tick every BPM sends its position to all of its
+neighbours.
+\item Every node in the network forwards a copy of every \emph{new} position it
+receives.
+\item After around 45\,\textmu s every node has seen every position update.
+\end{enumerate}
+
+\end{itemize}
+
+\end{frame}
+
+
+% ------------------------------------------------------------------------------
+%
+\begin{frame}\frametitle{Communication Controller Network Topology}
+\includegraphics[width=\linewidth]{fofb}
+\end{frame}
+
+
+
+% ------------------------------------------------------------------------------
+%
+\begin{frame}\frametitle{Communication Controller Internals}
+
+The Communication Controller is entirely implemented in FPGA in VHDL.
+
+\medskip
+
+\includegraphics[width=\linewidth]{cc-internal}
+
+\medskip
+
+One challenge: if the internal queues overflow then data can be delayed or lost.
+
+\end{frame}
+
+
+% ------------------------------------------------------------------------------
+%
+\begin{frame}\frametitle{Fast Feedback Controller}
+
+There are 24 feedback controllers, one per storage ring sector, each controlling
+14 corrector magnets.  Each controller runs on a VME PowerPC processor card with
+the following hardware connections:
+
+\begin{itemize}
+\item Connection to Communication Controller network through PCI Mezzanine Card
+(PMC) over PCI bus.
+\item Connection to Power Supply Controllers over VME backplane and optical
+fibre.
+\item Ethernet connection to controls network for EPICS control and status
+monitoring.
+\end{itemize}
+
+
+\end{frame}
+
+
+% ------------------------------------------------------------------------------
+%
+\begin{frame}\frametitle{Fast Feedback Processing}
+
+Feedback control is performed by the following steps:
+
+\begin{enumerate}
+\item Receive interrupt from Communication Controller PMC notifying that a
+complete set of BPM positions has arrived.
+\item Initiate DMA from CC card to processor memory.  Takes 60\,\textmu s!
+\item Convert global orbit error into local corrector error.  This is a $14
+\times 172$ matrix multiplication converting 172 $X,Y$ positions into 7 $X,Y$
+corrector adjustments.
+\item Filter corrector error adjustment to manage spectral response and
+stability.  This step involves quite a bit of control theory.
+\item Sanity check correction and halt feedback if any error is found.
+\item Send corrector magnet update to power supply controllers.
+\end{enumerate}
+
+\end{frame}
+
+
+% ------------------------------------------------------------------------------
+%
+\begin{frame}\frametitle{Feedback and Timing}
+
+The time budget for the feedback process is quite interesting.  There is a
+total delay from beam measurement to correction of around 700\,\textmu s.  This
+limits our bandwidth to little more than 100\,Hz.  The following are
+contributions to delay:
+
+\begin{description}
+\item[150\,\textmu s] Filtering in BPM.  A natural consequence of the
+100\,\textmu s update rate.
+\item[45\,\textmu s] Communication from BPM to CC PMC.
+\item[50\,\textmu s] DMA from CC PMC to processor RAM.
+\item[40\,\textmu s] Feedback algorithm.
+\item[400\,\textmu s] Power supply control.  This will be investigated...
+\end{description}
+
+\medskip
+
+Note that little more than 10\% of the delay is spent in computation: vectorised
+floating point arithmetic can be \emph{fast}!
+
+\end{frame}
+
+
+% ------------------------------------------------------------------------------
+%
+\begin{frame}\frametitle{The Fast Acquisition Archiver}
+
+The nature of the Fast Feedback Communication network makes it very easy to add
+nodes.  The Fast Archiver is one such node.
+
+\medskip
+
+The Fast Archiver captures $X,Y$ position data from BPMs at 10\,kHz, maintains a
+rolling historical record, and rebroadcasts the complete data stream to all
+interested parties.
+
+\begin{itemize}
+
+\item 256 $X,Y$ position updates every 100\,\textmu s, sustained data
+rate of 20\,MB/s.
+
+\item A fortnight of data is archived onto a dedicated 30TB server.
+
+\item Any number of clients (limited by network connection to archive server)
+can read the archive and subscribe to the rebroadcast live data stream.
+
+\end{itemize}
+\end{frame}
+
+
+
+% ------------------------------------------------------------------------------
+%
+\begin{frame}\frametitle{FA Archiver in Context}
+\begin{center}
+\input{WEPMN004f1.tikz}
+\end{center}
+\end{frame}
+
+
+
+% ------------------------------------------------------------------------------
+%
+\begin{frame}\frametitle{The Fast Acquisition Archiver}
+\begin{center}
+\input{context.tikz}
+\end{center}
+\end{frame}
+
+
+
+% ------------------------------------------------------------------------------
+%
+\begin{frame}\frametitle{FA Archiver Architecture}
+
+\begin{itemize}
+
+\item Very regular data feed: fixed size updates at fixed intervals.
+Makes archiver design much simpler than an EPICS archiver.
+
+\item The historical archive is fixed length, determined by disk size.  Old data
+is discarded as new data arrives.
+
+\item Data is reordered for fast read access before storage to disk.
+
+\item File system overhead is avoided by storing archiver database on raw block
+device!
+
+\item Overview data (decimated by binning) also stored.
+
+\item Archive indexed by timestamp of arrival of CC data.
+
+\end{itemize}
+\end{frame}
+
+
+
+% ------------------------------------------------------------------------------
+%
+\begin{frame}\frametitle{FA Archiver Architecture}
+\input{WEPMN004f2.tikz}
+\end{frame}
+
+
+% ------------------------------------------------------------------------------
+%
+\begin{frame}\frametitle{Binned Archive Data}
+\begin{center}
+\includegraphics[width=.9\linewidth]{binning}
+\end{center}
+\end{frame}
+
+
+% ------------------------------------------------------------------------------
+%
+\begin{frame}\frametitle{Archiver Services}
+
+The FA archiver provides the following data over TCP/IP to any connecting
+machine:
+
+\begin{itemize}
+
+\item Subscription to any subset of the complete CC data stream.
+\note{If the client doesn't take data rapidly enough it will be disconnected by
+the server.}
+
+\item Subscription to any subset of the complete CC data stream decimated by
+filtering by a factor of 10.
+
+\item Access to any part of the historical archive, both full and decimated,
+indexed by timestamp.
+
+\end{itemize}
+\end{frame}
+
+
+
+% ------------------------------------------------------------------------------
+%
+\begin{frame}\frametitle{Spectrum Analysis Tool}
+\begin{center}
+\input{analyser.tikz}
+\end{center}
+\end{frame}
+
+
+% ------------------------------------------------------------------------------
+%
+\begin{frame}\frametitle{Spectrogram at one EBPM for a Week}
+\includegraphics[width=\linewidth]{spectrogram-3-2}
+\end{frame}
+
+
+
+% ------------------------------------------------------------------------------
+%
+\begin{frame}\frametitle{FA Viewer}
+\begin{center}
+\includegraphics[width=.85\linewidth]{WEPMN004f6}
+\end{center}
+\end{frame}
+
+
+% ------------------------------------------------------------------------------
+%
+\begin{frame}\frametitle{}
+
+
+\end{frame}
+
+
+
+
+% How to skip a block of (valid) code:
+\iffalse \fi
+
+\end{document}

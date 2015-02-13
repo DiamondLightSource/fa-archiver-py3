@@ -1,0 +1,48 @@
+\begin{tikzpicture}
+
+\tikzset{
+    accent/.style={color=blue!40, line width=4pt},
+    highlight/.style={fill=yellow!20}}
+
+\path (0,0)
+    node (cc) {CC Network}
+    [draw, line width=5pt, gray, ->] (cc.south) -- ++(0,-12mm)
+    coordinate (input)
+    node [midway, left, black, xshift=-2mm]
+        {$256\times(X,Y)$  every 100\,\textmu{}s}
+    node [midway, right, black, align=left, xshift=2mm]
+        {Position data\\from all BPMs};
+\node (archiver) [
+        draw, very thick, rectangle, anchor=north,
+        label={[xshift=-4mm]left:FA Archiver},
+        minimum width=40mm, minimum height=30mm] at (input) {};
+\path [gray] node [fit=(archiver), inner sep=0pt, left delimiter=\{] {};
+
+\draw[very thick] (archiver.-10) -- (archiver.-170);
+\path (archiver.-10) -- (archiver.south west)
+    node [midway, align=center] {Socket\\Server};
+
+\draw [line width=5pt, gray, ->] (archiver.-135) -- +(0, -10mm)
+    node [black, anchor=north, align=center] {Subscription\\Clients};
+\draw [line width=5pt, gray, ->] (archiver.-45) -- +(0, -10mm)
+    node [black, anchor=north, align=center] {History\\Clients};
+
+\begin{pgfonlayer}{background}
+\path[highlight] (archiver.north west) rectangle (archiver.south east);
+\draw[accent, ->] (archiver.north) |- (archiver.20);
+\draw[accent, ->] (archiver.0) -| (archiver.-45);
+\draw[accent, ->] (archiver.north |- archiver.20) -| (archiver.-135);
+\end{pgfonlayer}
+
+\node (disk) [disk icon, fill=black!10,
+    minimum height=15mm, minimum width=15mm, xshift=18mm,
+    label={[align=center]below:2 week\\Archive\\(30\,TB)}]
+    at (archiver.10) {};
+\draw [line width=5pt, color=gray, ->]
+    (archiver.20) -- (archiver.20 -| disk.west);
+\draw [line width=5pt, color=gray, <-]
+    (archiver.0) -- (archiver.0 -| disk.west);
+
+\end{tikzpicture}
+
+% vim: set filetype=tex:
