@@ -91,14 +91,18 @@ static bool parse_raw_mask(
     for (unsigned int i = count; i > 0; )
     {
         i -= 1;
-        unsigned int ch = *(*string)++;
+        unsigned int ch = **string;
         unsigned int nibble;
         if ('0' <= ch  &&  ch <= '9')
             nibble = ch - '0';
         else if ('A' <= ch  &&  ch <= 'F')
             nibble = ch - 'A' + 10;
+        else if (ch == '\0')
+            return FAIL_("Mask too short");
         else
             return FAIL_("Unexpected character in mask");
+
+        *string += 1;
         // 2 nibbles per byte
         mask->mask[i / 2] |= (uint8_t) (nibble << (4 * (i % 2)));
     }

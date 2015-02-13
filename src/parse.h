@@ -76,10 +76,11 @@ bool skip_whitespace(const char **string);
  * message. */
 #define DO_PARSE(message, parse, string, result...) \
     ( { \
-      const char *__string__ = (string); \
+      const char *string_in__ = (string); \
+      const char *__string__ = string_in__; \
       push_error_handling(); \
       bool __parse_ok = (parse)(&__string__, ##result); \
-      report_parse_error((message), __parse_ok, (string), __string__); \
+      report_parse_error((message), __parse_ok, string_in__, __string__); \
     } )
 
 /* This must be called with push_error_handling() in force, and will call
