@@ -14,13 +14,13 @@
 \matrix [minimum height=15mm, column sep=6mm, row sep=10mm] at (0,-40mm) {
     \node (libera) [draw, rectangle] {Libera\\EBPM}; &
     \node (cc) [draw, cloud, aspect=2, highlight fill, inner sep=0pt]
-        {CC\\Network}; &
+        {Fast\\Network}; &
     \node (ff) [draw, rectangle] {Feedback\\Controller}; &
     \node (psc) [draw, rectangle] {PSC}; &
     \node (psu) [draw, rectangle] {PSU};
 \\
     \node (epics1) [minimum height=0] {EPICS}; &
-    \node (fa) [draw, rectangle] {FA\\Archiver}; &
+    \node (fa) [draw, rectangle] {Fast\\Archiver}; &
     \node (epics2) [minimum height=0] {EPICS};
 \\
 };

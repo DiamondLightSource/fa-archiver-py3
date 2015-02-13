@@ -1,6 +1,5 @@
 DOCUMENT = fast-feedback
 
-FIGURES += fb-on-off.png
 FIGURES += fb-on-off-integ.png
 FIGURES += fofb.png
 FIGURES += cc-internal.png

@@ -77,7 +77,7 @@
 
 % ------------------------------------------------------------------------------
 %
-\begin{frame}\frametitle{Fast Orbit Feedback}
+\begin{frame}{Fast Orbit Feedback}
 
 The purpose of Fast Orbit Feedback is to stabilise the electron beam so that the
 optical beam delivered to beamlines does not move too much.
@@ -97,41 +97,34 @@ by the current feedback implementation.
 
 % ------------------------------------------------------------------------------
 %
-\begin{frame}\frametitle{Impact of Orbit Feedback by Frequency}
-\includegraphics[width=\linewidth]{fb-on-off}
-\end{frame}
-
-
-% ------------------------------------------------------------------------------
-%
-\begin{frame}\frametitle{Integrated Impact of Orbit Feedback}
+\begin{frame}{Integrated Impact of Orbit Feedback}
 \includegraphics[width=\linewidth]{fb-on-off-integ}
 \end{frame}
 
 
 % ------------------------------------------------------------------------------
 %
-\begin{frame}\frametitle{Feedback Signal Processing}
+\begin{frame}{Beam Position Monitors}
 
-172 beam position monitors are used to control 344 corrector magnets:
+172 electron Beam Position Monitors (Libera EBPMs) measure beam position around
+the ring.  The processing chain is:
 
-\begin{itemize}
-\item 500\,MHz signal picked up from beam by 172 button blocks
-\item Signal sampled at 117\,MHz (32\,MHz intermediate frequency)
-\item Signal filtered down to 10\,kHz signal and $X,Y$ computed
-\item Position communicated to each of 24 feedback processors
-\item Position error used to compute magnet correction
-\item Correction communicated to each of 344 power supply controllers
-\item Power supply drives correction coils in focusing magnets
-\item Beam is steered back into position
-\end{itemize}
+\begin{enumerate}
+\item 500\,MHz signal picked up from beam by RF pickups in vacuum chamber.
+\item RF signal sampled at 117\,MHz.
+\item Digitised signal filtered down to 10\,kHz data rate.
+\item Position $X,Y$ computed from filtered signal.
+\item Position communicated to Fast Feedback network via Communication
+Controller every 100\,\textmu s.
+\item Signal further filtered down to 10\,Hz for EPICS monitoring.
+\end{enumerate}
 
 \end{frame}
 
 
 % ------------------------------------------------------------------------------
 %
-\begin{frame}\frametitle{Electron Beam Fast Feedback}
+\begin{frame}{Electron Beam Fast Feedback}
 \begin{center}
 \input{feedback.tikz}
 \end{center}
@@ -140,13 +133,13 @@ by the current feedback implementation.
 
 % ------------------------------------------------------------------------------
 %
-\begin{frame}\frametitle{A Quick Detailed Look}
+\begin{frame}{A Quick Detailed Look}
 
 We'll now take a quick detailed look at three corners of this system:
 
 \begin{itemize}
-\item Communication controller.
-\item Feedback controller.
+\item Communication Controller.
+\item Feedback Controller.
 \item Fast Archiver.
 \end{itemize}
 
@@ -155,16 +148,23 @@ We'll now take a quick detailed look at three corners of this system:
 
 % ------------------------------------------------------------------------------
 %
-\begin{frame}\frametitle{Communication Controller}
+\begin{frame}{Communication Controller}
+\end{frame}
+
+
+% ------------------------------------------------------------------------------
+%
+\begin{frame}{Communication Controller}
 
 \begin{itemize}
 
 \item
 The challenge: to communicate 172 beam position $X, Y$ pairs to 24 feedback
-controllers every 100\,\textmu s.
+controllers every 100\,\textmu s.  Both sources and destinations distributed
+around synchrotron.
 
 \item
-The technology: fiber optical connections runnng at 1\,Gbit per second
+The technology: fiber optical connections runnng at 2.4\,Gbit per second
 connecting all Beam Position Monitors and Feedback Controllers in a complex
 redundant network.
 
@@ -172,11 +172,11 @@ redundant network.
 The algorithm:
 
 \begin{enumerate}
-\item At the start of every tick every BPM sends its position to all of its
-neighbours.
+\item At the start of every 100\,\textmu s tick every BPM sends its position to
+all of its neighbours.
 \item Every node in the network forwards a copy of every \emph{new} position it
 receives.
-\item After around 45\,\textmu s every node has seen every position update.
+\item After around 40\,\textmu s every node has seen every position update.
 \end{enumerate}
 
 \end{itemize}
@@ -186,15 +186,14 @@ receives.
 
 % ------------------------------------------------------------------------------
 %
-\begin{frame}\frametitle{Communication Controller Network Topology}
+\begin{frame}{Communication Controller Network Topology}
 \includegraphics[width=\linewidth]{fofb}
 \end{frame}
 
 
-
 % ------------------------------------------------------------------------------
 %
-\begin{frame}\frametitle{Communication Controller Internals}
+\begin{frame}{Communication Controller Internals}
 
 The Communication Controller is entirely implemented in FPGA in VHDL.
 
@@ -211,11 +210,17 @@ One challenge: if the internal queues overflow then data can be delayed or lost.
 
 % ------------------------------------------------------------------------------
 %
-\begin{frame}\frametitle{Fast Feedback Controller}
+\begin{frame}{Fast Feedback Controller}
+\end{frame}
+
+
+% ------------------------------------------------------------------------------
+%
+\begin{frame}{Fast Feedback Controller}
 
 There are 24 feedback controllers, one per storage ring sector, each controlling
 14 corrector magnets.  Each controller runs on a VME PowerPC processor card with
-the following hardware connections:
+fast vectorised floating point support and the following hardware connections:
 
 \begin{itemize}
 \item Connection to Communication Controller network through PCI Mezzanine Card
@@ -226,20 +231,19 @@ fibre.
 monitoring.
 \end{itemize}
 
-
 \end{frame}
 
 
 % ------------------------------------------------------------------------------
 %
-\begin{frame}\frametitle{Fast Feedback Processing}
+\begin{frame}{Fast Feedback Processing}
 
 Feedback control is performed by the following steps:
 
 \begin{enumerate}
 \item Receive interrupt from Communication Controller PMC notifying that a
 complete set of BPM positions has arrived.
-\item Initiate DMA from CC card to processor memory.  Takes 60\,\textmu s!
+\item DMA from CC card to processor memory.  Takes 60\,\textmu s!
 \item Convert global orbit error into local corrector error.  This is a $14
 \times 172$ matrix multiplication converting 172 $X,Y$ positions into 7 $X,Y$
 corrector adjustments.
@@ -254,15 +258,19 @@ stability.  This step involves quite a bit of control theory.
 
 % ------------------------------------------------------------------------------
 %
-\begin{frame}\frametitle{Feedback and Timing}
+\begin{frame}{Feedback and Timing}
 
-The time budget for the feedback process is quite interesting.  There is a
-total delay from beam measurement to correction of around 700\,\textmu s.  This
-limits our bandwidth to little more than 100\,Hz.  The following are
-contributions to delay:
+The time budget for the feedback process is quite interesting: this is a
+reasonably ``hard real-time'' processing challenge.
+
+\medskip
+
+There is a total delay from beam measurement to correction of around
+700\,\textmu s.  This limits our correction bandwidth to little more than
+100\,Hz.  The following are contributions to delay:
 
 \begin{description}
-\item[150\,\textmu s] Filtering in BPM.  A natural consequence of the
+\item[150\,\textmu s] Filtering in BPM, this is a natural consequence of the
 100\,\textmu s update rate.
 \item[45\,\textmu s] Communication from BPM to CC PMC.
 \item[50\,\textmu s] DMA from CC PMC to processor RAM.
@@ -280,10 +288,17 @@ floating point arithmetic can be \emph{fast}!
 
 % ------------------------------------------------------------------------------
 %
-\begin{frame}\frametitle{The Fast Acquisition Archiver}
+\begin{frame}{The Fast Archiver}
+
+\end{frame}
+
+
+% ------------------------------------------------------------------------------
+%
+\begin{frame}{The Fast Archiver}
 
 The nature of the Fast Feedback Communication network makes it very easy to add
-nodes.  The Fast Archiver is one such node.
+nodes that see all BPM data.  The Fast Archiver is one such node.
 
 \medskip
 
@@ -294,7 +309,7 @@ interested parties.
 \begin{itemize}
 
 \item 256 $X,Y$ position updates every 100\,\textmu s, sustained data
-rate of 20\,MB/s.
+rate of 20\,MB/s.  Note that this runs without interruption.
 
 \item A fortnight of data is archived onto a dedicated 30TB server.
 
@@ -305,30 +320,27 @@ can read the archive and subscribe to the rebroadcast live data stream.
 \end{frame}
 
 
-
 % ------------------------------------------------------------------------------
 %
-\begin{frame}\frametitle{FA Archiver in Context}
+\begin{frame}{Fast Archiver in Context}
 \begin{center}
 \input{WEPMN004f1.tikz}
 \end{center}
 \end{frame}
 
 
-
 % ------------------------------------------------------------------------------
 %
-\begin{frame}\frametitle{The Fast Acquisition Archiver}
+\begin{frame}{Fast Archiver Dataflow}
 \begin{center}
 \input{context.tikz}
 \end{center}
 \end{frame}
 
 
-
 % ------------------------------------------------------------------------------
 %
-\begin{frame}\frametitle{FA Archiver Architecture}
+\begin{frame}{Fast Archiver Architecture}
 
 \begin{itemize}
 
@@ -340,49 +352,42 @@ is discarded as new data arrives.
 
 \item Data is reordered for fast read access before storage to disk.
 
+\item Data is retrieved in \textonehalf\,MB blocks and stored in bursts of up to
+100\,MB; this helps to manage and reduce the sustained load on the disks.
+
 \item File system overhead is avoided by storing archiver database on raw block
 device!
 
 \item Overview data (decimated by binning) also stored.
 
-\item Archive indexed by timestamp of arrival of CC data.
+\item Archive indexed by timestamp of arrival of data.
 
 \end{itemize}
 \end{frame}
 
 
-
 % ------------------------------------------------------------------------------
 %
-\begin{frame}\frametitle{FA Archiver Architecture}
+\begin{frame}{Fast Archiver Architecture}
 \input{WEPMN004f2.tikz}
 \end{frame}
 
 
 % ------------------------------------------------------------------------------
 %
-\begin{frame}\frametitle{Binned Archive Data}
-\begin{center}
-\includegraphics[width=.9\linewidth]{binning}
-\end{center}
-\end{frame}
+\begin{frame}{Fast Archiver Services}
 
-
-% ------------------------------------------------------------------------------
-%
-\begin{frame}\frametitle{Archiver Services}
-
-The FA archiver provides the following data over TCP/IP to any connecting
+The Fast Archiver provides the following data over TCP/IP to any connecting
 machine:
 
 \begin{itemize}
 
-\item Subscription to any subset of the complete CC data stream.
-\note{If the client doesn't take data rapidly enough it will be disconnected by
-the server.}
+\item Subscription to any subset of the complete feedback data stream.  (Note:
+if the client doesn't take data rapidly enough it is disconnected by the
+server.)
 
-\item Subscription to any subset of the complete CC data stream decimated by
-filtering by a factor of 10.
+\item Subscription to any subset of the complete feedback data stream decimated
+by filtering by a factor of 10.
 
 \item Access to any part of the historical archive, both full and decimated,
 indexed by timestamp.
@@ -391,10 +396,18 @@ indexed by timestamp.
 \end{frame}
 
 
+% ------------------------------------------------------------------------------
+%
+\begin{frame}{Binned Archive Data}
+\begin{center}
+\includegraphics[width=.9\linewidth]{binning}
+\end{center}
+\end{frame}
+
 
 % ------------------------------------------------------------------------------
 %
-\begin{frame}\frametitle{Spectrum Analysis Tool}
+\begin{frame}{Spectrum Analysis Tool}
 \begin{center}
 \input{analyser.tikz}
 \end{center}
@@ -403,28 +416,18 @@ indexed by timestamp.
 
 % ------------------------------------------------------------------------------
 %
-\begin{frame}\frametitle{Spectrogram at one EBPM for a Week}
+\begin{frame}{Spectrogram at one EBPM for a Week}
 \includegraphics[width=\linewidth]{spectrogram-3-2}
 \end{frame}
 
 
-
 % ------------------------------------------------------------------------------
 %
-\begin{frame}\frametitle{FA Viewer}
+\begin{frame}{FA Viewer}
 \begin{center}
 \includegraphics[width=.85\linewidth]{WEPMN004f6}
 \end{center}
 \end{frame}
-
-
-% ------------------------------------------------------------------------------
-%
-\begin{frame}\frametitle{}
-
-
-\end{frame}
-
 
 
 

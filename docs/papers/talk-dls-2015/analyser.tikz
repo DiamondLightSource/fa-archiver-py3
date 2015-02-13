@@ -3,7 +3,7 @@
 \draw [very thick]
     (0,0) coordinate(ar-nw) -- ++(0,-10mm) --
     ++(25mm,0) coordinate[midway] (ar-s) -- ++(0,10mm) coordinate(ar-ne);
-\node [anchor=north, inner sep=0pt] at ($(ar-nw)!.5!(ar-ne)$) {FA Archiver};
+\node [anchor=north, inner sep=0pt] at ($(ar-nw)!.5!(ar-ne)$) {Fast Archiver};
 \node [anchor=south] at (ar-s) {$\div 10$};
 
 \node [draw, single arrow, rotate=-90, anchor=west, minimum height=14mm,
@@ -14,7 +14,7 @@
     (analyser) at (from-archiver.east) {Power\\Spectrum\\Analyser};
 
 \node [align=center] (pvs)
-    at ($(analyser.south)+(0,-20mm)$) {EPICS\\Waveform PVS};
+    at ($(analyser.south)+(0,-20mm)$) {EPICS\\Waveform PVs};
 \draw [gray, line width=3pt, ->] (analyser) -- (pvs)
     coordinate[pos=0.3] (pv nw)
     node [anchor=east, pos=0.5, black, align=right, font=\footnotesize]

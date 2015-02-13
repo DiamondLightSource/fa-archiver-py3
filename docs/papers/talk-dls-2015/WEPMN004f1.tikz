@@ -2,8 +2,9 @@
 
 % Nice puffy cloud representing the FA network
 \path[xshift=27mm, yshift=5mm, thin]
-    node[draw, cloud, aspect=2, cloud puffs=11, inner sep=0pt, highlight fill]
-        (fa network) {CC Network};
+    node[draw, cloud, aspect=2, cloud puffs=11, inner sep=0pt, highlight fill,
+        align=center]
+        (fa network) {Feedback\\Network};
 
 % Draw a stack of rectangles representing the liberas
 \path[xshift=-5mm, yshift=12mm,
@@ -49,7 +50,7 @@
     node[controller] (left controller) {}
     ++(5mm,0mm) node {\dots}
     ++(5mm,0mm) node[controller,
-        label={[align=left]right:Fast\\feedback\\controllers}]
+        label={[align=left]right:Fast\\Feedback\\Controllers}]
     (right controller) {};
 
 \draw[->] (fa network) -- (left controller);
@@ -58,11 +59,11 @@
 % The archiver saving into the archive store
 \path[xshift=5.5cm, yshift=-8mm]
     node[draw, very thick, rectangle, inner sep=8pt, fill=yellow!20]
-        (archiver) {FA archiver}
+        (archiver) {Fast Archiver}
 
     node[disk icon, below=4mm of archiver, fill=black!10] (fa archive) {}
     node[tight fit=(fa archive),
-        label={[align=left]right:FA\\Archive}] {}
+        label={[align=left]right:Fast\\Archive}] {}
     [draw,<->] (archiver) -- (fa archive);
 
 \draw[->] (fa network) -- (archiver);
@@ -73,7 +74,7 @@
         (spectrum) {Spectrum\\Analyser}
 
     node[disk icon, anchor=shape center, fill=black!10,
-        label={[align=center]above:EPICS\\archive}]
+        label={[align=center]above:EPICS\\Archive}]
         (epics archive) at ($(spectrum.west)-(10mm,0)$) {}
     node[tight fit=(epics archive)] (epics archive fit) {}
 

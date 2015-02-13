@@ -53,7 +53,7 @@
     left delimiter=\{, copy shadow={
         shadow xshift=1.5mm, shadow yshift=-1.5mm, highlight fill},
     label={[align=right, xshift=-3mm]left:Major\\Block\\double\\buffers}]
-    (major block) at (transpose arrow.east) {FA and D};
+    (major block) at (transpose arrow.east) {F and D};
 \end{pgfonlayer}
 
 
@@ -92,8 +92,8 @@
     -- +(-4mm,0) -- (raw buffer);
 \draw [<-] ($(subscription server.west)+(0,2mm)$)
     -- +(-4mm,0) -- (decimated buffer);
-\draw [<-] (archive server.west) -- +(-10mm,0) |- (archive);
-\draw [<-] (archive server.west) -- +(-10mm,0) |- (dd);
+\draw [<-] ($(archive server.west)+(0,2mm)$) -- +(-12mm,0) |- (dd);
+\draw [<-] ($(archive server.west)+(0,-2mm)$) -- +(-10mm,0) |- (archive);
 
 
 \end{tikzpicture}
