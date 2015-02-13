@@ -456,6 +456,14 @@ function [day, start_time, ts] = process_timestamps( ...
     % we need to take care about when we're working with integers and when
     % we're not.
 
+    try int64(1)+int64(1); catch
+        % On older versions of matlab the next assignment will fail because
+        % arithmetic isn't implemented for 64-bit integers!  This conversion can
+        % lose a bit of precision, but to be honest the impact is pretty
+        % marginal!
+        timestamps = double(timestamps);
+    end
+
     % First compute the start time in archiver units, and from this we can
     % compute the day and start time.
     start_time_us = ...
