@@ -24,6 +24,7 @@ MATLAB_FILES += fa_load.m           # Reads requested data set from server
 MATLAB_FILES += fa_name2id.m        # Converts name to FA id
 MATLAB_FILES += fa_zoomer.m         # Interactive tool for exploring stored data
 MATLAB_FILES += tcp_connect.m       # Generic Matlab TCP interface
+MATLAB_FILES += progress_bar.m      # Progress bar support
 MATLAB_FILES += fa_server_names     # Table of server locations and short names
 
 default: fa_zoomer
