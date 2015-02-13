@@ -1,4 +1,4 @@
-% d = fa_load(tse, mask [, type [,server]])
+% d = fa_load(tse, mask [, type [, server [, show_bar]])
 %
 % Grab bpm data from the FA archiver
 %
@@ -13,7 +13,10 @@
 %          'CD' for continuous decimated data, and similarly tse must specify
 %              number of samples
 %          Use 'Z' suffix to select ID0 capture as well.
+%       Default is 'F'.
 %   server = IP address of FA archiver or one of 'SR', 'BR', 'TS'.
+%       Default is 'SR'.
+%   show_bar = can be set to false to hide progress bar.  Default is true.
 %
 % Output:
 %   d = object containing all of the data, containing the following fields:
@@ -56,14 +59,14 @@
 %      OX11 0DE
 %      michael.abbott@diamond.ac.uk
 
-function d = fa_load(tse, mask, type, varargin)
+function d = fa_load(tse, mask, type, server, show_bar)
     % Assign defaults
-    if ~exist('type', 'var')
-        type = 'F';
-    end
+    if ~exist('type', 'var');       type = 'F'; end
+    if ~exist('server', 'var');     server = 'SR'; end
+    if ~exist('show_bar', 'var');   show_bar = true; end
 
     % Start by normalising the server name
-    [name, server, port] = fa_find_server(varargin{:});
+    [name, server, port] = fa_find_server(server);
 
     % Parse arguments
     [decimation, frequency, typestr, ts_at_end, save_id0, max_id] = ...
@@ -90,7 +93,7 @@ function d = fa_load(tse, mask, type, varargin)
     simple_data = strcmp(typestr, 'C')  ||  decimation == 1;
     [data, timestamps, durations, id_zeros, sample_count] = ...
         read_data(sc, sample_count, id_count, block_size, initial_offset, ...
-            ts_at_end, save_id0, simple_data);
+            ts_at_end, save_id0, simple_data, show_bar);
 
     % Prepare final result structure.  This involves some interpretation of the
     % captured timestamp information.
@@ -240,7 +243,7 @@ end
 function [data, timestamps, durations, id_zeros, sample_count] = ...
     read_data( ...
         sc, sample_count, id_count, block_size, initial_offset, ...
-        ts_at_end, save_id0, simple_data)
+        ts_at_end, save_id0, simple_data, show_bar)
 
     function truncate_data()
         warning('Data truncated');
@@ -325,7 +328,7 @@ function [data, timestamps, durations, id_zeros, sample_count] = ...
 
     % If possible create the wait bar
     if ~ts_at_end
-        wh = progress_bar('Fetching data');
+        wh = progress_bar('Fetching data', show_bar);
     end
 
     % Read the requested data block by block

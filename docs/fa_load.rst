@@ -16,7 +16,7 @@ Matlab script for fetching data from FA archive
 
 Synopsis
 ========
-*data* = fa_load(*times*, *id-list* [, *type* [, *server*]])
+*data* = fa_load(*times*, *id-list* [, *type* [, *server* [, *show_bar*]])
 
 Description
 ===========
@@ -33,7 +33,10 @@ captured.  If `C` is specifed (for continuous data) then *times* must be a
 single number specifying the number of points to capture.
 
 The *server* parameter can be used to specify the archiver server used for data
-capture overriding the hard-wired default.
+capture overriding the hard-wired default, which is `SR`.
+
+The *show_bar* parameter can be set to `false` to suppress the progress bar
+normally shown during loading of F and D data.
 
 The format of the structure returned is similar to that described in detail in
 fa-capture_\(1).
