@@ -44,11 +44,11 @@ struct decimated_data {
  *  data_store = disk_header, index, DD_data, FA_data
  *  index = data_index[major_block_count]
  *  DD_data = DD_block[archive_mask_count]
- *  DD_block = decimated_data[DD_sample_count]
+ *  DD_block = decimated_data[dd_sample_count]
  *  FA_data = major_block[major_block_count]
  *  major_block = FA_block[archive_mask_count], D_block[archive_mask_count]
  *  FA_block = fa_entry[major_sample_count]
- *  D_block = decimated_data[D_sample_count]
+ *  D_block = decimated_data[d_sample_count]
  *
  * data_store
  * +-------------------------------------------
@@ -72,7 +72,7 @@ struct decimated_data {
  * |       |       +-------+-------------------
  * |       |       |D      |decimated_data
  * |       |       |block  +-------------------
- * |       |       |       *D_sample_count
+ * |       |       |       *d_sample_count
  * |       |       +---------------------------
  * |       |       *archive_mask_count
  * |       +-----------------------------------
@@ -82,8 +82,8 @@ struct decimated_data {
  * archive_mask_count = number of BPMs being archived, from 1 to 256
  * major_sample_count = parameter determined by output block size
  * major_block_count = paramter determined by file store size
- * D_sample_count = major_sample_count / first_decimation
- * DD_sample_count = D_sample_count / second_decimation
+ * d_sample_count = major_sample_count / first_decimation
+ * dd_sample_count = d_sample_count / second_decimation
  * dd_total_count = dd_sample_count * major_block_count
  *
  * Note that major_sample_count must be a multiple of the two decimation factors
