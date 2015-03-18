@@ -299,6 +299,7 @@ class mode_fft(mode_common):
         mode_common.__init__(self, parent)
 
         self.windowed = QtGui.QCheckBox('Windowed', parent.ui)
+        self.windowed.setChecked(True)
         self.addWidget(self.windowed)
 
         squared = QtGui.QCheckBox(
@@ -429,6 +430,7 @@ class mode_fft_logf(mode_common):
         mode_common.__init__(self, parent)
 
         self.windowed = QtGui.QCheckBox('Windowed', parent.ui)
+        self.windowed.setChecked(True)
         self.addWidget(self.windowed)
 
         check_scalef = QtGui.QCheckBox('scale by f', parent.ui)
