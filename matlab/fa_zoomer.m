@@ -44,7 +44,7 @@ function fa_zoomer(varargin)
     % Figure out sensible starting point for initial display.
     initial_id = 4;
     ids = sort(fa_getids(h.server_name, 'stored', 'missing'));
-    id_ix = strmatch(fa_id2name(initial_id), ids, 'exact');
+    id_ix = strmatch(fa_id2name(initial_id, h.server_name), ids, 'exact');
     if isempty(id_ix)
         id_ix = 1;
         initial_id = fa_name2id(ids(id_ix), h.server_name, 'missing');
@@ -448,7 +448,7 @@ function show_legend(fig, event)
     global fa_data;
     for n = 1:2
         subplot(2, 1, n)
-        legend(fa_id2name(fa_data.ids, h.server_name));
+        legend(fa_id2name(fa_data.ids, h.server_name, 'missing'));
     end
 end
 
