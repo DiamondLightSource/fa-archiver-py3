@@ -299,6 +299,17 @@ function data = centre_data(data)
 end
 
 
+function hold_on
+    try
+        % From matlab 2014b hold on has changed its behaviour, and we need
+        % to explicitly reset the colour order.  Unfortunately this is a
+        % new property, so this fails on older versions of matlab!
+        set(gca, 'ColorOrderIndex', 1)
+    end
+    hold on
+end
+
+
 function plotfa(h, d)
     data = d.data;
     data_type = get(h.data_type, 'Value');
@@ -340,7 +351,7 @@ function plotfa(h, d)
         if length(size(data)) == 4
             switch data_type
                 case 1
-                    plot(d.t, 1e-3 * squeeze(data(n, 2, :, :))); hold on
+                    plot(d.t, 1e-3 * squeeze(data(n, 2, :, :))); hold_on
                     plot(d.t, 1e-3 * squeeze(data(n, 3, :, :))); hold off
                 case 2
                     plot(d.t, 1e-3 * squeeze(data(n, 4, :, :)));
