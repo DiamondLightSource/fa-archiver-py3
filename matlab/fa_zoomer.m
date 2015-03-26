@@ -171,14 +171,13 @@ function zoom_in_callback(fig, event)
         end
     end
 
-    load_data(fig, xlim + fa_data.day, type, true);
+    load_data(fig, xlim + h.ts_offset, type, true);
 end
 
 
 function reload_plot(fig, event)
-    h = guidata(fig);
     global fa_data;
-    plotfa(h, fa_data);
+    plotfa(fig, fa_data);
 end
 
 
@@ -196,7 +195,7 @@ function load_data(fig, range, type, save)
 
     global fa_data;
     fa_data = fa_load(range, pvs, type, h.server_name);
-    plotfa(h, fa_data);
+    plotfa(fig, fa_data);
 
     describe;
 end
@@ -243,7 +242,7 @@ function spectrogram_callback(fig, event)
 
             set(gca, 'Ydir', 'normal');
             colorbar
-            label_axis(n, xy_names, 'Hz', 'Spectrogram')
+            label_axis(h, n, xy_names, 'Hz', 'Spectrogram')
         end
         describe;
     else
@@ -310,7 +309,8 @@ function hold_on
 end
 
 
-function plotfa(h, d)
+function plotfa(fig, d)
+    h = guidata(fig);
     data = d.data;
     data_type = get(h.data_type, 'Value');
 
@@ -346,30 +346,39 @@ function plotfa(h, d)
     end
 
     xy_names = axis_names(h, d);
+    if diff(d.t([1 end])) >= 1
+        ts = d.t + d.day;
+        h.ts_offset = 0;
+    else
+        ts = d.t;
+        h.ts_offset = d.day;
+    end
+    guidata(fig, h)
+
     for n = 1:2
         subplot(2, 1, n)
         if length(size(data)) == 4
             switch data_type
                 case 1
-                    plot(d.t, 1e-3 * squeeze(data(n, 2, :, :))); hold_on
-                    plot(d.t, 1e-3 * squeeze(data(n, 3, :, :))); hold off
+                    plot(ts, 1e-3 * squeeze(data(n, 2, :, :))); hold_on
+                    plot(ts, 1e-3 * squeeze(data(n, 3, :, :))); hold off
                 case 2
-                    plot(d.t, 1e-3 * squeeze(data(n, 4, :, :)));
+                    plot(ts, 1e-3 * squeeze(data(n, 4, :, :)));
                 case 3
-                    plot(d.t, 1e-3 * squeeze(data(n, 1, :, :)));
+                    plot(ts, 1e-3 * squeeze(data(n, 1, :, :)));
             end
         else
-            plot(d.t, 1e-3 * squeeze(data(n, :, :)))
+            plot(ts, 1e-3 * squeeze(data(n, :, :)))
         end
 
-        xlim([d.t(1) d.t(end)]);
+        xlim([ts(1) ts(end)]);
         if isempty(set_ylim)
             % Stretch ylim by 10% to avoid hitting upper and lower limits
             ylim(ylim + [-0.1 0.1] * diff(ylim));
         else
             ylim(set_ylim);
         end
-        label_axis(n, xy_names, units, annotation);
+        label_axis(h, n, xy_names, units, annotation);
         if scaled; set(gca, 'YTick', []); end
         zoom reset;
     end
@@ -377,8 +386,8 @@ function plotfa(h, d)
 
     % Called when zooming is done: refresh the display
     function refresh_ticks(obj, event_obj)
-        label_axis(1, xy_names, units, annotation);
-        label_axis(2, xy_names, units, annotation);
+        label_axis(h, 1, xy_names, units, annotation);
+        label_axis(h, 2, xy_names, units, annotation);
     end
 
     z = zoom(gcf);
@@ -418,16 +427,17 @@ end
 
 
 % Label axes
-function label_axis(n, axes, yname, annotation)
+function label_axis(h, n, axes, yname, annotation)
     global fa_data;
     ylabel(gca, yname);
 
     msecs_per_day = 1e3 * 24 * 3600;
     range = xlim;
     ms_interval = diff(range) * msecs_per_day;
-    if ms_interval <= 5000
-        title([datestr(fa_data.day + range(1)) ' ' axes{n}])
 
+    start = range(1) + h.ts_offset;
+    format = 'ddd yyyy-mm-dd';
+    if ms_interval <= 5000
         % If the data spans less than a handful of seconds we need to get cute
         % and smart about computing ticks.  The placement Matlab has done for us
         % really isn't good enough.
@@ -447,10 +457,24 @@ function label_axis(n, axes, yname, annotation)
         minute = 1e3 * 60 * floor(range(1) * 24 * 60);
         set(gca, 'XTick', ticks_ms / msecs_per_day);
         set(gca, 'XTickLabel', num2str(1e-3 * (ticks_ms - minute)', '%.3f'));
+
+        format = [format ' HH:MM:SS'];
     else
-        title([datestr(fa_data.day) ' ' axes{n} ' ' annotation])
-        datetick('keeplimits')
+        % For ranges in the order of days show the days label in a sensible
+        % form, otherwise rely on datetick's automatic choices.
+        if diff(range) >= 3
+            datetick('x', 'dd/mm', 'keeplimits')
+        else
+            datetick('keeplimits')
+        end
+        start = floor(start);
     end
+
+    title_string = [datestr(start, format) ' - ' axes{n}];
+    if annotation;
+        title_string = [title_string ' ' annotation];
+    end
+    title(title_string)
 end
 
 
