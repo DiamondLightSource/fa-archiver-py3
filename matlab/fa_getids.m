@@ -117,13 +117,18 @@ function fields = get_names_ids(server, port)
     else
         % The format of the response is quite exact and somewhat tailored to
         % help Matlab:
-        %   id description x_name y_name
-        % If the description is missing the a single - is returned, and no field
-        % is completely absent.
+        %   id x_name y_name id_name
+        % The id_name field can be absent if the field is stored, but no name
+        % has been assigned.
         fields = textscan(response, ...
             ['%c%d%*[ ]%[^ ]%*[ ]%[^ ]%*[ ]%[^' 10 ']'], ...
             'Whitespace', '', 'ReturnOnError', 0);
         fields{1} = fields{1} == '*';    % Archived flag
+        % Matlab (sometimes?) returns the result of a %d scan as an int32 ..
+        % this ought to be just fine, but unfortunately matlab's handling of
+        % integer arithmetic is full of surprises.  Let's try to reduce the
+        % surprises here.
+        fields{2} = double(fields{2});
     end
 end
 
