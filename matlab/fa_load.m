@@ -401,8 +401,8 @@ function result = format_mask(mask, max_id)
 
     % Assemble array of ints from ids and send as raw mask array
     mask_array = zeros(1, max_id / 32);
-    for id = double(mask)
-        ix = floor(id / 32) + 1;
+    for id = uint32(mask)
+        ix = idivide(id, uint32(32)) + 1;
         mask_array(ix) = bitor(mask_array(ix), bitshift(1, mod(id, 32)));
     end
     result = ['R' sprintf('%08X', mask_array(end:-1:1))];
