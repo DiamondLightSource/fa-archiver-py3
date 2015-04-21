@@ -257,6 +257,33 @@ void panic_error(const char *filename, int line)
 
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+/* Helper functions for reading and writing. */
+
+#define ENSURE_ACTION(action, fd, buf, count) \
+    size_t total = 0; \
+    while (count > total) \
+    { \
+        ssize_t processed = action(fd, buf + total, count - total); \
+        if (processed < 0) \
+            return processed; \
+        else if (processed == 0) \
+            break; \
+        total += (size_t) processed; \
+    } \
+    return (ssize_t) total
+
+ssize_t ensure_write(int fd, const void *buf, size_t count)
+{
+    ENSURE_ACTION(write, fd, buf, count);
+}
+
+ssize_t ensure_read(int fd, void *buf, size_t count)
+{
+    ENSURE_ACTION(read, fd, buf, count);
+}
+
+
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /* Utility function with no proper home. */
 
 

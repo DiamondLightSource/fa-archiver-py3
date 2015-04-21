@@ -196,15 +196,20 @@ void panic_error(const char *filename, int line)
 /* Testing read and write happens often enough to be annoying, so some
  * special case macros here. */
 #define _COND_rw(rw, fd, buf, count) \
-    (rw(fd, buf, count) == (ssize_t) (count))
+    (ensure_##rw(fd, buf, count) == (ssize_t) (count))
 #define TEST_read(fd, buf, count)   TEST_OK(_COND_rw(read, fd, buf, count))
 #define TEST_write(fd, buf, count)  TEST_OK(_COND_rw(write, fd, buf, count))
 #define TEST_read_(fd, buf, count, message...) \
     TEST_OK_(_COND_rw(read, fd, buf, count), message)
 #define TEST_write_(fd, buf, count, message...) \
     TEST_OK_(_COND_rw(write, fd, buf, count), message)
-#define ASSERT_read(fd, buf, count)  ASSERT_OK(_COND_rw(read, fd, buf, count))
-#define ASSERT_write(fd, buf, count) ASSERT_OK(_COND_rw(write, fd, buf, count))
+
+/* These wrappers around read and write make an extra bit of effort to process
+ * the entire count bytes.  It is still possible for them to fail or to return a
+ * value less than count; note that if an error is returned data may have been
+ * partially written. */
+ssize_t ensure_write(int fd, const void *buf, size_t count);
+ssize_t ensure_read(int fd, void *buf, size_t count);
 
 
 /* A tricksy compile time bug checking macro modified from the kernel. */
