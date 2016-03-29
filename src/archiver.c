@@ -242,18 +242,26 @@ void shutdown_archiver(void)
 
 static void at_exit(int signum)
 {
-    log_message("Caught signal %d", signum);
     shutdown_archiver();
 }
 
 static bool initialise_signals(void)
 {
+    sigset_t signal_mask;
     struct sigaction do_shutdown = {
         .sa_handler = at_exit, .sa_flags = SA_RESTART };
     struct sigaction do_ignore = {
         .sa_handler = SIG_IGN, .sa_flags = SA_RESTART };
     return
         TEST_IO(sem_init(&shutdown_semaphore, 0, 0))  &&
+
+        /* Make sure that we can actually see the signals we're going handle,
+         * and block everything else. */
+        TEST_IO(sigfillset(&signal_mask))  &&
+        TEST_IO(sigdelset(&signal_mask, SIGHUP))  &&
+        TEST_IO(sigdelset(&signal_mask, SIGINT))  &&
+        TEST_IO(sigdelset(&signal_mask, SIGTERM))  &&
+        TEST_IO(sigprocmask(SIG_SETMASK, &signal_mask, NULL))  &&
 
         TEST_IO(sigfillset(&do_shutdown.sa_mask))  &&
         /* Catch the usual interruption signals and use them to trigger an
