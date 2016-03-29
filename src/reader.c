@@ -264,12 +264,15 @@ static bool allocate_timestamp_buffer(
         /* We only need a rough estimate here, so long as we don't
          * underestimate.  Simplest to say one timestamp per complete block plus
          * one each extra for partial blocks at each end. */
-        size_t ts_count = 2 + count / samples_per_block;
+        uint64_t ts_count_64 = 2 + count / samples_per_block;
+        size_t ts_count = (size_t) ts_count_64;
         unsigned int timestamp_blocks =
             round_up(ts_count, pooled_buffer_size / sizeof(uint64_t));
         unsigned int duration_blocks =
             round_up(ts_count, pooled_buffer_size / sizeof(uint32_t));
         return
+            TEST_OK_(ts_count == ts_count_64,
+                "Far too many samples requested")  &&
             allocate_write_buffer(&ts_buffer->timestamps, timestamp_blocks)  &&
             allocate_write_buffer(&ts_buffer->durations,  duration_blocks)  &&
             IF_(send_id0,
