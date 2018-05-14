@@ -269,7 +269,7 @@ void *get_write_block(struct buffer *buffer)
 bool release_write_block(struct buffer *buffer, bool gap, uint64_t timestamp)
 {
     gap = gap || buffer->write_blocked;     // Allow blocking override
-    bool blocked = false;
+    volatile bool blocked = false;          // Implicit longjmp in [UN]LOCK
 
     LOCK(buffer->lock);
     if (gap)

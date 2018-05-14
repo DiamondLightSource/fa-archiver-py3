@@ -32,6 +32,7 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include <memory.h>
 #include <time.h>
 #include <sys/types.h>
