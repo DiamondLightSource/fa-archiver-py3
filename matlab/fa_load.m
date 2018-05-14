@@ -493,7 +493,8 @@ function id0 = process_id0( ...
         id_zeros, sample_count, block_size, initial_offset, decimation)
     id_zeros = int32(id_zeros);
     offsets = int32(decimation * (0 : block_size - 1));
-    id0 = repmat(id_zeros, 1, block_size) + repmat(offsets, size(id_zeros), 1);
+    id0 = repmat(id_zeros, 1, block_size) + ...
+        repmat(offsets, size(id_zeros, 1), 1);
     id0 = reshape(id0', [], 1);
     id0 = id0(initial_offset + 1:initial_offset + sample_count);
 end
