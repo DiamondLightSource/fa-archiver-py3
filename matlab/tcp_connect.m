@@ -13,6 +13,8 @@
 %       bytes are received.
 %   c.read_int_array(count)
 %       Reads array of count 32-bit integers from server
+%   c.read_uint_array(count)
+%       Reads array of count 32-bit integers from server and returns as uint32
 %   c.read_long_array(count)
 %       Reads array of count 64-bit integers from server
 %   c.read_string([count])
@@ -74,6 +76,7 @@ function sock = tcp_connect(server, port, timeout)
     sock.read_string    = @(varargin) read_string(sock, varargin{:});
     sock.read_bytes     = @(varargin) read_bytes(sock, varargin{:});
     sock.read_int_array = @(varargin) read_int_array(sock, varargin{:});
+    sock.read_uint_array = @(varargin) read_uint_array(sock, varargin{:});
     sock.read_long_array = @(varargin) read_long_array(sock, varargin{:});
 end
 
@@ -132,6 +135,15 @@ function a = read_int_array(c, count)
     ints = IntBuffer.allocate(count);
     ints.put(buf.asIntBuffer());
     a = double(ints.array());
+end
+
+function a = read_uint_array(c, count)
+    import java.nio.IntBuffer;
+
+    buf = read_bytes(c, 4 * count, true);
+    ints = IntBuffer.allocate(count);
+    ints.put(buf.asIntBuffer());
+    a = typecast(ints.array(), 'uint32');
 end
 
 function a = read_long_array(c, count)

@@ -231,7 +231,7 @@ function [ ...
         timestamps = zeros(round(sample_count / block_size) + 2, 1, 'int64');
         durations  = zeros(round(sample_count / block_size) + 2, 1);
         if save_id0
-            id_zeros = int32(zeros(round(sample_count / block_size) + 2, 1));
+            id_zeros = uint32(zeros(round(sample_count / block_size) + 2, 1));
         else
             id_zeros = 0;   % Dummy value
         end
@@ -277,7 +277,10 @@ function [data, timestamps, durations, id_zeros, sample_count] = ...
         timestamps(ts_read + 1) = timestamp_buf.getLong();
         durations (ts_read + 1) = timestamp_buf.getInt();
         if save_id0
-            id_zeros(ts_read + 1) = timestamp_buf.getInt();
+            % Converting raw values to underlying unsigned integers is
+            % remarkably tricky.
+            id_zeros(ts_read + 1) = ...
+                typecast(int32(timestamp_buf.getInt()), 'uint32');
         end
         ts_read = ts_read + 1;
     end
@@ -292,7 +295,7 @@ function [data, timestamps, durations, id_zeros, sample_count] = ...
         timestamps = sc.read_long_array(ts_read);
         durations  = sc.read_int_array(ts_read);
         if save_id0
-            id_zeros = sc.read_int_array(ts_read);
+            id_zeros = sc.read_uint_array(ts_read);
         end
     end
 
@@ -491,10 +494,24 @@ end
 % Computes id0 array from captured information.
 function id0 = process_id0( ...
         id_zeros, sample_count, block_size, initial_offset, decimation)
-    id_zeros = int32(id_zeros);
-    offsets = int32(decimation * (0 : block_size - 1));
-    id0 = repmat(id_zeros, 1, block_size) + ...
-        repmat(offsets, size(id_zeros, 1), 1);
+    id_zeros,
+    id_zeros = repmat(uint32(id_zeros), 1, block_size);
+    offsets = repmat( ...
+        uint32(decimation * (0 : block_size - 1)), size(id_zeros, 1), 1);
+    id0 = id_zeros + offsets;
+
+    % Alas matlab's treatment of fixed point arithmetic is saturating, which
+    % means we have a problem at this point if we've overrun.  We have to handle
+    % this by avoiding overflow by splitting the sum into two cases.  Writing
+    %   o = offsets, W = 2^32, z = id_zeros
+    % then if o + z >= W then we will overflow and want to calculate o + z - W
+    % instead.  Both the test and the new calculation need to be done while
+    % avoiding overflow, so we test for o > (W - 1) - z and compute
+    % (o - 1) - ((W - 1) - z).
+    clipped = offsets > uint32(2^32-1) - id_zeros;
+    id0(clipped) = ...
+        (offsets(clipped) - 1) - (uint32(2^32-1) - id_zeros(clipped));
+
     id0 = reshape(id0', [], 1);
     id0 = id0(initial_offset + 1:initial_offset + sample_count);
 end
