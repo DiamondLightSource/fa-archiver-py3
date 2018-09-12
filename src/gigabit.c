@@ -49,53 +49,87 @@
 #include "gigabit.h"
 
 
+/* This determines how much buffer space we put aside for gigabit ethernet
+ * capture.  At up to 4096 bytes per message (up to 256 frames, 16 bytes per BPM
+ * frame), a buffer count of 256 reserves about 1MB of buffer which is fine. */
+#define BUFFER_COUNT    256
+
+
 static int gigabit_socket;
 static size_t fa_frame_size;
 
+static struct libera_payload payload_buffer[BUFFER_COUNT][LIBERAS_PER_DATAGRAM];
+static struct mmsghdr mmsghdr[BUFFER_COUNT];
+static struct iovec iovec[BUFFER_COUNT];
 
-/* Receives and decodes a single Libera datagram from the gigabit ethernet
- * interface.  */
-static bool read_datagram(struct fa_entry *row)
+
+/* In preparation for using recvmmsg we need to prepare a mmsghdr array together
+ * with the associated buffers. */
+static bool prepare_gigabit_buffers(void)
 {
-    COMPILE_ASSERT(LIBERA_BLOCK_SIZE == 16);
-
-    /* As reading can be quite sparse, zero initialise the row. */
-    memset(row, 0, fa_frame_size);
-
-    /* Read a datagram from the socket. */
-    struct libera_payload buffer[LIBERAS_PER_DATAGRAM];
-    ssize_t bytes_rx;
-    bool ok =
-        TEST_IO(
-            bytes_rx = recvfrom(
-                gigabit_socket, buffer, sizeof(buffer), 0, NULL, NULL))  &&
-        TEST_OK_(bytes_rx > 0, "Gigabit socket closed");
-    if (!ok)
-        return false;
-
-    /* Decode the data */
-    for (unsigned int i = 0; i < (size_t) bytes_rx / LIBERA_BLOCK_SIZE; i ++)
+    for (int i = 0; i < BUFFER_COUNT; i ++)
     {
-        struct libera_payload *payload = &buffer[i];
-        if (payload->status.valid)
-        {
-            unsigned int id = payload->status.libera_id;
-            row[id].x = payload->x;
-            row[id].y = payload->y;
-        }
+        mmsghdr[i] = (struct mmsghdr) {
+            .msg_hdr = (struct msghdr) {
+                .msg_iov = &iovec[i],
+                .msg_iovlen = 1,
+            },
+        };
+        iovec[i] = (struct iovec) {
+            .iov_base = &payload_buffer[i],
+            .iov_len = sizeof(payload_buffer[i]),
+        };
     }
     return true;
 }
 
 
+static void decode_frame(
+    const struct libera_payload buffer[], size_t bytes_rx,
+    struct fa_row *row)
+{
+    /* Decode the data */
+    for (unsigned int i = 0; i < bytes_rx / LIBERA_BLOCK_SIZE; i ++)
+    {
+        const struct libera_payload *payload = &buffer[i];
+        if (payload->status.valid)
+        {
+            unsigned int id = payload->status.libera_id;
+            row->row[id].x = payload->x;
+            row->row[id].y = payload->y;
+        }
+    }
+}
+
+
+static void decode_frames(
+    struct mmsghdr message[], int count, struct fa_row block[])
+{
+    for (int i = 0; i < count; i ++)
+    {
+        decode_frame(payload_buffer[i], message[i].msg_len, block);
+        block = (void *) block + fa_frame_size;
+    }
+}
+
+
 static bool read_gigabit_block(
-    struct fa_row *block, size_t block_size, uint64_t *timestamp)
+    struct fa_row block[], size_t block_size, uint64_t *timestamp)
 {
     bool ok = true;
-    for (unsigned int i = 0; ok  &&  i < block_size / fa_frame_size; i ++)
+    unsigned int frames = (unsigned int) (block_size / fa_frame_size);
+    while (frames > 0)
     {
-        ok = read_datagram(block->row);
-        block = (void *) block + fa_frame_size;
+        unsigned int to_read = frames <= BUFFER_COUNT ? frames : BUFFER_COUNT;
+        int frames_rx = recvmmsg(
+            gigabit_socket, mmsghdr, to_read, 0, NULL);
+        ok = TEST_IO(frames_rx);
+        if (ok)
+        {
+            decode_frames(mmsghdr, frames_rx, block);
+            frames -= (unsigned int) frames_rx;
+            block = (void *) block + (size_t) frames_rx * fa_frame_size;
+        }
     }
     *timestamp = get_timestamp();
     return ok;
@@ -150,6 +184,7 @@ const struct sniffer_context *initialise_gigabit(unsigned int fa_entry_count)
     bool ok =
         TEST_OK_(fa_entry_count >= LIBERAS_PER_DATAGRAM,
             "FA capture count too small")  &&
+        prepare_gigabit_buffers()  &&
         open_gigabit_socket();
     return ok ? &sniffer_gigabit : NULL;
 }
