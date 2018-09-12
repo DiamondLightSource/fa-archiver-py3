@@ -38,6 +38,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <errno.h>
 
 #include "error.h"
 
@@ -53,6 +54,11 @@
  * capture.  At up to 4096 bytes per message (up to 256 frames, 16 bytes per BPM
  * frame), a buffer count of 256 reserves about 1MB of buffer which is fine. */
 #define BUFFER_COUNT    256
+
+/* Timeout while waiting for gigabit ethernet. */
+#define TIMEOUT_SECS    0
+#define TIMEOUT_USECS   100000          // 100 ms
+#define TIMEOUT_NSECS   (1000 * TIMEOUT_USECS)
 
 
 static int gigabit_socket;
@@ -118,20 +124,29 @@ static bool read_gigabit_block(
 {
     bool ok = true;
     unsigned int frames = (unsigned int) (block_size / fa_frame_size);
-    while (frames > 0)
+    while (ok  &&  frames > 0)
     {
         unsigned int to_read = frames <= BUFFER_COUNT ? frames : BUFFER_COUNT;
-        int frames_rx = recvmmsg(
-            gigabit_socket, mmsghdr, to_read, 0, NULL);
-        ok = TEST_IO(frames_rx);
-        if (ok)
+        struct timespec timeout = {
+            .tv_sec = TIMEOUT_SECS,
+            .tv_nsec = TIMEOUT_NSECS,
+        };
+        int frames_rx = recvmmsg(gigabit_socket, mmsghdr, to_read, 0, &timeout);
+        *timestamp = get_timestamp();
+
+        if (frames_rx > 0)
         {
             decode_frames(mmsghdr, frames_rx, block);
             frames -= (unsigned int) frames_rx;
             block = (void *) block + (size_t) frames_rx * fa_frame_size;
         }
+        else if (frames_rx == -1  &&  errno == EAGAIN)
+            /* Fail silently on timeout. */
+            ok = false;
+        else
+            /* Log unexpected error. */
+            ok = TEST_IO(-1);
     }
-    *timestamp = get_timestamp();
     return ok;
 }
 
@@ -143,8 +158,15 @@ static bool open_gigabit_socket(void)
         .sin_addr.s_addr = htonl(INADDR_ANY),
         .sin_port = htons(2048),
     };
+    struct timeval rx_timeout = {
+        .tv_sec = TIMEOUT_SECS,
+        .tv_usec = TIMEOUT_USECS,
+    };
     return
         TEST_IO(gigabit_socket = socket(PF_INET, SOCK_DGRAM, 0))  &&
+        TEST_IO(setsockopt(
+            gigabit_socket, SOL_SOCKET, SO_RCVTIMEO,
+            &rx_timeout, sizeof(rx_timeout)))  &&
         TEST_IO(bind(
             gigabit_socket, (struct sockaddr *) &skaddr, sizeof(skaddr)));
 }
@@ -160,12 +182,14 @@ static bool reset_gigabit(void)
 
 static bool read_gigabit_status(struct fa_status *status)
 {
+    errno = 0;
     return FAIL_("Read status not suppported for gigabit");
 }
 
 
 static bool interrupt_gigabit(void)
 {
+    errno = 0;
     return FAIL_("Interrupt not suppported for gigabit");
 }
 
