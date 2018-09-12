@@ -44,32 +44,9 @@
 #include "fa_sniffer.h"
 #include "sniffer.h"
 #include "buffer.h"
+#include "libera-grouping.h"
 
 #include "gigabit.h"
-
-
-/* Up to 64 Liberas can be transmitted in a single datagram. */
-#define LIBERAS_PER_DATAGRAM    64
-
-/* We can make some simplifying assumptions: both the transmitter and the
- * receiver are little endian machines, so the payload can be mapped directly to
- * the underlying datatypes. */
-struct libera_payload {
-    int32_t sum;
-    int32_t x;
-    int32_t y;
-    uint16_t counter;
-    /* Status bits are:
-     *  0       MC PLL lock status (1 if locked)
-     *  2-7     Libera ID
-     *  11      Data valid (1 if valid)
-     *  14      ADC overflow (1 on overflow)
-     *  15      Interlock status (1 on interlock active) */
-    uint16_t status;
-} __attribute__((packed));
-
-/* Each transmission is 16 bytes. */
-#define LIBERA_BLOCK_SIZE       (sizeof(struct libera_payload))
 
 
 static int gigabit_socket;
@@ -100,9 +77,12 @@ static bool read_datagram(struct fa_entry *row)
     for (unsigned int i = 0; i < (size_t) bytes_rx / LIBERA_BLOCK_SIZE; i ++)
     {
         struct libera_payload *payload = &buffer[i];
-        int id = (payload->status >> 2) & 63;
-        row[id].x = payload->x;
-        row[id].y = payload->y;
+        if (payload->status.valid)
+        {
+            unsigned int id = payload->status.libera_id;
+            row[id].x = payload->x;
+            row[id].y = payload->y;
+        }
     }
     return true;
 }

@@ -5,6 +5,12 @@ TOP = $(CURDIR)
 DEVICE_DIR = $(TOP)/device
 BUILD_DIR = $(CURDIR)/build
 
+# Unfortunately, due in part I think to confused documentation from I-Tech,
+# there appear be two different implementations of Fast Acquisition data over
+# gigabit ethernet, otherwise known as Libera Grouping.  For details look at
+# src/libera-grouping.h, but in brief, set LIBERA_GROUPING to 0 for the older
+# compatibility, to 1 for newer systems (including Brilliance+).
+LIBERA_GROUPING = 1
 
 # Any special installation instructions are picked up from Makefile.private
 # which is created by the dls-release process.
@@ -25,6 +31,7 @@ export PYTHON
 export PREFIX
 export SCRIPT_DIR
 export MODULEVER
+export LIBERA_GROUPING
 
 
 BIN_BUILD_DIR = $(BUILD_DIR)/$(shell uname -m)

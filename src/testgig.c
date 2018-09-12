@@ -15,7 +15,6 @@
 
 #include "error.h"
 #include "parse.h"
-#define LIBERA_GROUPING 0
 #include "libera-grouping.h"
 
 
