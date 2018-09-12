@@ -71,6 +71,7 @@ class monitor:
         self.data_ready = 0
         self.running = False
         self.decimated = False
+        self.id = 0
 
     def start(self):
         assert not self.running, 'Strange: we are already running'
@@ -78,6 +79,8 @@ class monitor:
             self.subscription = self.server.subscription(
                 [self.id], decimated = self.decimated, uncork = self.decimated)
         except Exception, message:
+            import traceback
+            traceback.print_exc()
             self.on_eof('Unable to connect to server: %s' % message)
         else:
             self.running = True

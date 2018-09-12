@@ -124,6 +124,9 @@ class Viewer:
         self.show_y = True
         self.mode.show_xy(True, True)
 
+        self.channel = 0
+        self.bpm_name = ''
+
         # Make the initial GUI connections
         ui.channel_group.currentIndexChanged.connect(self.set_group)
         ui.channel.currentIndexChanged.connect(self.set_channel)
