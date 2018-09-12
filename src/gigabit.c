@@ -94,6 +94,9 @@ static void decode_frame(
     const struct libera_payload buffer[], size_t bytes_rx,
     struct fa_row *row)
 {
+    /* As the data can be quite sparse, zero initialise the row. */
+    memset(row, 0, fa_frame_size);
+
     /* Decode the data */
     for (unsigned int i = 0; i < bytes_rx / LIBERA_BLOCK_SIZE; i ++)
     {
