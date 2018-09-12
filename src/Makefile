@@ -61,7 +61,7 @@ CPPFLAGS += -D_FORTIFY_SOURCE=2
 LDLIBS += -lpthread -lrt -lm
 
 
-BUILD = archiver prepare capture
+BUILD = archiver prepare capture testgig
 
 COMMON_SRCS += error.c              # Core error handling framework
 COMMON_SRCS += locking.c            # Simple abstraction of pthread locking
@@ -92,6 +92,8 @@ prepare_SRCS += disk.c
 # FA data capture
 capture_SRCS += capture.c           # Command line interface
 capture_SRCS += matlab.c            # Matlab header support
+
+testgig_SRCS += testgig.c
 
 
 BUILD_NAMES = $(patsubst %,$(PROGRAM_PREFIX)%,$(BUILD))
