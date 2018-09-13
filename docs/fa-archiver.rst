@@ -118,6 +118,10 @@ Options
 -G
     Use gigabit ethernet (Libera grouping) as data source.
 
+-S port
+    If Libera Grouping is enabled with `-G` the default port is 2048.  This
+    option can be used to specify an alternative port.
+
 -N
     Run with data source disabled.  The archiver will run in read-only mode and
     no subscription data will be available.

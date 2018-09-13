@@ -88,6 +88,8 @@ static bool boost_priority = false;
 static unsigned int buffer_blocks = BUFFER_BLOCKS;
 /* Socket used for serving remote connections. */
 static int server_socket = 8888;
+/* Socket of the incoming fa-data stream */
+static int gigabit_port = 2048;
 /* Decimation configuration file. */
 static const char *decimation_config = NULL;
 /* File from which to load list of FA ids. */
@@ -139,6 +141,7 @@ static void usage(void)
 "    -X   Enable extra commands (debug only)\n"
 "    -R   Set SO_REUSEADDR on listening socket, debug use only\n"
 "    -G   Use gigabit ethernet as data source\n"
+"    -S:  Specify the gigabit ethernet data source socket (default 2048)\n"
 "    -N   Run without data source, archive effectively read-only\n"
         , argv0, buffer_blocks);
 }
@@ -159,7 +162,7 @@ static bool process_options(int *argc, char ***argv)
     bool ok = true;
     while (ok)
     {
-        switch (getopt(*argc, *argv, "+hc:l:n:d:rb:qtDp:s:F:E:B:XRGN"))
+        switch (getopt(*argc, *argv, "+hc:l:n:d:rb:qtDp:s:F:E:B:XRGS:N"))
         {
             case 'h':   usage();                                    exit(0);
             case 'c':   decimation_config = optarg;                 break;
@@ -190,6 +193,10 @@ static bool process_options(int *argc, char ***argv)
             case 's':
                 ok = DO_PARSE("server socket",
                     parse_int, optarg, &server_socket);
+                break;
+            case 'S':
+                ok = DO_PARSE("input data socket",
+                    parse_int, optarg, &gigabit_port);
                 break;
             default:
                 fprintf(stderr, "Try `%s -h` for usage\n", argv0);
@@ -290,7 +297,7 @@ static bool initialise_sniffer(
                 initialise_replay(fa_sniffer_device, fa_entry_count);
             break;
         case SNIFFER_GIGABIT:
-            sniffer_context = initialise_gigabit(fa_entry_count);
+            sniffer_context = initialise_gigabit(fa_entry_count, gigabit_port);
             break;
         case SNIFFER_NONE:
             sniffer_context = initialise_empty_sniffer();

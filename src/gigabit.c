@@ -61,6 +61,7 @@
 #define TIMEOUT_NSECS   (1000 * TIMEOUT_USECS)
 
 
+static int gigabit_port;
 static int gigabit_socket;
 static size_t fa_frame_size;
 
@@ -159,7 +160,7 @@ static bool open_gigabit_socket(void)
     struct sockaddr_in skaddr = {
         .sin_family = AF_INET,
         .sin_addr.s_addr = htonl(INADDR_ANY),
-        .sin_port = htons(2048),
+        .sin_port = htons(gigabit_port),
     };
     struct timeval rx_timeout = {
         .tv_sec = TIMEOUT_SECS,
@@ -205,9 +206,13 @@ static const struct sniffer_context sniffer_gigabit = {
 };
 
 
-const struct sniffer_context *initialise_gigabit(unsigned int fa_entry_count)
+const struct sniffer_context *initialise_gigabit(
+    unsigned int fa_entry_count, int port)
 {
     fa_frame_size = fa_entry_count * FA_ENTRY_SIZE;
+    gigabit_port = port;
+
+    log_message("Data capturing from port %d", gigabit_port);
     bool ok =
         TEST_OK_(fa_entry_count >= LIBERAS_PER_DATAGRAM,
             "FA capture count too small")  &&
