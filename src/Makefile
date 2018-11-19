@@ -38,8 +38,7 @@ CFLAGS += -Woverflow
 CFLAGS += -Wconversion
 
 CFLAGS_clang += -Wstrict-overflow=5
-CFLAGS_clang += -Wmost -Weverything
-CFLAGS_clang += -Wno-variadic-macros
+CFLAGS_clang += -Wmost
 
 CFLAGS += -msse
 CFLAGS += -msse2
