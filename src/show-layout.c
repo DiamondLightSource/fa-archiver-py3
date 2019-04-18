@@ -30,11 +30,11 @@ struct field {
       offsetof(struct STRUCT_NAME, field) \
     }
 
-const struct field fields[] = {
+static const struct field fields[] = {
     #include FIELD_LIST
 };
 
-const int field_count = sizeof(fields) / sizeof(fields[0]);
+static const int field_count = sizeof(fields) / sizeof(fields[0]);
 
 int main(int argc, char **argv)
 {
