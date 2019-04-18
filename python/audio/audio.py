@@ -1,4 +1,4 @@
-#!/usr/bin/env dls-python2.6
+#!/usr/bin/env dls-python
 
 # Audio player for playing FA position data through PC speakers
 
@@ -109,6 +109,7 @@ class Player:
     # Rescales audio to avoid clipping after volume scaling.
     def rescale(self, block):
         # First remove any DC component as this makes no sense for sound
+        block = numpy.float32(block)
         block -= block.mean(axis = 0)
 
         # Compute the available dynamic range
