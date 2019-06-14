@@ -66,14 +66,14 @@ def find_nearby_file(module, filename, file_pattern, full_path = False):
 def find_location_file(location, full_path):
     '''Computes full path to given location file.'''
     return find_nearby_file(
-        __file__, location, '../conf/%s.conf', full_path)
+        __file__, location, '../../conf/%s.conf', full_path)
 
 def list_location_files():
     '''Returns list of configured location files.'''
     return [
         re.sub('.*/([^/]*)\.conf', r'\1', conf)
         for conf in glob.glob(
-            os.path.join(os.path.dirname(__file__), '..', 'conf', '*.conf'))]
+            os.path.join(os.path.dirname(__file__), '../..', 'conf', '*.conf'))]
 
 
 def load_location_file(globs, location, full_path, server = None, port = None):

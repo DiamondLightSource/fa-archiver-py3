@@ -10,13 +10,16 @@ setup(
     description = 'Diamond Fast Archiver',
     author = 'Michael Abbott',
     author_email = 'Michael.Abbott@diamond.ac.uk',
-    packages = ['audio', 'falib', 'viewer', 'conf'],
+    packages = [
+        'fa_archiver',
+        'fa_archiver.audio', 'fa_archiver.falib', 'fa_archiver.viewer',
+        'conf'],
     package_data = {
         'conf' : ['BR.conf', 'SR.conf', 'TS.conf'],
-        'viewer' : ['viewer.ui']},
+        'fa_archiver.viewer' : ['viewer.ui']},
     install_requires = ['cothread', 'numpy'],
     entry_points = {
         'console_scripts': [
-            'fa-viewer = viewer.fa_viewer:main',
-            'fa-audio = audio.audio:main']},
+            'fa-viewer = fa_archiver.viewer.fa_viewer:main',
+            'fa-audio = fa_archiver.audio.audio:main']},
     zip_safe = False)

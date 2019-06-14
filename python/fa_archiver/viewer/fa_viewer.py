@@ -37,7 +37,7 @@ import numpy
 from PyQt4 import Qwt5, QtGui, QtCore, uic
 
 import cothread
-import falib
+from fa_archiver import falib
 
 import modes
 import buffer
