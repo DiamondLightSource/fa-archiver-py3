@@ -203,7 +203,7 @@ class Viewer:
 
         # Monitor mouse movements over the plot area so we can show the position
         # in coordinates.
-        SpyMouse(plot.canvas()).MouseMove.connect(self.mouse_move)
+#         SpyMouse(plot.canvas()).MouseMove.connect(self.mouse_move)
 
 
     # --------------------------------------------------------------------------
