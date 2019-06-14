@@ -6,7 +6,7 @@ endif
 MATLAB_DIR ?= $(PREFIX)/matlab
 
 # Substitutions for fa_zoomer.sh
-MCRROOT ?= /dls_sw/prod/tools/RHEL6-x86_64/matlab/R2014a/prefix
+MCRROOT ?= /dls_sw/prod/tools/RHEL7-x86_64/matlab/R2019a/prefix
 ARCH ?= glnxa64
 
 MCC ?= $(MCRROOT)/bin/mcc
