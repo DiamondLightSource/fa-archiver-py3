@@ -1,4 +1,0 @@
-# Extra rules to make SR and BR archive disks available and to create
-# convenience soft links in /dev.
-KERNEL=="sdb", SYMLINK+="sr_archive", OWNER="root", GROUP="500", MODE="0660", OPTIONS="last_rule"
-KERNEL=="dm-2", SYMLINK+="br_archive", OWNER="root", GROUP="500", MODE="0660", OPTIONS="last_rule"
