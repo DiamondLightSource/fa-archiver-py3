@@ -37,7 +37,7 @@ import math
 import numpy
 
 import cothread
-from fa_archiver import falib
+from fa import falib
 
 
 # Offset applied to user programmed volume, in dB.

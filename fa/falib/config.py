@@ -30,7 +30,7 @@ import os
 import re
 import glob
 
-import falib
+from fa.falib import falib
 
 
 __all__ = ['load_location_file', 'compute_bpm_groups']
