@@ -90,7 +90,7 @@ class connection:
     def recv_all(self):
         result = []
         while True:
-            chunk = self.sock.recv(65536)
+            chunk = self.sock.recv(65536).decode()
             if chunk:
                 result.append(chunk)
             else:
@@ -105,10 +105,10 @@ class connection:
             l = len(buf)
             if l:
                 if rx + l <= length:
-                    result.data[rx:rx+l] = buf
+                    result.data[rx:rx+l] = numpy.frombuffer(buf, dtype=numpy.int8)
                     buf = []
                 else:
-                    result.data[rx:] = buf[:length - rx]
+                    result.data[rx:] = numpy.frombuffer(buf[:length - rx], dtype=numpy.int8)
                     buf = buf[length - rx:]
                 rx += l
                 if rx >= length:
@@ -135,10 +135,10 @@ class subscription(connection):
         flags = ''
         if uncork: flags = flags + 'U'
         if decimated: flags = flags + 'D'
-        self.sock.send('S%s%s\n' % (format, flags))
-        c = self.recv(1)
+        self.sock.send(('S%s%s\n' % (format, flags)).encode())
+        c = self.recv(1).decode()
         if c != chr(0):
-            raise self.Error((c + self.recv())[:-1])    # Discard trailing \n
+            raise self.Error((c + self.recv().decode())[:-1])    # Discard trailing \n
 
     def read(self, samples):
         '''Returns a waveform of samples indexed by sample count, bpm count
@@ -153,7 +153,7 @@ class subscription(connection):
 
 def server_command(command, **kargs):
     server = connection(**kargs)
-    server.sock.send(command)
+    server.sock.send(command.encode())
     result = server.recv_all()
     server.close()
     return result

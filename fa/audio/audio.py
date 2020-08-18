@@ -126,7 +126,7 @@ class Player:
             ['aplay', '-c2', '-fS32_LE', '-r10000'], stdin = subprocess.PIPE)
         fcntl.fcntl(aplay.stdin, fcntl.F_SETFL, os.O_NONBLOCK)
 
-        to_write = ''
+        to_write = b''
         while True:
             block = self.queue.Wait()[:,0,:]
             if self.channels == 'l':
@@ -136,7 +136,7 @@ class Player:
 
             block = self.rescale(block)
 
-            to_write = to_write + block.astype('l').tostring()
+            to_write = to_write + block.astype('l').tobytes()
             while len(to_write) > 4096:
                 assert cothread.poll_list([(aplay.stdin, cothread.POLLOUT)])
                 written = os.write(aplay.stdin.fileno(), to_write)
