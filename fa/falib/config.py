@@ -66,7 +66,7 @@ def find_nearby_file(module, filename, file_pattern, full_path = False):
 def find_location_file(location, full_path):
     '''Computes full path to given location file.'''
     return find_nearby_file(
-        __file__, location, '../../conf/%s.conf', full_path)
+        __file__, location, '../conf/%s.conf', full_path)
 
 def list_location_files():
     '''Returns list of configured location files.'''
@@ -80,7 +80,9 @@ def load_location_file(globs, location, full_path, server = None, port = None):
     result = dict(FA_PORT = falib.DEFAULT_PORT)
     config_file = find_location_file(location, full_path)
     context = dict(here = os.path.dirname(config_file), os = os)
-    execfile(config_file, context, result)
+    with open(config_file, 'rb') as src:
+        code = compile(src.read(), config_file, "exec")
+    exec(code, context, result)
     if server:
         result['FA_SERVER'] = server
     if port:
