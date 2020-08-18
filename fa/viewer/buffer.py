@@ -78,7 +78,7 @@ class monitor:
         try:
             self.subscription = self.server.subscription(
                 [self.id], decimated = self.decimated, uncork = self.decimated)
-        except Exception, message:
+        except Exception as message:
             import traceback
             traceback.print_exc()
             self.on_eof('Unable to connect to server: %s' % message)
@@ -115,7 +115,7 @@ class monitor:
         while self.running:
             try:
                 block = self.subscription.read(self.update_size)[:,0,:]
-            except Exception, exception:
+            except Exception as exception:
                 stop_reason = str(exception)
                 self.running = False
             else:

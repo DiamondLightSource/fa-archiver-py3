@@ -28,11 +28,6 @@
 #      OX11 0DE
 #      michael.abbott@diamond.ac.uk
 
-if __name__ == '__main__':
-    from pkg_resources import require
-    require('cothread')
-    require('numpy')
-
 import optparse
 import subprocess
 import os
@@ -66,8 +61,8 @@ class Sub:
     def __subscriber(self, bpm):
         try:
             sub = server.subscription([bpm])
-        except Exception, error:
-            print 'Error', error, 'connecting to archiver'
+        except Exception as error:
+            print(f'Error {error} connecting to archiver')
             os._exit(0)
 
         while self.running:
@@ -152,7 +147,7 @@ class Player:
     def command_h(self, arg):
         '''h        Show this list of possible commands'''
         for command in self.commands:
-            print self.get_command(command).__doc__
+            print(self.get_command(command).__doc__)
 
     def command_q(self, arg):
         '''q        Quit'''
@@ -180,10 +175,10 @@ class Player:
 
     def command_i(self, arg):
         '''i        Show information about current settings'''
-        print 'BPM', self.sub.bpm
-        print 'Volume', self.volume, 'dB'
-        print 'Channel', self.channels
-        print 'Max volume: %.1f dB' % numpy.min(self.mvolume)
+        print(f'BPM {self.sub.bpm}')
+        print(f'Volume {self.volume} dB')
+        print(f'Channel {self.channels}')
+        print(f'Max volume: {numpy.min(self.mvolume):.1f} dB')
 
     commands = 'hqbvxyai'
 
@@ -204,10 +199,10 @@ class Player:
                 if command in self.commands:
                     try:
                         self.get_command(command)(arg)
-                    except Exception, error:
-                        print 'Error', error, 'in command'
+                    except Exception as error:
+                        print(f'Error {error} in command')
                 else:
-                    print 'Unknown command.  Possible commands are:'
+                    print('Unknown command.  Possible commands are:')
                     self.command_h(arg)
 
 parser = optparse.OptionParser(usage = '''\
