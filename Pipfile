@@ -1,0 +1,19 @@
+[dev-packages]
+pytest = "*"
+pytest-cov = "*"
+mock = "*"
+flake8-docstrings = "*"
+flake8-import-order = "*"
+black = "==19.3b0"
+sphinx = "*"
+mypy = "*"
+isort = "*"
+
+[packages]
+cothread = ">=2.15"
+numpy = "*"
+pygelf = "*"
+scipy = "*"
+matplotlib = "*"
+pyqt5 = "*"
+PythonQwt = "*"
