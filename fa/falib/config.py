@@ -47,7 +47,7 @@ def compute_bpm_groups(fa_id_list, groups, patterns):
     for id, bpm in fa_id_list:
         for match, pattern, replace in patterns:
             if re.match(match, bpm):
-                key = re.sub(pattern, replace, bpm)
+                key = re.sub(pattern, replace, bpm, count=1)
                 group_dict[key].append((bpm, id))
                 break
     return [('Other', [])] + [(group, group_dict[group]) for group in groups]

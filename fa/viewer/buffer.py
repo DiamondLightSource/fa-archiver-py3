@@ -52,7 +52,7 @@ class buffer:
         return self.data_size
 
     def read(self, size):
-        return self.buffer[-size:]
+        return self.buffer[-int(size):]
 
     def reset(self):
         self.buffer[:] = 0
@@ -114,7 +114,7 @@ class monitor:
         self.on_connect()
         while self.running:
             try:
-                block = self.subscription.read(self.update_size)[:,0,:]
+                block = self.subscription.read(int(self.update_size))[:,0,:]
             except Exception as exception:
                 stop_reason = str(exception)
                 self.running = False

@@ -131,7 +131,7 @@ class decimation:
     def update(self):
         self.selector.blockSignals(True)
         self.selector.clear()
-        valid_items = filter(self.filter, self.item_list)
+        valid_items = list(filter(self.filter, self.item_list))
         if not valid_items:
             valid_items = self.item_list[:1]
         self.selector.addItems(['%d:1' % n for n in valid_items])

@@ -409,5 +409,3 @@ def main():
 
     cothread.WaitForQuit()
 
-if __name__ == '__main__':
-    main()

@@ -190,12 +190,13 @@ class Player:
         '''Runs a simple command shell.'''
         while True:
             try:
-                input = raw_input('> ').lstrip()
-            except:
+                input_cmd = input('> ').lstrip()
+            except Exception as e:
+                print(e)
                 sys.exit(0)
 
             if input:
-                command, arg = input[0], input[1:]
+                command, arg = input_cmd[0], input_cmd[1:]
                 if command in self.commands:
                     try:
                         self.get_command(command)(arg)
@@ -239,6 +240,3 @@ player = Player(options.bpm_id, server, options.volume)
 
 def main():
     player.shell()
-
-if __name__ == '__main__':
-    main()
