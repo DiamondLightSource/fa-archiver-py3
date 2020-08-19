@@ -26,23 +26,19 @@
 #      OX11 0DE
 #      michael.abbott@diamond.ac.uk
 
-if __name__ == '__main__':
-    from pkg_resources import require
-    require('cothread')
-    require('numpy')
-
 import os, sys
 import optparse
 import numpy
-from PyQt4 import Qwt5, QtGui, QtCore, uic
+from PyQt5 import QtGui, QtCore, QtWidgets, uic
+import qwt as Qwt5
 
 import cothread
-from fa_archiver import falib
+from fa import falib
 
-import modes
-import buffer
+from fa.viewer import modes
+from fa.viewer import buffer
 
-from modes import X_colour, Y_colour
+from fa.viewer.modes import X_colour, Y_colour
 
 
 #   FA Sniffer Viewer
@@ -107,9 +103,9 @@ class Viewer:
         ui.channel_id.setValidator(
             QtGui.QIntValidator(0, server.fa_id_count - 1, ui))
 
-        ui.position_xy = QtGui.QLabel('', ui.statusbar)
+        ui.position_xy = QtWidgets.QLabel('', ui.statusbar)
         ui.statusbar.addPermanentWidget(ui.position_xy)
-        ui.status_message = QtGui.QLabel('', ui.statusbar)
+        ui.status_message = QtWidgets.QLabel('', ui.statusbar)
         ui.statusbar.addWidget(ui.status_message)
 
 
@@ -162,7 +158,7 @@ class Viewer:
     def makeplot(self):
         '''set up plotting'''
         # make any contents fill the empty frame
-        self.ui.axes.setLayout(QtGui.QGridLayout(self.ui.axes))
+        self.ui.axes.setLayout(QtWidgets.QGridLayout(self.ui.axes))
 
         # Draw a plot in the frame.  We do this, rather than defining the
         # QwtPlot object in Qt designer because loadUi then fails!
@@ -178,9 +174,9 @@ class Viewer:
 
         # Enable zooming
         plot.setStatusTip(self.Plot_tooltip)
-        zoom = Qwt5.QwtPlotZoomer(plot.canvas())
-        zoom.setRubberBandPen(QtGui.QPen(QtCore.Qt.white))
-        zoom.setTrackerPen(QtGui.QPen(QtCore.Qt.white))
+        #zoom = Qwt5.QwtPlotZoomer(plot.canvas())
+        #zoom.setRubberBandPen(QtGui.QPen(QtCore.Qt.white))
+        #zoom.setTrackerPen(QtGui.QPen(QtCore.Qt.white))
         # This is a poorly documented trick to disable the use of the right
         # button for cancelling zoom, so we can use it for panning instead.  The
         # first argument of setMousePattern() selects the zooming action, and is
@@ -193,13 +189,13 @@ class Viewer:
         #   3       Shift Left      ?
         #   4       Shift Right     ?
         #   5       Shift Middle    Zoom back in one level
-        zoom.setMousePattern(1, QtCore.Qt.NoButton)
-        self.zoom = zoom
+        #zoom.setMousePattern(1, QtCore.Qt.NoButton)
+        #self.zoom = zoom
 
         # Enable panning.  We reconfigure the active mouse to use the right
         # button so that panning and zooming can coexist.
-        pan = Qwt5.QwtPlotPanner(plot.canvas())
-        pan.setMouseButton(QtCore.Qt.RightButton)
+        #pan = Qwt5.QwtPlotPanner(plot.canvas())
+        #pan.setMouseButton(QtCore.Qt.RightButton)
 
         # Monitor mouse movements over the plot area so we can show the position
         # in coordinates.
@@ -252,7 +248,7 @@ class Viewer:
             Qwt5.QwtPlot.xBottom, self.mode.xmin, self.mode.xmax)
         self.plot.setAxisScale(
             Qwt5.QwtPlot.yLeft, self.mode.ymin, self.mode.ymax)
-        self.zoom.setZoomBase()
+        #self.zoom.setZoomBase()
         self.plot.replot()
 
     def set_timebase(self, ix):
@@ -304,11 +300,11 @@ class Viewer:
 
     def on_data_update(self, value):
         self.mode.plot(value)
-        if self.ui.autoscale.isChecked() and self.zoom.zoomRectIndex() == 0:
-            self.mode.rescale(value)
-            self.plot.setAxisScale(
-                Qwt5.QwtPlot.yLeft, self.mode.ymin, self.mode.ymax)
-            self.zoom.setZoomBase()
+        #if self.ui.autoscale.isChecked() and self.zoom.zoomRectIndex() == 0:
+        #    self.mode.rescale(value)
+        #    self.plot.setAxisScale(
+        #        Qwt5.QwtPlot.yLeft, self.mode.ymin, self.mode.ymax)
+        #    self.zoom.setZoomBase()
         self.plot.replot()
 
     def on_connect(self):
@@ -345,7 +341,7 @@ class Viewer:
         self.plot.setAxisMaxMinor(x, self.mode.xticks)
         self.plot.setAxisScale(x, self.mode.xmin, self.mode.xmax)
         self.plot.setAxisScale(y, self.mode.ymin, self.mode.ymax)
-        self.zoom.setZoomBase()
+        #self.zoom.setZoomBase()
 
         self.redraw()
 

@@ -32,7 +32,8 @@
 #      michael.abbott@diamond.ac.uk
 
 import numpy
-from PyQt4 import Qwt5, QtGui, QtCore
+from PyQt5 import QtGui, QtWidgets, QtCore
+import qwt as Qwt5
 
 
 # Actually, these really belong in fa-viewer.py, but the practicalities of doing
@@ -56,8 +57,8 @@ class mode_common:
 
     def __init__(self, parent):
         self.parent = parent
-        self.__tray = QtGui.QWidget(parent.ui)
-        self.__tray_layout = QtGui.QHBoxLayout()
+        self.__tray = QtWidgets.QWidget(parent.ui)
+        self.__tray_layout = QtWidgets.QHBoxLayout()
         self.__tray.setLayout(self.__tray_layout)
         parent.ui.bottom_row.addWidget(self.__tray)
         self.__tray_layout.setContentsMargins(0, 0, 0, 0)
@@ -112,12 +113,12 @@ class decimation:
         self.filter = filter
         self.on_update = on_update
 
-        mode.addWidget(QtGui.QLabel('Decimation', parent.ui))
+        mode.addWidget(QtWidgets.QLabel('Decimation', parent.ui))
 
-        self.selector = QtGui.QComboBox(parent.ui)
+        self.selector = QtWidgets.QComboBox(parent.ui)
         # To get the initial size right, start by adding all items
         self.selector.addItems(['%d:1' % n for n in item_list])
-        self.selector.setSizeAdjustPolicy(QtGui.QComboBox.AdjustToContents)
+        self.selector.setSizeAdjustPolicy(QtWidgets.QComboBox.AdjustToContents)
         self.selector.currentIndexChanged.connect(self.set_decimation)
         mode.addWidget(self.selector)
         self.decimation = self.item_list[0]
@@ -166,7 +167,7 @@ class mode_raw(mode_common):
     def __init__(self, parent):
         mode_common.__init__(self, parent)
 
-        self.qt_diff = QtGui.QCheckBox('Diff', parent.ui)
+        self.qt_diff = QtWidgets.QCheckBox('Diff', parent.ui)
         self.diff = False
         self.qt_diff.stateChanged.connect(self.set_diff)
         self.addWidget(self.qt_diff)
@@ -298,11 +299,11 @@ class mode_fft(mode_common):
     def __init__(self, parent):
         mode_common.__init__(self, parent)
 
-        self.windowed = QtGui.QCheckBox('Windowed', parent.ui)
+        self.windowed = QtWidgets.QCheckBox('Windowed', parent.ui)
         self.windowed.setChecked(True)
         self.addWidget(self.windowed)
 
-        squared = QtGui.QCheckBox(
+        squared = QtWidgets.QCheckBox(
             '%s%s/Hz' % (micrometre, char_squared), parent.ui)
         squared.stateChanged.connect(self.set_squared)
         self.addWidget(squared)
@@ -429,17 +430,17 @@ class mode_fft_logf(mode_common):
     def __init__(self, parent):
         mode_common.__init__(self, parent)
 
-        self.windowed = QtGui.QCheckBox('Windowed', parent.ui)
+        self.windowed = QtWidgets.QCheckBox('Windowed', parent.ui)
         self.windowed.setChecked(True)
         self.addWidget(self.windowed)
 
-        check_scalef = QtGui.QCheckBox('scale by f', parent.ui)
+        check_scalef = QtWidgets.QCheckBox('scale by f', parent.ui)
         self.addWidget(check_scalef)
         check_scalef.stateChanged.connect(self.set_scalef_state)
 
-        self.addWidget(QtGui.QLabel('Filter', parent.ui))
+        self.addWidget(QtWidgets.QLabel('Filter', parent.ui))
 
-        selector = QtGui.QComboBox(parent.ui)
+        selector = QtWidgets.QComboBox(parent.ui)
         selector.addItems(['%ds' % f for f in self.Filters])
         self.addWidget(selector)
         selector.currentIndexChanged.connect(self.set_filter)
@@ -506,16 +507,16 @@ class mode_integrated(mode_common):
     def __init__(self, parent):
         mode_common.__init__(self, parent)
 
-        reversed = QtGui.QCheckBox('Reversed', parent.ui)
+        reversed = QtWidgets.QCheckBox('Reversed', parent.ui)
         self.addWidget(reversed)
         reversed.stateChanged.connect(self.set_reversed)
         self.reversed = False
 
-        yselect = QtGui.QCheckBox('Linear', parent.ui)
+        yselect = QtWidgets.QCheckBox('Linear', parent.ui)
         self.addWidget(yselect)
         yselect.stateChanged.connect(self.set_yscale)
 
-        button = QtGui.QPushButton('Background', parent.ui)
+        button = QtWidgets.QPushButton('Background', parent.ui)
         self.addWidget(button)
         button.clicked.connect(self.set_background)
 
