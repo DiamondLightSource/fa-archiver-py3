@@ -1,3 +1,8 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
 [dev-packages]
 pytest = "*"
 pytest-cov = "*"
@@ -14,6 +19,7 @@ cothread = ">=2.15"
 numpy = "*"
 pygelf = "*"
 scipy = "*"
-matplotlib = "*"
-pyqt5 = "*"
+pyqt5 = "==5.12.2+dls1"
 PythonQwt = "*"
+guidata = "*"
+guiqwt = "*"

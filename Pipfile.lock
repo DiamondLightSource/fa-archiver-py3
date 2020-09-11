@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "18c53495c55b81852b6112bb4e7ad2efce123bb9deed99cd3fdc18d153e64c82"
+            "sha256": "fce3ce3f1600f5f1221a2a3878dc3904a20ec559dbf2920a31d53c2efc333249"
         },
         "pipfile-spec": 6,
         "requires": {},
@@ -22,24 +22,20 @@
             "index": "pypi",
             "version": "==2.16+dls1"
         },
-        "cycler": {
+        "guidata": {
             "hashes": [
-                "sha256:1d8a5ae1ff6c5cf9b93e8811e581232ad8920aeec647c37316ceac982b08cb2d"
-            ],
-            "version": "==0.10.0"
-        },
-        "kiwisolver": {
-            "hashes": [
-                "sha256:603162139684ee56bcd57acc74035fceed7dd8d732f38c0959c8bd157f913fec"
-            ],
-            "version": "==1.2.0"
-        },
-        "matplotlib": {
-            "hashes": [
-                "sha256:282b3fc8023c4365bad924d1bb442ddc565c2d1635f210b700722776da466ca3"
+                "sha256:3dcb9b26e077c4c91c3f3fb5093a971ffee569e9b580f0ff0e87f6a9ff24a2ba",
+                "sha256:5514196cce1739c11d95ab918a13c9cbe1b5dc23dd6d6ee93a1e18c4b05552dd"
             ],
             "index": "pypi",
-            "version": "==3.2.1"
+            "version": "==1.7.9"
+        },
+        "guiqwt": {
+            "hashes": [
+                "sha256:dc028ea502426f90f53ae172743b1f17646a6b7b7f2e66d0cb9a2c31ee1304e1"
+            ],
+            "index": "pypi",
+            "version": "==3.0.5"
         },
         "numpy": {
             "hashes": [
@@ -68,6 +64,12 @@
             "index": "pypi",
             "version": "==1.18.4"
         },
+        "pillow": {
+            "hashes": [
+                "sha256:0e2a3bceb0fd4e0cb17192ae506d5f082b309ffe5fc370a5667959c9b2f85fa3"
+            ],
+            "version": "==7.1.2"
+        },
         "pygelf": {
             "hashes": [
                 "sha256:e2df467b215b8d114130aa4b48e609ec4d8d7d6b1a99d71749c8a72dc5c64a84"
@@ -75,25 +77,12 @@
             "index": "pypi",
             "version": "==0.3.5"
         },
-        "pyparsing": {
-            "hashes": [
-                "sha256:c203ec8783bf771a155b207279b9bccb8dea02d8f0c9e5f8ead507bc3246ecc1",
-                "sha256:ef9d7589ef3c200abe66653d3f1ab1033c3c419ae9b9bdb1240a85b024efc88b"
-            ],
-            "version": "==2.4.7"
-        },
         "pyqt5": {
             "hashes": [
                 "sha256:2c309db3035093ea85f08029711d6fbcccf89eded7f8e4f788695d933cfd80a5"
             ],
             "index": "pypi",
             "version": "==5.12.2+dls1"
-        },
-        "python-dateutil": {
-            "hashes": [
-                "sha256:75bb3f31ea686f1197762692a9ee6a7550b59fc6ca3a1f4b5d7e32fb98e2da2a"
-            ],
-            "version": "==2.8.1"
         },
         "pythonqwt": {
             "hashes": [
@@ -103,19 +92,19 @@
             "index": "pypi",
             "version": "==0.5.5"
         },
+        "qtpy": {
+            "hashes": [
+                "sha256:2db72c44b55d0fe1407be8fba35c838ad0d6d3bb81f23007886dc1fc0f459c8d",
+                "sha256:fa0b8363b363e89b2a6f49eddc162a04c0699ae95e109a6be3bb145a913190ea"
+            ],
+            "version": "==1.9.0"
+        },
         "scipy": {
             "hashes": [
                 "sha256:00af72998a46c25bdb5824d2b729e7dabec0c765f9deb0b504f928591f5ff9d4"
             ],
             "index": "pypi",
             "version": "==1.4.1"
-        },
-        "six": {
-            "hashes": [
-                "sha256:30639c035cdb23534cd4aa2dd52c3bf48f06e5f4a941509c8bafd8ce11080259",
-                "sha256:8b74bedcbbbaca38ff6d7491d76f2b06b3592611af620f8426e82dddb04a5ced"
-            ],
-            "version": "==1.15.0"
         }
     },
     "develop": {
@@ -265,7 +254,7 @@
                 "sha256:90bb658cdbbf6d1735b6341ce708fc7024a3e14e99ffdc5783edea9f9b077f83",
                 "sha256:dc15b2969b4ce36305c51eebe62d418ac7791e9a157911d58bfb1f9ccd8e2070"
             ],
-            "markers": "python_version < '3.8' and python_version < '3.8'",
+            "markers": "python_version < '3.8'",
             "version": "==1.7.0"
         },
         "isort": {

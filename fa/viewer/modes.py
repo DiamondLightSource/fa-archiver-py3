@@ -288,7 +288,7 @@ class mode_fft(mode_common):
     xshortname = 'f'
     xunits = 'Hz'
     xscale = Qwt5.QwtLinearScaleEngine
-    yscale = Qwt5.QwtLog10ScaleEngine
+    yscale = Qwt5.QwtLogScaleEngine
     xticks = 5
     xmin = 0
     ymin_normal = 1e-4
@@ -393,8 +393,8 @@ class mode_fft_logf(mode_common):
     xname = 'Frequency'
     xshortname = 'f'
     xunits = 'Hz'
-    xscale = Qwt5.QwtLog10ScaleEngine
-    yscale = Qwt5.QwtLog10ScaleEngine
+    xscale = Qwt5.QwtLogScaleEngine
+    yscale = Qwt5.QwtLogScaleEngine
     xticks = 10
 
     Filters = [1, 10, 100]
@@ -480,8 +480,8 @@ class mode_integrated(mode_common):
     xshortname = 'f'
     xunits = 'Hz'
     yunits = micrometre
-    xscale = Qwt5.QwtLog10ScaleEngine
-    yscale = Qwt5.QwtLog10ScaleEngine
+    xscale = Qwt5.QwtLogScaleEngine
+    yscale = Qwt5.QwtLogScaleEngine
     xticks = 10
     ymin = 1e-3
     ymax = 10
@@ -538,7 +538,7 @@ class mode_integrated(mode_common):
         if linear:
             self.yscale = Qwt5.QwtLinearScaleEngine
         else:
-            self.yscale = Qwt5.QwtLog10ScaleEngine
+            self.yscale = Qwt5.QwtLogScaleEngine
         self.parent.reset_mode()
 
     def set_reversed(self, reversed):

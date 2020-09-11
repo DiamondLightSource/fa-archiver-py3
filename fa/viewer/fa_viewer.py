@@ -26,11 +26,15 @@
 #      OX11 0DE
 #      michael.abbott@diamond.ac.uk
 
-import os, sys
+import os
 import optparse
-import numpy
 from PyQt5 import QtGui, QtCore, QtWidgets, uic
 import qwt as Qwt5
+from guiqwt.plot import PlotManager
+from guiqwt.curve import CurvePlot, CurveItem
+from guiqwt.events import PanHandler, AutoZoomHandler, ZoomRectHandler
+from guiqwt.styles import GridParam
+from guiqwt.tools import RectZoomTool
 
 import cothread
 from fa import falib
@@ -39,6 +43,19 @@ from fa.viewer import modes
 from fa.viewer import buffer
 
 from fa.viewer.modes import X_colour, Y_colour
+
+
+class CustomZoomTool(RectZoomTool):
+    """RectZoomTool modified to use right-click to pan."""
+
+    def setup_filter(self, baseplot):
+        filter = baseplot.filter
+        start_state = filter.new_state()
+        handler = ZoomRectHandler(filter, QtCore.Qt.LeftButton, start_state=start_state)
+        handler.set_shape(*self.get_shape())
+        PanHandler(filter, QtCore.Qt.RightButton, start_state=start_state)
+        AutoZoomHandler(filter, QtCore.Qt.MidButton, start_state=start_state)
+        return start_state
 
 
 #   FA Sniffer Viewer
@@ -147,7 +164,7 @@ class Viewer:
         self.ui.show()
 
     def makecurve(self, colour, dotted=False):
-        c = Qwt5.QwtPlotCurve()
+        c = CurveItem()
         pen = QtGui.QPen(colour)
         if dotted:
             pen.setStyle(QtCore.Qt.DotLine)
@@ -160,10 +177,14 @@ class Viewer:
         # make any contents fill the empty frame
         self.ui.axes.setLayout(QtWidgets.QGridLayout(self.ui.axes))
 
-        # Draw a plot in the frame.  We do this, rather than defining the
-        # QwtPlot object in Qt designer because loadUi then fails!
-        plot = Qwt5.QwtPlot(self.ui.axes)
+        # Draw a plot in the frame using guiqwt.
+        plot = CurvePlot(self.ui.axes, gridparam=GridParam())
         self.ui.axes.layout().addWidget(plot)
+        pm = PlotManager(self.ui.axes)
+        pm.add_plot(plot)
+        plot.set_manager(pm, id(plot))
+        pm.add_tool(CustomZoomTool)
+        pm.get_tool(CustomZoomTool).activate()
 
         self.plot = plot
         self.cx = self.makecurve(X_colour)
@@ -172,34 +193,11 @@ class Viewer:
         # set background to black
         plot.setCanvasBackground(QtCore.Qt.black)
 
-        # Enable zooming
         plot.setStatusTip(self.Plot_tooltip)
-        #zoom = Qwt5.QwtPlotZoomer(plot.canvas())
-        #zoom.setRubberBandPen(QtGui.QPen(QtCore.Qt.white))
-        #zoom.setTrackerPen(QtGui.QPen(QtCore.Qt.white))
-        # This is a poorly documented trick to disable the use of the right
-        # button for cancelling zoom, so we can use it for panning instead.  The
-        # first argument of setMousePattern() selects the zooming action, and is
-        # one of the following with the given default assignment:
-        #
-        #   Index   Button          Action
-        #   0       Left Mouse      Start and stop rubber band selection
-        #   1       Right Mouse     Restore to original unzoomed axes
-        #   2       Middle Mouse    Zoom out one level
-        #   3       Shift Left      ?
-        #   4       Shift Right     ?
-        #   5       Shift Middle    Zoom back in one level
-        #zoom.setMousePattern(1, QtCore.Qt.NoButton)
-        #self.zoom = zoom
-
-        # Enable panning.  We reconfigure the active mouse to use the right
-        # button so that panning and zooming can coexist.
-        #pan = Qwt5.QwtPlotPanner(plot.canvas())
-        #pan.setMouseButton(QtCore.Qt.RightButton)
 
         # Monitor mouse movements over the plot area so we can show the position
         # in coordinates.
-#         SpyMouse(plot.canvas()).MouseMove.connect(self.mouse_move)
+        SpyMouse(plot.canvas()).MouseMove.connect(self.mouse_move)
 
 
     # --------------------------------------------------------------------------
@@ -248,7 +246,6 @@ class Viewer:
             Qwt5.QwtPlot.xBottom, self.mode.xmin, self.mode.xmax)
         self.plot.setAxisScale(
             Qwt5.QwtPlot.yLeft, self.mode.ymin, self.mode.ymax)
-        #self.zoom.setZoomBase()
         self.plot.replot()
 
     def set_timebase(self, ix):
@@ -300,11 +297,6 @@ class Viewer:
 
     def on_data_update(self, value):
         self.mode.plot(value)
-        #if self.ui.autoscale.isChecked() and self.zoom.zoomRectIndex() == 0:
-        #    self.mode.rescale(value)
-        #    self.plot.setAxisScale(
-        #        Qwt5.QwtPlot.yLeft, self.mode.ymin, self.mode.ymax)
-        #    self.zoom.setZoomBase()
         self.plot.replot()
 
     def on_connect(self):
