@@ -269,7 +269,7 @@ def scaled_abs_fft(value, sample_frequency, windowed=False, axis=0):
     N = value.shape[axis]
     slice = [numpy.s_[:] for s in fft.shape]
     slice[axis] = numpy.s_[:N//2]
-    fft = fft[slice]
+    fft = fft[tuple(slice)]
 
     # Finally scale the result into units per sqrt(Hz)
     return numpy.abs(fft) * numpy.sqrt(2.0 / (sample_frequency * N))
