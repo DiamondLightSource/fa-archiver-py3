@@ -30,11 +30,11 @@ import os
 import optparse
 from PyQt5 import QtGui, QtCore, QtWidgets, uic
 import qwt as Qwt5
-from guiqwt.plot import PlotManager
-from guiqwt.curve import CurvePlot, CurveItem
-from guiqwt.events import PanHandler, AutoZoomHandler, ZoomRectHandler
-from guiqwt.styles import GridParam
-from guiqwt.tools import RectZoomTool
+from plotpy.plot import BasePlotOptions, PlotManager, BasePlot
+from plotpy.items import CurveItem
+from plotpy.events import PanHandler, AutoZoomHandler, ZoomRectHandler
+from plotpy.styles import GridParam
+from plotpy.tools import RectZoomTool
 
 import cothread
 from fa import falib
@@ -177,8 +177,9 @@ class Viewer:
         # make any contents fill the empty frame
         self.ui.axes.setLayout(QtWidgets.QGridLayout(self.ui.axes))
 
-        # Draw a plot in the frame using guiqwt.
-        plot = CurvePlot(self.ui.axes, gridparam=GridParam())
+        plot_options = BasePlotOptions(gridparam=GridParam())
+        # Draw a plot in the frame using plotpy.
+        plot = BasePlot(self.ui.axes, options=plot_options)
         self.ui.axes.layout().addWidget(plot)
         pm = PlotManager(self.ui.axes)
         pm.add_plot(plot)
