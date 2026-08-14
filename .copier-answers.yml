@@ -1,0 +1,14 @@
+# Changes here will be overwritten by Copier
+_commit: 1.0.0
+_src_path: https://github.com/DiamondLightSource/python-copier-template.git
+author_email: diamhighlvlapps@diamond.ac.uk
+author_name: Diamond High Level Apps
+component_owner: user:zrv91478
+description: Python tools for accessing the diamond fast acquisition archiver
+distribution_name: fa-archiver
+docker: true
+docs_type: README
+git_platform: github.com
+github_org: DiamondLightSource
+package_name: fa
+repo_name: fa-archiver-py3

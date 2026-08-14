@@ -1,0 +1,10 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: fa-archiver
+  title: fa-archiver-py3
+  description: Python tools for accessing the diamond fast acquisition archiver
+spec:
+  type: documentation
+  lifecycle: experimental
+  owner: user:zrv91478
