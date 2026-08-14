@@ -298,6 +298,10 @@ class Viewer:
 
     def on_data_update(self, value):
         self.mode.plot(value)
+        if self.ui.autoscale.isChecked():
+            self.mode.rescale(value)
+            self.plot.setAxisScale(
+                Qwt5.QwtPlot.yLeft, self.mode.ymin, self.mode.ymax)
         self.plot.replot()
 
     def on_connect(self):
