@@ -32,28 +32,27 @@
 #      michael.abbott@diamond.ac.uk
 
 import numpy
-from PyQt5 import QtGui, QtWidgets, QtCore
 import qwt as Qwt5
-
+from PyQt5 import QtCore, QtGui, QtWidgets
 
 # Actually, these really belong in fa-viewer.py, but the practicalities of doing
 # this are not worth the trouble.
-X_colour = QtGui.QColor(64, 64, 255)    # QtCore.Qt.blue is too dark
+X_colour = QtGui.QColor(64, 64, 255)  # QtCore.Qt.blue is too dark
 Y_colour = QtCore.Qt.red
 
 
 # Unicode characters
-char_times  = u'\u00D7'             # Multiplication sign
-char_mu     = u'\u03BC'             # Greek mu
-char_sqrt   = u'\u221A'             # Square root sign
-char_cdot   = u'\u22C5'             # Centre dot
-char_squared = u'\u00B2'            # Superscript 2
+char_times = "\u00d7"  # Multiplication sign
+char_mu = "\u03bc"  # Greek mu
+char_sqrt = "\u221a"  # Square root sign
+char_cdot = "\u22c5"  # Centre dot
+char_squared = "\u00b2"  # Superscript 2
 
-micrometre  = char_mu + 'm'
+micrometre = char_mu + "m"
 
 
 class mode_common:
-    yshortname = 'Y'
+    yshortname = "Y"
 
     def __init__(self, parent):
         self.parent = parent
@@ -88,7 +87,7 @@ class mode_common:
     def get_minmax(self, value):
         value = self.compute(value)
         ix = (self.show_x, self.show_y)
-        ix = numpy.nonzero(ix)[0]           # Ugly numpy clever indexing failure
+        ix = numpy.nonzero(ix)[0]  # Ugly numpy clever indexing failure
         return numpy.nanmin(value[:, ix]), numpy.nanmax(value[:, ix])
 
     def linear_rescale(self, value):
@@ -100,11 +99,11 @@ class mode_common:
     def log_rescale(self, value):
         self.ymin, self.ymax = self.get_minmax(value)
 
-    rescale = log_rescale           # Most common default
+    rescale = log_rescale  # Most common default
 
 
 class decimation:
-    '''Common code for decimation selection.'''
+    """Common code for decimation selection."""
 
     # Note that this code assumes that filter selectes a prefix of item_list
     def __init__(self, mode, parent, item_list, filter, on_update):
@@ -113,11 +112,11 @@ class decimation:
         self.filter = filter
         self.on_update = on_update
 
-        mode.addWidget(QtWidgets.QLabel('Decimation', parent.ui))
+        mode.addWidget(QtWidgets.QLabel("Decimation", parent.ui))
 
         self.selector = QtWidgets.QComboBox(parent.ui)
         # To get the initial size right, start by adding all items
-        self.selector.addItems(['%d:1' % n for n in item_list])
+        self.selector.addItems(["%d:1" % n for n in item_list])
         self.selector.setSizeAdjustPolicy(QtWidgets.QComboBox.AdjustToContents)
         self.selector.currentIndexChanged.connect(self.set_decimation)
         mode.addWidget(self.selector)
@@ -134,7 +133,7 @@ class decimation:
         valid_items = list(filter(self.filter, self.item_list))
         if not valid_items:
             valid_items = self.item_list[:1]
-        self.selector.addItems(['%d:1' % n for n in valid_items])
+        self.selector.addItems(["%d:1" % n for n in valid_items])
 
         if self.decimation not in valid_items:
             self.decimation = valid_items[-1]
@@ -149,10 +148,10 @@ class decimation:
 
 
 class mode_raw(mode_common):
-    mode_name = 'Raw Signal'
-    xname = 'Time'
-    yname = 'Position'
-    xshortname = 't'
+    mode_name = "Raw Signal"
+    xname = "Time"
+    yname = "Position"
+    xshortname = "t"
     yunits = micrometre
     xscale = Qwt5.QwtLinearScaleEngine
     yscale = Qwt5.QwtLinearScaleEngine
@@ -167,14 +166,18 @@ class mode_raw(mode_common):
     def __init__(self, parent):
         mode_common.__init__(self, parent)
 
-        self.qt_diff = QtWidgets.QCheckBox('Diff', parent.ui)
+        self.qt_diff = QtWidgets.QCheckBox("Diff", parent.ui)
         self.diff = False
         self.qt_diff.stateChanged.connect(self.set_diff)
         self.addWidget(self.qt_diff)
 
         self.selector = decimation(
-            self, parent, self.Decimations,
-            lambda d: 50*d < self.sample_count, self.set_decimation)
+            self,
+            parent,
+            self.Decimations,
+            lambda d: 50 * d < self.sample_count,
+            self.set_decimation,
+        )
         self.decimation = self.selector.decimation
 
         self.maxx = parent.makecurve(X_colour, True)
@@ -202,10 +205,10 @@ class mode_raw(mode_common):
         self.sample_count = sample_count
         duration = sample_count / sample_frequency
         if duration <= 1:
-            self.xunits = 'ms'
+            self.xunits = "ms"
             self.scale = 1e3
         else:
-            self.xunits = 's'
+            self.xunits = "s"
             self.scale = 1.0
         self.xmax = self.scale * duration
 
@@ -231,8 +234,9 @@ class mode_raw(mode_common):
             mean = value
         else:
             points = len(value) // self.decimation
-            value = value[:points * self.decimation].reshape(
-                (points, self.decimation, 2))
+            value = value[: points * self.decimation].reshape(
+                (points, self.decimation, 2)
+            )
             mean = numpy.mean(value, axis=1)
             min = numpy.min(value, axis=1)
             max = numpy.max(value, axis=1)
@@ -251,15 +255,14 @@ class mode_raw(mode_common):
 
 
 def scaled_abs_fft(value, sample_frequency, windowed=False, axis=0):
-    '''Returns the fft of value (along axis 0) scaled so that values are in
+    """Returns the fft of value (along axis 0) scaled so that values are in
     units per sqrt(Hz).  The magnitude of the first half of the spectrum is
-    returned.'''
+    returned."""
     if windowed:
         # The Hann window is good enough.  In some cases the Hamming window
         # looks a bit better, but then I'd need a choice of windows.  Not really
         # the point here, so just go for the simplest...
-        window = 1 + numpy.cos(
-            numpy.linspace(-numpy.pi, numpy.pi, value.shape[axis]))
+        window = 1 + numpy.cos(numpy.linspace(-numpy.pi, numpy.pi, value.shape[axis]))
         value = value * window[:, None]
     fft = numpy.fft.fft(value, axis=axis)
 
@@ -268,25 +271,25 @@ def scaled_abs_fft(value, sample_frequency, windowed=False, axis=0):
     # complicated...
     N = value.shape[axis]
     slice = [numpy.s_[:] for s in fft.shape]
-    slice[axis] = numpy.s_[:N//2]
+    slice[axis] = numpy.s_[: N // 2]
     fft = fft[tuple(slice)]
 
     # Finally scale the result into units per sqrt(Hz)
     return numpy.abs(fft) * numpy.sqrt(2.0 / (sample_frequency * N))
 
+
 def fft_timebase(sample_count, sample_frequency, scale=1.0):
-    '''Returns a waveform suitable for an FFT timebase with the given number of
-    points.'''
-    return scale * sample_frequency * \
-        numpy.arange(sample_count // 2) / sample_count
+    """Returns a waveform suitable for an FFT timebase with the given number of
+    points."""
+    return scale * sample_frequency * numpy.arange(sample_count // 2) / sample_count
 
 
 class mode_fft(mode_common):
-    mode_name = 'FFT'
-    xname = 'Frequency'
-    yname = 'Amplitude'
-    xshortname = 'f'
-    xunits = 'Hz'
+    mode_name = "FFT"
+    xname = "Frequency"
+    yname = "Amplitude"
+    xshortname = "f"
+    xunits = "Hz"
     xscale = Qwt5.QwtLinearScaleEngine
     yscale = Qwt5.QwtLogScaleEngine
     xticks = 5
@@ -299,18 +302,21 @@ class mode_fft(mode_common):
     def __init__(self, parent):
         mode_common.__init__(self, parent)
 
-        self.windowed = QtWidgets.QCheckBox('Windowed', parent.ui)
+        self.windowed = QtWidgets.QCheckBox("Windowed", parent.ui)
         self.windowed.setChecked(True)
         self.addWidget(self.windowed)
 
-        squared = QtWidgets.QCheckBox(
-            '%s%s/Hz' % (micrometre, char_squared), parent.ui)
+        squared = QtWidgets.QCheckBox("%s%s/Hz" % (micrometre, char_squared), parent.ui)
         squared.stateChanged.connect(self.set_squared)
         self.addWidget(squared)
 
         self.selector = decimation(
-            self, parent, self.Decimations,
-            lambda d: 1000 * d <= self.sample_count, self.set_decimation)
+            self,
+            parent,
+            self.Decimations,
+            lambda d: 1000 * d <= self.sample_count,
+            self.set_decimation,
+        )
 
         self.set_squared_state(False)
         self.decimation = self.selector.decimation
@@ -324,15 +330,16 @@ class mode_fft(mode_common):
     def set_decimation(self, decimation):
         self.decimation = decimation
         self.xaxis = fft_timebase(
-            self.sample_count // self.decimation, self.sample_frequency)
+            self.sample_count // self.decimation, self.sample_frequency
+        )
 
     def set_squared_state(self, show_squared):
         self.show_squared = show_squared
         if show_squared:
-            self.yunits = '%s%s/Hz' % (micrometre, char_squared)
-            self.ymin = self.ymin_normal ** 2
+            self.yunits = "%s%s/Hz" % (micrometre, char_squared)
+            self.ymin = self.ymin_normal**2
         else:
-            self.yunits = '%s/%sHz' % (micrometre, char_sqrt)
+            self.yunits = "%s/%sHz" % (micrometre, char_sqrt)
             self.ymin = self.ymin_normal
 
     def set_squared(self, squared):
@@ -342,37 +349,39 @@ class mode_fft(mode_common):
     def compute(self, value):
         windowed = self.windowed.isChecked()
         if self.decimation == 1:
-            result = scaled_abs_fft(
-                value, self.sample_frequency, windowed = windowed)
+            result = scaled_abs_fft(value, self.sample_frequency, windowed=windowed)
         else:
             # Compute a decimated fft by segmenting the waveform (by reshaping),
             # computing the fft of each segment, and computing the mean power of
             # all the resulting transforms.
             N = len(value)
             points = len(value) // self.decimation
-            value = value[:points * self.decimation].reshape(
-                (self.decimation, points, 2))
+            value = value[: points * self.decimation].reshape(
+                (self.decimation, points, 2)
+            )
             fft = scaled_abs_fft(
-                value, self.sample_frequency, windowed = windowed, axis=1)
+                value, self.sample_frequency, windowed=windowed, axis=1
+            )
             result = numpy.sqrt(numpy.mean(fft**2, axis=0))
         if self.show_squared:
-            return result ** 2
+            return result**2
         else:
             return result
 
 
 def compute_gaps(l, N):
-    '''This computes a series of logarithmically spaced indexes into an array
+    """This computes a series of logarithmically spaced indexes into an array
     of length l.  N is a hint for the number of indexes, but the result may
-    be somewhat shorter.'''
+    be somewhat shorter."""
     gaps = numpy.int_(numpy.logspace(0, numpy.log10(l), N))
     counts = numpy.diff(gaps)
     return counts[counts > 0]
 
+
 def condense(value, counts):
-    '''The given waveform is condensed in logarithmic intervals so that the same
+    """The given waveform is condensed in logarithmic intervals so that the same
     number of points are generated in each decade.  The accumulation and number
-    of accumulated points are returned as separate waveforms.'''
+    of accumulated points are returned as separate waveforms."""
 
     # The result is the same shape as the value in all axes except the first.
     shape = list(value.shape)
@@ -381,18 +390,19 @@ def condense(value, counts):
 
     left = 0
     for i, step in enumerate(counts):
-        sums[i] = numpy.sum(value[left:left + step], axis=0)
+        sums[i] = numpy.sum(value[left : left + step], axis=0)
         left += step
     return sums
 
 
 FFT_LOGF_POINTS = 5000
 
+
 class mode_fft_logf(mode_common):
-    mode_name = 'FFT (log f)'
-    xname = 'Frequency'
-    xshortname = 'f'
-    xunits = 'Hz'
+    mode_name = "FFT (log f)"
+    xname = "Frequency"
+    xshortname = "f"
+    xunits = "Hz"
     xscale = Qwt5.QwtLogScaleEngine
     yscale = Qwt5.QwtLogScaleEngine
     xticks = 10
@@ -409,10 +419,8 @@ class mode_fft_logf(mode_common):
 
     def compute(self, value):
         windowed = self.windowed.isChecked()
-        fft = scaled_abs_fft(
-            value, self.sample_frequency, windowed = windowed)[1:]
-        fft_logf = numpy.sqrt(
-            condense(fft**2, self.counts) / self.counts[:,None])
+        fft = scaled_abs_fft(value, self.sample_frequency, windowed=windowed)[1:]
+        fft_logf = numpy.sqrt(condense(fft**2, self.counts) / self.counts[:, None])
         if self.scalef:
             fft_logf *= self.xaxis[:, None]
 
@@ -423,25 +431,24 @@ class mode_fft_logf(mode_common):
             self.history = fft_logf**2
             return fft_logf
         else:
-            self.history = \
-                self.filter * fft_logf**2 + (1 - self.filter) * self.history
+            self.history = self.filter * fft_logf**2 + (1 - self.filter) * self.history
             return numpy.sqrt(self.history)
 
     def __init__(self, parent):
         mode_common.__init__(self, parent)
 
-        self.windowed = QtWidgets.QCheckBox('Windowed', parent.ui)
+        self.windowed = QtWidgets.QCheckBox("Windowed", parent.ui)
         self.windowed.setChecked(True)
         self.addWidget(self.windowed)
 
-        check_scalef = QtWidgets.QCheckBox('scale by f', parent.ui)
+        check_scalef = QtWidgets.QCheckBox("scale by f", parent.ui)
         self.addWidget(check_scalef)
         check_scalef.stateChanged.connect(self.set_scalef_state)
 
-        self.addWidget(QtWidgets.QLabel('Filter', parent.ui))
+        self.addWidget(QtWidgets.QLabel("Filter", parent.ui))
 
         selector = QtWidgets.QComboBox(parent.ui)
-        selector.addItems(['%ds' % f for f in self.Filters])
+        selector.addItems(["%ds" % f for f in self.Filters])
         self.addWidget(selector)
         selector.currentIndexChanged.connect(self.set_filter)
 
@@ -456,15 +463,15 @@ class mode_fft_logf(mode_common):
     def set_scalef(self, scalef):
         self.scalef = scalef
         if self.scalef:
-            self.yname = 'Amplitude %s freq' % char_times
-            self.yunits = '%s%s%sHz' % (micrometre, char_cdot, char_sqrt)
-            self.yshortname = 'f%sY' % char_cdot
+            self.yname = "Amplitude %s freq" % char_times
+            self.yunits = "%s%s%sHz" % (micrometre, char_cdot, char_sqrt)
+            self.yshortname = "f%sY" % char_cdot
             self.ymin = 1e-3
             self.ymax = 100
         else:
-            self.yname = 'Amplitude'
-            self.yunits = '%s/%sHz' % (micrometre, char_sqrt)
-            self.yshortname = 'Y'
+            self.yname = "Amplitude"
+            self.yunits = "%s/%sHz" % (micrometre, char_sqrt)
+            self.yshortname = "Y"
             self.ymin = 1e-4
             self.ymax = 1
 
@@ -474,11 +481,11 @@ class mode_fft_logf(mode_common):
 
 
 class mode_integrated(mode_common):
-    mode_name = 'Integrated'
-    xname = 'Frequency'
-    yname = 'Cumulative amplitude'
-    xshortname = 'f'
-    xunits = 'Hz'
+    mode_name = "Integrated"
+    xname = "Frequency"
+    yname = "Cumulative amplitude"
+    xshortname = "f"
+    xunits = "Hz"
     yunits = micrometre
     xscale = Qwt5.QwtLogScaleEngine
     yscale = Qwt5.QwtLogScaleEngine
@@ -490,14 +497,14 @@ class mode_integrated(mode_common):
         self.sample_frequency = sample_frequency
         self.xmax = sample_frequency / 2
         self.counts = compute_gaps(sample_count // 2 - 1, FFT_LOGF_POINTS)[1:]
-        self.xaxis = sample_frequency * (
-            numpy.cumsum(self.counts) + 1) / sample_count
+        self.xaxis = sample_frequency * (numpy.cumsum(self.counts) + 1) / sample_count
         self.xmin = self.xaxis[0]
 
     def compute(self, value):
         N = len(value)
         fft2 = condense(
-            scaled_abs_fft(value, self.sample_frequency)[2:]**2, self.counts)
+            scaled_abs_fft(value, self.sample_frequency)[2:] ** 2, self.counts
+        )
         if self.reversed:
             cumsum = numpy.cumsum(fft2[::-1], axis=0)[::-1]
         else:
@@ -507,21 +514,21 @@ class mode_integrated(mode_common):
     def __init__(self, parent):
         mode_common.__init__(self, parent)
 
-        reversed = QtWidgets.QCheckBox('Reversed', parent.ui)
+        reversed = QtWidgets.QCheckBox("Reversed", parent.ui)
         self.addWidget(reversed)
         reversed.stateChanged.connect(self.set_reversed)
         self.reversed = False
 
-        yselect = QtWidgets.QCheckBox('Linear', parent.ui)
+        yselect = QtWidgets.QCheckBox("Linear", parent.ui)
         self.addWidget(yselect)
         yselect.stateChanged.connect(self.set_yscale)
 
-        button = QtWidgets.QPushButton('Background', parent.ui)
+        button = QtWidgets.QPushButton("Background", parent.ui)
         self.addWidget(button)
         button.clicked.connect(self.set_background)
 
         self.cxb = parent.makecurve(X_colour, True)
-        self.cyb = parent.makecurve(Y_colour,  True)
+        self.cyb = parent.makecurve(Y_colour, True)
 
     def set_enable(self, enabled):
         mode_common.set_enable(self, enabled)
