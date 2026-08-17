@@ -26,22 +26,20 @@
 #      OX11 0DE
 #      michael.abbott@diamond.ac.uk
 
-import os
 import optparse
-from PyQt5 import QtGui, QtCore, QtWidgets, uic
-import qwt as Qwt5
-from guiqwt.plot import PlotManager
-from guiqwt.curve import CurvePlot, CurveItem
-from guiqwt.events import PanHandler, AutoZoomHandler, ZoomRectHandler
-from guiqwt.styles import GridParam
-from guiqwt.tools import RectZoomTool
+import os
 
 import cothread
+import qwt as Qwt5
+from plotpy.events import AutoZoomHandler, PanHandler, ZoomRectHandler
+from plotpy.items import CurveItem
+from plotpy.plot import BasePlot, BasePlotOptions, PlotManager
+from plotpy.styles import GridParam
+from plotpy.tools import RectZoomTool
+from PyQt5 import QtCore, QtGui, QtWidgets, uic
+
 from fa import falib
-
-from fa.viewer import modes
-from fa.viewer import buffer
-
+from fa.viewer import buffer, modes
 from fa.viewer.modes import X_colour, Y_colour
 
 
@@ -63,12 +61,23 @@ class CustomZoomTool(RectZoomTool):
 # This is the implementation of the viewer as a Qt display application.
 
 Display_modes = [
-    modes.mode_raw, modes.mode_fft, modes.mode_fft_logf, modes.mode_integrated]
+    modes.mode_raw,
+    modes.mode_fft,
+    modes.mode_fft_logf,
+    modes.mode_integrated,
+]
 
 Timebase_list = [
-    ('100ms', 1000),    ('250ms', 2500),    ('0.5s',  5000),
-    ('1s',   10000),    ('2.5s', 25000),    ('5s',   50000),
-    ('10s', 100000),    ('25s', 250000),    ('50s', 500000)]
+    ("100ms", 1000),
+    ("250ms", 2500),
+    ("0.5s", 5000),
+    ("1s", 10000),
+    ("2.5s", 25000),
+    ("5s", 50000),
+    ("10s", 100000),
+    ("25s", 250000),
+    ("50s", 500000),
+]
 
 # Start up with 1 second window
 INITIAL_TIMEBASE = 3
@@ -79,7 +88,7 @@ SCROLL_THRESHOLD = 10000
 INITIAL_MODE = 0
 
 # Default location used if no location specified on command line.
-DEFAULT_LOCATION = 'SR'
+DEFAULT_LOCATION = "SR"
 
 
 class SpyMouse(QtCore.QObject):
@@ -97,34 +106,34 @@ class SpyMouse(QtCore.QObject):
 
 
 class Viewer:
-    Plot_tooltip = \
-        'Click and drag to zoom in, ' \
-        'middle click to zoom out, right click and drag to pan.'
+    Plot_tooltip = (
+        "Click and drag to zoom in, "
+        "middle click to zoom out, right click and drag to pan."
+    )
 
-    '''application class'''
+    """application class"""
+
     def __init__(self, ui, server):
         self.ui = ui
 
         self.makeplot()
 
         self.monitor = buffer.monitor(
-            server, self.on_data_update, self.on_connect, self.on_eof,
-            500000, 10000)
+            server, self.on_data_update, self.on_connect, self.on_eof, 500000, 10000
+        )
 
         # Prepare the selections in the controls
         ui.timebase.addItems([l[0] for l in Timebase_list])
         ui.mode.addItems([l.mode_name for l in Display_modes])
         ui.channel_group.addItems([l[0] for l in BPM_list])
-        ui.show_curves.addItems(['Show X&Y', 'Show X', 'Show Y'])
+        ui.show_curves.addItems(["Show X&Y", "Show X", "Show Y"])
 
-        ui.channel_id.setValidator(
-            QtGui.QIntValidator(0, server.fa_id_count - 1, ui))
+        ui.channel_id.setValidator(QtGui.QIntValidator(0, server.fa_id_count - 1, ui))
 
-        ui.position_xy = QtWidgets.QLabel('', ui.statusbar)
+        ui.position_xy = QtWidgets.QLabel("", ui.statusbar)
         ui.statusbar.addPermanentWidget(ui.position_xy)
-        ui.status_message = QtWidgets.QLabel('', ui.statusbar)
+        ui.status_message = QtWidgets.QLabel("", ui.statusbar)
         ui.statusbar.addWidget(ui.status_message)
-
 
         # For each possible display mode create the initial state used to manage
         # that display mode and set up the initial display mode.
@@ -138,7 +147,7 @@ class Viewer:
         self.mode.show_xy(True, True)
 
         self.channel = 0
-        self.bpm_name = ''
+        self.bpm_name = ""
 
         # Make the initial GUI connections
         ui.channel_group.currentIndexChanged.connect(self.set_group)
@@ -173,12 +182,13 @@ class Viewer:
         return c
 
     def makeplot(self):
-        '''set up plotting'''
+        """set up plotting"""
         # make any contents fill the empty frame
         self.ui.axes.setLayout(QtWidgets.QGridLayout(self.ui.axes))
 
-        # Draw a plot in the frame using guiqwt.
-        plot = CurvePlot(self.ui.axes, gridparam=GridParam())
+        plot_options = BasePlotOptions(gridparam=GridParam())
+        # Draw a plot in the frame using plotpy.
+        plot = BasePlot(self.ui.axes, options=plot_options)
         self.ui.axes.layout().addWidget(plot)
         pm = PlotManager(self.ui.axes)
         pm.add_plot(plot)
@@ -198,7 +208,6 @@ class Viewer:
         # Monitor mouse movements over the plot area so we can show the position
         # in coordinates.
         SpyMouse(plot.canvas()).MouseMove.connect(self.mouse_move)
-
 
     # --------------------------------------------------------------------------
     # GUI event handlers
@@ -223,29 +232,26 @@ class Viewer:
         self.channel_ix = ix
         bpm = BPM_list[self.group_index][1][ix]
         self.channel = bpm[1]
-        self.bpm_name = 'BPM: %s (id %d)' % (bpm[0], self.channel)
-        self.monitor.set_channel(
-            id = self.channel, decimated = not self.full_data)
+        self.bpm_name = "BPM: %s (id %d)" % (bpm[0], self.channel)
+        self.monitor.set_channel(id=self.channel, decimated=not self.full_data)
 
     def set_channel_id(self):
         channel = int(self.ui.channel_id.text())
         if channel != self.channel:
             self.channel = channel
-            self.bpm_name = 'BPM id %d' % channel
-            self.monitor.set_channel(id = channel)
+            self.bpm_name = "BPM id %d" % channel
+            self.monitor.set_channel(id=channel)
 
     def set_full_data(self, full_data):
         self.full_data = full_data
-        self.monitor.set_channel(decimated = not full_data)
+        self.monitor.set_channel(decimated=not full_data)
         self.update_timebase()
         self.reset_mode()
 
     def rescale_graph(self):
         self.mode.rescale(self.monitor.read())
-        self.plot.setAxisScale(
-            Qwt5.QwtPlot.xBottom, self.mode.xmin, self.mode.xmax)
-        self.plot.setAxisScale(
-            Qwt5.QwtPlot.yLeft, self.mode.ymin, self.mode.ymax)
+        self.plot.setAxisScale(Qwt5.QwtPlot.xBottom, self.mode.xmin, self.mode.xmax)
+        self.plot.setAxisScale(Qwt5.QwtPlot.yLeft, self.mode.ymin, self.mode.ymax)
         self.plot.replot()
 
     def set_timebase(self, ix):
@@ -259,8 +265,7 @@ class Viewer:
             factor = 1
         else:
             factor = decimation_factor
-        self.monitor.resize(
-            timebase / factor, min(timebase, SCROLL_THRESHOLD) / factor)
+        self.monitor.resize(timebase / factor, min(timebase, SCROLL_THRESHOLD) / factor)
 
     def set_mode(self, ix):
         self.mode.set_enable(False)
@@ -287,16 +292,25 @@ class Viewer:
         x = self.plot.invTransform(Qwt5.QwtPlot.xBottom, pos.x())
         y = self.plot.invTransform(Qwt5.QwtPlot.yLeft, pos.y())
         self.ui.position_xy.setText(
-            '%s: %.4g %s, %s: %.4g %s' % (
-                self.mode.xshortname, x, self.mode.xunits,
-                self.mode.yshortname, y, self.mode.yunits))
-
+            "%s: %.4g %s, %s: %.4g %s"
+            % (
+                self.mode.xshortname,
+                x,
+                self.mode.xunits,
+                self.mode.yshortname,
+                y,
+                self.mode.yunits,
+            )
+        )
 
     # --------------------------------------------------------------------------
     # Data event handlers
 
     def on_data_update(self, value):
         self.mode.plot(value)
+        if self.ui.autoscale.isChecked():
+            self.mode.rescale(value)
+            self.plot.setAxisScale(Qwt5.QwtPlot.yLeft, self.mode.ymin, self.mode.ymax)
         self.plot.replot()
 
     def on_connect(self):
@@ -305,8 +319,7 @@ class Viewer:
 
     def on_eof(self, message):
         self.ui.run.setChecked(False)
-        self.ui.status_message.setText('FA server disconnected: %s' % message)
-
+        self.ui.status_message.setText("FA server disconnected: %s" % message)
 
     # --------------------------------------------------------------------------
     # Handling
@@ -324,16 +337,14 @@ class Viewer:
 
         x = Qwt5.QwtPlot.xBottom
         y = Qwt5.QwtPlot.yLeft
-        self.plot.setAxisTitle(
-            x, '%s (%s)' % (self.mode.xname, self.mode.xunits))
-        self.plot.setAxisTitle(
-            y, '%s (%s)' % (self.mode.yname, self.mode.yunits))
+        self.plot.setAxisTitle(x, "%s (%s)" % (self.mode.xname, self.mode.xunits))
+        self.plot.setAxisTitle(y, "%s (%s)" % (self.mode.yname, self.mode.yunits))
         self.plot.setAxisScaleEngine(x, self.mode.xscale())
         self.plot.setAxisScaleEngine(y, self.mode.yscale())
         self.plot.setAxisMaxMinor(x, self.mode.xticks)
         self.plot.setAxisScale(x, self.mode.xmin, self.mode.xmax)
         self.plot.setAxisScale(y, self.mode.ymin, self.mode.ymax)
-        #self.zoom.setZoomBase()
+        # self.zoom.setZoomBase()
 
         self.redraw()
 
@@ -347,31 +358,37 @@ class KeyFilter(QtCore.QObject):
         if event.type() == QtCore.QEvent.KeyPress:
             key = QtGui.QKeyEvent(event)
             # \x11 is CTRL-Q; I can't find any other way to force a match.
-            if key.text() == '\x11' or key.matches(QtGui.QKeySequence.Quit):
+            if key.text() == "\x11" or key.matches(QtGui.QKeySequence.Quit):
                 cothread.Quit()
                 return True
         return False
 
 
-parser = optparse.OptionParser(usage = '''\
+parser = optparse.OptionParser(
+    usage="""\
 fa-viewer [-f] [location]
 
 Display live Fast Acquisition data from EBPM data stream.  The location can
 be one of %s, or full path to location file if -f specified.
-The default location is %s.''' % (
-    ', '.join(falib.config.list_location_files()), DEFAULT_LOCATION))
+The default location is %s."""
+    % (", ".join(falib.config.list_location_files()), DEFAULT_LOCATION)
+)
 parser.add_option(
-    '-f', dest = 'full_path', default = False, action = 'store_true',
-    help = 'Location is full path to location file')
+    "-f",
+    dest="full_path",
+    default=False,
+    action="store_true",
+    help="Location is full path to location file",
+)
 parser.add_option(
-    '-S', dest = 'server', default = None,
-    help = 'Override server address in location file')
+    "-S", dest="server", default=None, help="Override server address in location file"
+)
 parser.add_option(
-    '-P', dest = 'port', default = None,
-    help = 'Override server port in location file')
+    "-P", dest="port", default=None, help="Override server port in location file"
+)
 options, arglist = parser.parse_args()
 if len(arglist) > 1:
-    parser.error('Unexpected arguments')
+    parser.error("Unexpected arguments")
 if arglist:
     location = arglist[0]
 else:
@@ -379,13 +396,13 @@ else:
 
 # Load the location file and compute the groups
 falib.load_location_file(
-    globals(), location, options.full_path,
-    server = options.server, port = options.port)
+    globals(), location, options.full_path, server=options.server, port=options.port
+)
 
-server = falib.Server(server = FA_SERVER, port = FA_PORT)
+server = falib.Server(server=FA_SERVER, port=FA_PORT)
 F_S = server.sample_frequency
 decimation_factor = server.decimation
-FA_ID_list = server.get_fa_ids(missing = True)
+FA_ID_list = server.get_fa_ids(missing=True)
 BPM_list = falib.compute_bpm_groups(FA_ID_list, GROUPS, PATTERNS)
 
 
@@ -395,9 +412,8 @@ def main():
     qapp.installEventFilter(key_filter)
 
     # create and show form
-    ui_viewer = uic.loadUi(os.path.join(os.path.dirname(__file__), 'viewer.ui'))
+    ui_viewer = uic.loadUi(os.path.join(os.path.dirname(__file__), "viewer.ui"))
     # Bind code to form
     s = Viewer(ui_viewer, server)
 
     cothread.WaitForQuit()
-

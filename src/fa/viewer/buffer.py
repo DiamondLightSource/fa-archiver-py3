@@ -36,7 +36,8 @@ import numpy
 
 
 class buffer:
-    '''Circular buffer.'''
+    """Circular buffer."""
+
     # Super lazy implementation: we always just copy the data to the bottom!
 
     def __init__(self, buffer_size):
@@ -52,15 +53,14 @@ class buffer:
         return self.data_size
 
     def read(self, size):
-        return self.buffer[-int(size):]
+        return self.buffer[-int(size) :]
 
     def reset(self):
         self.buffer[:] = 0
 
 
 class monitor:
-    def __init__(self,
-            server, on_event, on_connect, on_eof, buffer_size, read_size):
+    def __init__(self, server, on_event, on_connect, on_eof, buffer_size, read_size):
         self.server = server
         self.on_event = on_event
         self.on_connect = on_connect
@@ -74,14 +74,16 @@ class monitor:
         self.id = 0
 
     def start(self):
-        assert not self.running, 'Strange: we are already running'
+        assert not self.running, "Strange: we are already running"
         try:
             self.subscription = self.server.subscription(
-                [self.id], decimated = self.decimated, uncork = self.decimated)
+                [self.id], decimated=self.decimated, uncork=self.decimated
+            )
         except Exception as message:
             import traceback
+
             traceback.print_exc()
-            self.on_eof('Unable to connect to server: %s' % message)
+            self.on_eof("Unable to connect to server: %s" % message)
         else:
             self.running = True
             self.buffer.reset()
@@ -103,18 +105,18 @@ class monitor:
             self.start()
 
     def resize(self, notify_size, update_size):
-        '''The notify_size is the data size delivered in each update, while
-        the update_size determines how frequently an update is delivered.'''
+        """The notify_size is the data size delivered in each update, while
+        the update_size determines how frequently an update is delivered."""
         self.notify_size = notify_size
         self.update_size = update_size
         self.data_ready = 0
 
     def __monitor(self):
-        stop_reason = 'Stopped'
+        stop_reason = "Stopped"
         self.on_connect()
         while self.running:
             try:
-                block = self.subscription.read(int(self.update_size))[:,0,:]
+                block = self.subscription.read(int(self.update_size))[:, 0, :]
             except Exception as exception:
                 stop_reason = str(exception)
                 self.running = False
@@ -127,5 +129,5 @@ class monitor:
         self.on_eof(stop_reason)
 
     def read(self):
-        '''Can be called at any time to read the most recent buffer.'''
+        """Can be called at any time to read the most recent buffer."""
         return 1e-3 * self.buffer.read(self.notify_size)

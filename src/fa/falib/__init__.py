@@ -26,10 +26,8 @@
 #      OX11 0DE
 #      michael.abbott@diamond.ac.uk
 
-from fa.falib import falib
-from fa.falib import config
-
-from fa.falib.falib import *
+from fa.falib import config, falib
 from fa.falib.config import *
+from fa.falib.falib import *
 
 __all__ = falib.__all__ + config.__all__
