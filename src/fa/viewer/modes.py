@@ -38,7 +38,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 # Actually, these really belong in fa-viewer.py, but the practicalities of doing
 # this are not worth the trouble.
 X_colour = QtGui.QColor(64, 64, 255)  # QtCore.Qt.blue is too dark
-Y_colour = QtCore.Qt.red
+Y_colour = QtCore.Qt.GlobalColor.red
 
 
 # Unicode characters

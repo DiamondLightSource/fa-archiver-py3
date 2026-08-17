@@ -1,5 +1,3 @@
-#!/usr/bin/env dls-python
-
 # Audio player for playing FA position data through PC speakers
 
 # Copyright (c) 2011 Michael Abbott, Diamond Light Source Ltd.
