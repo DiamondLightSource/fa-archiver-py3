@@ -32,8 +32,8 @@
 #      michael.abbott@diamond.ac.uk
 
 import numpy
-import qwt as Qwt5
-from PyQt5 import QtCore, QtGui, QtWidgets
+import qwt
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 # Actually, these really belong in fa-viewer.py, but the practicalities of doing
 # this are not worth the trouble.
@@ -153,8 +153,8 @@ class mode_raw(mode_common):
     yname = "Position"
     xshortname = "t"
     yunits = micrometre
-    xscale = Qwt5.QwtLinearScaleEngine
-    yscale = Qwt5.QwtLinearScaleEngine
+    xscale = qwt.QwtLinearScaleEngine
+    yscale = qwt.QwtLinearScaleEngine
     xticks = 5
     xmin = 0
     ymin = -10
@@ -290,8 +290,8 @@ class mode_fft(mode_common):
     yname = "Amplitude"
     xshortname = "f"
     xunits = "Hz"
-    xscale = Qwt5.QwtLinearScaleEngine
-    yscale = Qwt5.QwtLogScaleEngine
+    xscale = qwt.QwtLinearScaleEngine
+    yscale = qwt.QwtLogScaleEngine
     xticks = 5
     xmin = 0
     ymin_normal = 1e-4
@@ -403,8 +403,8 @@ class mode_fft_logf(mode_common):
     xname = "Frequency"
     xshortname = "f"
     xunits = "Hz"
-    xscale = Qwt5.QwtLogScaleEngine
-    yscale = Qwt5.QwtLogScaleEngine
+    xscale = qwt.QwtLogScaleEngine
+    yscale = qwt.QwtLogScaleEngine
     xticks = 10
 
     Filters = [1, 10, 100]
@@ -487,8 +487,8 @@ class mode_integrated(mode_common):
     xshortname = "f"
     xunits = "Hz"
     yunits = micrometre
-    xscale = Qwt5.QwtLogScaleEngine
-    yscale = Qwt5.QwtLogScaleEngine
+    xscale = qwt.QwtLogScaleEngine
+    yscale = qwt.QwtLogScaleEngine
     xticks = 10
     ymin = 1e-3
     ymax = 10
@@ -543,9 +543,9 @@ class mode_integrated(mode_common):
 
     def set_yscale(self, linear):
         if linear:
-            self.yscale = Qwt5.QwtLinearScaleEngine
+            self.yscale = qwt.QwtLinearScaleEngine
         else:
-            self.yscale = Qwt5.QwtLogScaleEngine
+            self.yscale = qwt.QwtLogScaleEngine
         self.parent.reset_mode()
 
     def set_reversed(self, reversed):

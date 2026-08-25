@@ -30,13 +30,13 @@ import optparse
 import os
 
 import cothread
-import qwt as Qwt5
+import qwt
 from plotpy.events import AutoZoomHandler, PanHandler, ZoomRectHandler
 from plotpy.items import CurveItem
 from plotpy.plot import BasePlot, BasePlotOptions, PlotManager
 from plotpy.styles import GridParam
 from plotpy.tools import RectZoomTool
-from PyQt5 import QtCore, QtGui, QtWidgets, uic
+from PyQt6 import QtCore, QtGui, QtWidgets, uic
 
 from fa import falib
 from fa.viewer import buffer, modes
@@ -250,8 +250,8 @@ class Viewer:
 
     def rescale_graph(self):
         self.mode.rescale(self.monitor.read())
-        self.plot.setAxisScale(Qwt5.QwtPlot.xBottom, self.mode.xmin, self.mode.xmax)
-        self.plot.setAxisScale(Qwt5.QwtPlot.yLeft, self.mode.ymin, self.mode.ymax)
+        self.plot.setAxisScale(qwt.QwtPlot.xBottom, self.mode.xmin, self.mode.xmax)
+        self.plot.setAxisScale(qwt.QwtPlot.yLeft, self.mode.ymin, self.mode.ymax)
         self.plot.replot()
 
     def set_timebase(self, ix):
@@ -289,8 +289,8 @@ class Viewer:
         self.plot.replot()
 
     def mouse_move(self, pos):
-        x = self.plot.invTransform(Qwt5.QwtPlot.xBottom, pos.x())
-        y = self.plot.invTransform(Qwt5.QwtPlot.yLeft, pos.y())
+        x = self.plot.invTransform(qwt.QwtPlot.xBottom, pos.x())
+        y = self.plot.invTransform(qwt.QwtPlot.yLeft, pos.y())
         self.ui.position_xy.setText(
             "%s: %.4g %s, %s: %.4g %s"
             % (
@@ -310,7 +310,7 @@ class Viewer:
         self.mode.plot(value)
         if self.ui.autoscale.isChecked():
             self.mode.rescale(value)
-            self.plot.setAxisScale(Qwt5.QwtPlot.yLeft, self.mode.ymin, self.mode.ymax)
+            self.plot.setAxisScale(qwt.QwtPlot.yLeft, self.mode.ymin, self.mode.ymax)
         self.plot.replot()
 
     def on_connect(self):
@@ -335,8 +335,8 @@ class Viewer:
 
         self.mode.show_xy(self.show_x, self.show_y)
 
-        x = Qwt5.QwtPlot.xBottom
-        y = Qwt5.QwtPlot.yLeft
+        x = qwt.QwtPlot.xBottom
+        y = qwt.QwtPlot.yLeft
         self.plot.setAxisTitle(x, "%s (%s)" % (self.mode.xname, self.mode.xunits))
         self.plot.setAxisTitle(y, "%s (%s)" % (self.mode.yname, self.mode.yunits))
         self.plot.setAxisScaleEngine(x, self.mode.xscale())
