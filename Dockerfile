@@ -4,7 +4,7 @@ FROM ghcr.io/diamondlightsource/ubuntu-devcontainer:resolute AS developer
 
 # Add any system dependencies for the developer/build environment here
 RUN apt-get update -y && apt-get install -y --no-install-recommends \
-    libqt6gui6 libgl1 \
+    libqt6gui6 libgl1 alsa-utils\
     && apt-get dist-clean
 
 # The build stage installs the context into the venv
@@ -28,7 +28,7 @@ FROM ubuntu:resolute AS runtime
 
 # Add apt-get system dependecies for runtime here if needed
 RUN apt-get update -y && apt-get install -y --no-install-recommends \
-    libqt6gui6 libgl1 \
+    libqt6gui6 libgl1 alsa-utils\
     && apt-get dist-clean
 
 # Copy the python installation from the build stage
