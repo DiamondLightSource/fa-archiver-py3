@@ -1,13 +1,18 @@
 [build-system]
-requires = ["setuptools>=64", "setuptools_scm[toml]>=8"]
+requires = ["setuptools>=77.0.3", "setuptools_scm[toml]>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "fa-archiver"
 classifiers = [
+<<<<<<< before updating
     "Development Status :: 3 - Alpha",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3.10",
+=======
+    "Development Status :: 5 - Production/Stable",
+    "Programming Language :: Python :: 3.11",
+>>>>>>> after updating
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
 ]
@@ -26,20 +31,20 @@ dependencies = [
     "plotpy",
 ] # Add project dependencies here, e.g. ["click", "numpy"]
 dynamic = ["version"]
-license.file = "LICENSE"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 readme = "README.md"
 # Cothread is broken for python 3.11
 requires-python = ">=3.10,!=3.11.*"
 
 [dependency-groups]
 dev = [
-    "copier",
     "mypy",
     "pre-commit",
     "pytest",
     "pytest-cov",
     "ruff",
-    "tox-uv",
+    "tox-uv-bare",
     "types-mock",
 ]
 
@@ -54,6 +59,10 @@ GitHub = "https://github.com/DiamondLightSource/fa-archiver-py3"
 [[project.authors]] # Further authors may be added by duplicating this section
 email = "diamhighlvlapps@diamond.ac.uk"
 name = "Diamond High Level Apps"
+
+[tool.uv]
+# Minimum uv to fix eMudhra CA cert incident (see discuss.python.org/t/109576)
+required-version = ">=0.13.5"
 
 [tool.setuptools_scm]
 version_file = "src/fa/_version.py"
@@ -98,6 +107,11 @@ env_list = ["pre-commit", "type-checking", "tests"]
 [tool.tox.env_run_base]
 # Pass all environment variables to the test environments
 passenv = ["*"]
+allowlist_externals = [
+    "mypy",
+    "pytest",
+    "pre-commit",
+]
 
 [tool.tox.env.pre-commit]
 description = "Run pre-commit on all files"
